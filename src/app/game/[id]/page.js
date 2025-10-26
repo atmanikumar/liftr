@@ -8,7 +8,7 @@ import styles from './page.module.css';
 
 export default function GamePage({ params }) {
   const router = useRouter();
-  const { getGame, addRound, addPlayerToGame, declareWinner, declareDraw, updateMaxPoints, declareAceWinners, players, games, loading: gameLoading, refreshData } = useGame();
+  const { getGame, addRound, addPlayerToGame, declareWinner, declareDraw, updateMaxPoints, declareAceWinners, players, games, loading: gameLoading } = useGame();
   const { isAdmin, loading: authLoading } = useAuth();
   const [game, setGame] = useState(null);
   const [showAddRoundModal, setShowAddRoundModal] = useState(false);
@@ -28,7 +28,6 @@ export default function GamePage({ params }) {
   const [selectedWinner, setSelectedWinner] = useState(null);
   const [selectedAcePlayer, setSelectedAcePlayer] = useState(null);
   const [selectedAceWinners, setSelectedAceWinners] = useState([]);
-  const [refreshing, setRefreshing] = useState(false);
 
   // Helper function to get profile photo for a player from players data
   const getPlayerProfilePhoto = (playerId) => {
@@ -258,12 +257,6 @@ export default function GamePage({ params }) {
     // Game will auto-update via useEffect watching 'games'
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await refreshData();
-    setRefreshing(false);
-  };
-
   const handleEndAceGame = () => {
     if (!game || game.players.length === 0) {
       alert('No players in game');
@@ -395,14 +388,6 @@ export default function GamePage({ params }) {
               )}
             </div>
             <div className={styles.headerActions}>
-              <button 
-                className="btn btn-secondary" 
-                onClick={handleRefresh}
-                disabled={refreshing}
-                style={{ minWidth: '100px' }}
-              >
-                {refreshing ? '⏳' : '🔄 Refresh'}
-              </button>
               {game.status === 'in_progress' && isAdmin() && (
                 <>
                   {isChess ? (

@@ -35,6 +35,7 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-title" content="House of Games" />
         <meta name="theme-color" content="#3b82f6" />
         <meta name="mobile-web-app-capable" content="yes" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
       </head>
       <body>
         <AuthProvider>
