@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
 import styles from './page.module.css';
@@ -8,6 +8,8 @@ import styles from './page.module.css';
 export default function HistoryPage() {
   const router = useRouter();
   const { games, players } = useGame();
+  const [filterGameType, setFilterGameType] = useState('All');
+  const [filterPlayer, setFilterPlayer] = useState('All');
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -35,11 +37,27 @@ export default function HistoryPage() {
     return player?.profilePhoto || null;
   };
 
-  // Memoize sorted games to prevent blocking navigation
-  const sortedGames = useMemo(() => 
-    [...games].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
-    [games]
-  );
+  // Memoize sorted and filtered games to prevent blocking navigation
+  const sortedGames = useMemo(() => {
+    let filtered = [...games];
+    
+    // Filter by game type
+    if (filterGameType !== 'All') {
+      filtered = filtered.filter(game => 
+        game.type.toLowerCase() === filterGameType.toLowerCase()
+      );
+    }
+    
+    // Filter by player
+    if (filterPlayer !== 'All') {
+      filtered = filtered.filter(game => 
+        game.players.some(p => p.id === filterPlayer)
+      );
+    }
+    
+    // Sort by date (newest first)
+    return filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [games, filterGameType, filterPlayer]);
 
   return (
     <div className={styles.historyPage}>
@@ -48,6 +66,59 @@ export default function HistoryPage() {
           <div>
             <h1 className={styles.title}>🕒 Game History</h1>
             <p className={styles.subtitle}>View all your past games and their details</p>
+          </div>
+        </div>
+
+        {/* Filters Section */}
+        <div className="card" style={{ marginBottom: '24px' }}>
+          <div className={styles.filtersContainer}>
+            {/* Game Type Filter */}
+            <div className={styles.filterGroup}>
+              <label className={styles.filterLabel}>Game Type:</label>
+              <div className={styles.tabsContainer}>
+                <button 
+                  className={`${styles.tab} ${filterGameType === 'All' ? styles.tabActive : ''}`}
+                  onClick={() => setFilterGameType('All')}
+                >
+                  All
+                </button>
+                <button 
+                  className={`${styles.tab} ${filterGameType === 'Rummy' ? styles.tabActive : ''}`}
+                  onClick={() => setFilterGameType('Rummy')}
+                >
+                  Rummy
+                </button>
+                <button 
+                  className={`${styles.tab} ${filterGameType === 'Chess' ? styles.tabActive : ''}`}
+                  onClick={() => setFilterGameType('Chess')}
+                >
+                  Chess
+                </button>
+                <button 
+                  className={`${styles.tab} ${filterGameType === 'Ace' ? styles.tabActive : ''}`}
+                  onClick={() => setFilterGameType('Ace')}
+                >
+                  Ace
+                </button>
+              </div>
+            </div>
+
+            {/* Player Filter */}
+            <div className={styles.filterGroup}>
+              <label className={styles.filterLabel}>Player:</label>
+              <select 
+                className={styles.filterSelect}
+                value={filterPlayer}
+                onChange={(e) => setFilterPlayer(e.target.value)}
+              >
+                <option value="All">All Players</option>
+                {players.map(player => (
+                  <option key={player.id} value={player.id}>
+                    {player.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -60,6 +131,21 @@ export default function HistoryPage() {
                 onClick={() => router.push('/')}
               >
                 Go to Dashboard
+              </button>
+            </div>
+          </div>
+        ) : sortedGames.length === 0 ? (
+          <div className="card">
+            <div className={styles.empty}>
+              <p>No games match your selected filters.</p>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => {
+                  setFilterGameType('All');
+                  setFilterPlayer('All');
+                }}
+              >
+                Clear Filters
               </button>
             </div>
           </div>

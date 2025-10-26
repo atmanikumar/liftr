@@ -80,11 +80,13 @@ export default function Home() {
   }, [games, players, filterGameType]);
   
   // Memoize recent matches to prevent blocking navigation
+  // Filter by selected game type
   const recentMatches = useMemo(() => 
     [...games]
+      .filter(game => game.type.toLowerCase() === filterGameType.toLowerCase())
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .slice(0, 10),
-    [games]
+    [games, filterGameType]
   );
 
   // Show loading state - AFTER all hooks
@@ -254,9 +256,9 @@ export default function Home() {
         </div>
 
         {/* Recent Matches Section */}
-        {recentMatches.length > 0 && (
-          <div className="card" style={{ marginTop: '24px' }}>
-            <h2 className={styles.sectionTitle}>Recent Matches (Last 10)</h2>
+        <div className="card" style={{ marginTop: '24px' }}>
+          <h2 className={styles.sectionTitle}>Recent {filterGameType} Matches (Last 10)</h2>
+          {recentMatches.length > 0 ? (
             <div className="table-container">
               <table className={styles.recentMatchesTable}>
                 <thead>
@@ -345,8 +347,20 @@ export default function Home() {
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className={styles.empty}>
+              <p>No {filterGameType} matches played yet!</p>
+              {isAdmin() && (
+                <button 
+                  className="btn btn-primary" 
+                  onClick={handleNewGame}
+                >
+                  Start a Game
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {showNewGameModal && (
