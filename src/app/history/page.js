@@ -33,6 +33,7 @@ export default function HistoryPage() {
   };
 
   const getPlayerProfilePhoto = (playerId) => {
+    // Players data already has profilePhoto merged from users table via API
     const player = players.find(p => p.id === playerId);
     return player?.profilePhoto || null;
   };

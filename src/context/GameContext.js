@@ -98,8 +98,8 @@ export function GameProvider({ children }) {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      // Load players and games from API
-      const loadedPlayers = await loadFromServer('players');
+      // Load users (as players) and games from API
+      const loadedPlayers = await loadFromServer('users');
       const loadedGames = await loadFromServer('games');
       
       setPlayers(loadedPlayers);
@@ -113,14 +113,14 @@ export function GameProvider({ children }) {
 
   // Refresh players from server
   const refreshPlayers = async () => {
-    const loadedPlayers = await loadFromServer('players');
+    const loadedPlayers = await loadFromServer('users');
     setPlayers(loadedPlayers);
   };
 
   // Refresh all data from server
   const refreshData = async () => {
     setLoading(true);
-    const loadedPlayers = await loadFromServer('players');
+    const loadedPlayers = await loadFromServer('users');
     const loadedGames = await loadFromServer('games');
     setPlayers(loadedPlayers);
     setGames(loadedGames);

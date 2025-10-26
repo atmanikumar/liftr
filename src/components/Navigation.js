@@ -91,7 +91,7 @@ export default function Navigation() {
       <nav className={styles.nav}>
         <div className={styles.container}>
           <Link href="/" className={styles.logo}>
-            House of Games
+            Home
           </Link>
           
           {/* Desktop Navigation */}

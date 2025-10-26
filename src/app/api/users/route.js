@@ -3,13 +3,13 @@ import { cookies } from 'next/headers';
 import { verifyToken, hashPassword, initDefaultAdmin } from '@/lib/auth';
 import { getUsers, saveUsers, getPlayers, savePlayers } from '@/lib/storage';
 
-// GET all users (admin only)
+// GET all users (admin and player roles)
 export async function GET() {
   try {
     const token = cookies().get('auth-token')?.value;
     const user = verifyToken(token);
 
-    if (!user || user.role !== 'admin') {
+    if (!user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 403 }

@@ -17,7 +17,7 @@
   --text: #f1f5f9;
   --text-secondary: #9ca3af;
   --border: #2a2a2a;
-  --card-bg: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+  --card-bg: #0a0a0a;
 }
 
 html {
@@ -65,7 +65,7 @@ body {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  background: var(--primary);
   color: white;
 }
 
@@ -118,7 +118,7 @@ table {
 }
 
 thead {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  background: var(--primary);
 }
 
 th {

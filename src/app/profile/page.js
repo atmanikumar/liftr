@@ -30,7 +30,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const fetchPlayers = async () => {
       try {
-        const response = await fetch('/api/players');
+        const response = await fetch('/api/users');
         if (response.ok) {
           const data = await response.json();
           setPlayers(data);

@@ -16,7 +16,8 @@ export default function Home() {
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [maxPoints, setMaxPoints] = useState(120);
 
-  // Helper function to get profile photo for a player from players data
+  // Helper function to get profile photo for a player
+  // Players data already has profilePhoto merged from users table via API
   const getPlayerProfilePhoto = (playerId) => {
     const player = players.find(p => p.id === playerId);
     return player?.profilePhoto || null;
@@ -43,7 +44,9 @@ export default function Home() {
             name: gamePlayer.name,
             avatar: gamePlayer.avatar,
             wins: 0,
+            draws: 0,
             totalGames: 0,
+            finals: 0,
             winPercentage: 0
           };
         }
@@ -58,16 +61,49 @@ export default function Home() {
         if (isWinner) {
           playerStatsMap[gamePlayer.id].wins += 1;
         }
+        
+        // For Chess: count draws (games with no winner)
+        if (game.type.toLowerCase() === 'chess' && !game.winner) {
+          playerStatsMap[gamePlayer.id].draws += 1;
+        }
+        
+        // For Rummy: count finals (all players who participated in the last round, including winner)
+        if (game.type.toLowerCase() === 'rummy' && game.rounds && game.rounds.length > 0 && game.winner) {
+          // Get the last round
+          const lastRound = game.rounds[game.rounds.length - 1];
+          
+          // Check if this player scored in the last round (including winner)
+          if (lastRound.scores && lastRound.scores[gamePlayer.id] !== 0 || !gamePlayer?.isLost) {
+            // This player participated in the final
+            playerStatsMap[gamePlayer.id].finals += 1;
+          }
+        }
       });
     });
 
     // Calculate win percentages and sort
-    const statsArray = Object.values(playerStatsMap).map(player => ({
-      ...player,
-      winPercentage: player.totalGames > 0 
-        ? Math.round((player.wins / player.totalGames) * 100)
-        : 0
-    }));
+    const statsArray = Object.values(playerStatsMap).map(player => {
+      let totalPoints = 0;
+      
+      if (filterGameType.toLowerCase() === 'chess') {
+        // Chess: Win = 1 point, Draw = 0.5 point, Loss = 0 point
+        totalPoints = (player.wins * 1) + (player.draws * 0.5);
+      } else if (filterGameType.toLowerCase() === 'rummy') {
+        // Rummy: Win = 1 point, Final (without win) = 0.25 point
+        const finalsWithoutWins = player.finals - player.wins;
+        totalPoints = (player.wins * 1) + (finalsWithoutWins * 0.25);
+      } else {
+        // Ace: Simple win rate (wins only)
+        totalPoints = player.wins * 1;
+      }
+      
+      return {
+        ...player,
+        winPercentage: player.totalGames > 0 
+          ? Math.round((totalPoints / player.totalGames) * 100)
+          : 0
+      };
+    });
     
     // Sort by win percentage, then by wins, then by total games
     return statsArray
@@ -79,6 +115,23 @@ export default function Home() {
       .slice(0, 5); // Top 5 only
   }, [games, players, filterGameType]);
   
+  // Helper function to get runners-up for a game (Rummy only)
+  const getRunners = (game) => {
+    if (game.type.toLowerCase() !== 'rummy' || game.status !== 'completed' || !game.rounds || game.rounds.length === 0 || !game.winner) {
+      return [];
+    }
+    
+    const runners = [];
+    const lastRound = game.rounds[game.rounds.length - 1];
+    
+      game.players.forEach(gamePlayer => {
+        if (gamePlayer.isLost && lastRound.scores && lastRound.scores[gamePlayer.id] !== 0) {
+          runners.push(gamePlayer);
+        }
+      });
+    return runners;
+  };
+
   // Memoize recent matches to prevent blocking navigation
   // Filter by selected game type
   const recentMatches = useMemo(() => 
@@ -205,8 +258,10 @@ export default function Home() {
                   <tr>
                     <th>Rank</th>
                     <th>Player</th>
+                    <th>Total</th>
+                    {filterGameType === 'Rummy' && <th>Finals</th>}
+                    {filterGameType === 'Chess' && <th>Draws</th>}
                     <th>Wins</th>
-                    <th>Total Games</th>
                     <th>Win %</th>
                   </tr>
                 </thead>
@@ -231,13 +286,14 @@ export default function Home() {
                               className={styles.playerAvatar}
                             />
                           ) : (
-                            <span className="avatar">{player.avatar}</span>
+                            <span>{player.name}</span>
                           )}
-                          <span>{player.name}</span>
                         </div>
                       </td>
-                      <td><strong>{player.wins}</strong></td>
                       <td>{player.totalGames}</td>
+                      {filterGameType === 'Rummy' && <td>{player.finals || 0}</td>}
+                      {filterGameType === 'Chess' && <td>{player.draws || 0}</td>}
+                      <td><strong>{player.wins}</strong></td>
                       <td>
                         <span className={`badge ${
                           player.winPercentage >= 50 ? 'badge-success' : 
@@ -264,10 +320,19 @@ export default function Home() {
                 <thead>
                   <tr>
                     <th className={styles.hideOnMobile}>Game</th>
-                    <th>Type</th>
                     <th className={styles.hideOnMobile}>Date</th>
-                    <th className={styles.hideOnMobile}>Players</th>
-                    <th>Winner</th>
+                    {filterGameType === 'Chess' ? (
+                      <>
+                        <th>Winner</th>
+                        <th>Opponent</th>
+                      </>
+                    ) : (
+                      <>
+                        <th className={styles.hideOnMobile}>Players</th>
+                        <th>Winner</th>
+                        {filterGameType === 'Rummy' && <th>Runner</th>}
+                      </>
+                    )}
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -283,7 +348,6 @@ export default function Home() {
                       <td className={styles.hideOnMobile}>
                         <strong>{game.title}</strong>
                       </td>
-                      <td>{game.type}</td>
                       <td className={styles.hideOnMobile}>
                         {new Date(game.createdAt).toLocaleDateString('en-US', {
                           month: 'short',
@@ -292,54 +356,134 @@ export default function Home() {
                           minute: '2-digit'
                         })}
                       </td>
-                      <td className={styles.hideOnMobile}>
-                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                          {game.players.slice(0, 3).map(p => (
-                            getPlayerProfilePhoto(p.id) ? (
-                              <img 
-                                key={p.id}
-                                src={getPlayerProfilePhoto(p.id)} 
-                                alt={p.name}
-                                className={styles.playerAvatarSmall}
-                              />
+                      {filterGameType === 'Chess' ? (
+                        <>
+                          <td>
+                            {game.winner ? (
+                              getPlayerProfilePhoto(game.winner) ? (
+                                <img 
+                                  src={getPlayerProfilePhoto(game.winner)} 
+                                  alt={game.players.find(p => p.id === game.winner)?.name}
+                                  className={styles.playerAvatar}
+                                />
+                              ) : (
+                                <span>{game.players.find(p => p.id === game.winner)?.name}</span>
+                              )
                             ) : (
-                              <span key={p.id} className="avatar" style={{ fontSize: '16px' }}>
-                                {p.avatar}
-                              </span>
-                            )
-                          ))}
-                          {game.players.length > 3 && (
-                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                              +{game.players.length - 3}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        {game.winner ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {getPlayerProfilePhoto(game.winner) ? (
-                              <img 
-                                src={getPlayerProfilePhoto(game.winner)} 
-                                alt={game.players.find(p => p.id === game.winner)?.name}
-                                className={styles.playerAvatar}
-                              />
-                            ) : (
-                              <span className="avatar" style={{ fontSize: '20px' }}>
-                                {game.players.find(p => p.id === game.winner)?.avatar}
-                              </span>
+                              <span style={{ color: 'var(--text-secondary)' }}>-</span>
                             )}
-                            <span>{game.players.find(p => p.id === game.winner)?.name}</span>
-                          </div>
-                        ) : (
-                          <span style={{ color: 'var(--text-secondary)' }}>-</span>
-                        )}
-                      </td>
+                          </td>
+                          <td>
+                            {(() => {
+                              // For Chess, show the opponent (non-winner player)
+                              const opponent = game.winner 
+                                ? game.players.find(p => p.id !== game.winner)
+                                : game.players[1]; // If no winner, show second player
+                              
+                              if (!opponent) {
+                                return <span style={{ color: 'var(--text-secondary)' }}>-</span>;
+                              }
+                              
+                              return getPlayerProfilePhoto(opponent.id) ? (
+                                <img 
+                                  src={getPlayerProfilePhoto(opponent.id)} 
+                                  alt={opponent.name}
+                                  className={styles.playerAvatar}
+                                />
+                              ) : (
+                                <span>{opponent.name}</span>
+                              );
+                            })()}
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className={styles.hideOnMobile}>
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                              {game.players.slice(0, 3).map(p => (
+                                getPlayerProfilePhoto(p.id) ? (
+                                  <img 
+                                    key={p.id}
+                                    src={getPlayerProfilePhoto(p.id)} 
+                                    alt={p.name}
+                                    className={styles.playerAvatarSmall}
+                                  />
+                                ) : (
+                                  <span key={p.id} className="avatar" style={{ fontSize: '16px' }}>
+                                    {p.avatar}
+                                  </span>
+                                )
+                              ))}
+                              {game.players.length > 3 && (
+                                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                  +{game.players.length - 3}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            {game.winner ? (
+                              getPlayerProfilePhoto(game.winner) ? (
+                                <img 
+                                  src={getPlayerProfilePhoto(game.winner)} 
+                                  alt={game.players.find(p => p.id === game.winner)?.name}
+                                  className={styles.playerAvatar}
+                                />
+                              ) : (
+                                <span>{game.players.find(p => p.id === game.winner)?.name}</span>
+                              )
+                            ) : (
+                              <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                            )}
+                          </td>
+                          {filterGameType === 'Rummy' && (
+                            <td>
+                              {(() => {
+                                const runners = getRunners(game);
+                                if (runners.length === 0) {
+                                  return <span style={{ color: 'var(--text-secondary)' }}>-</span>;
+                                }
+                                
+                                return (
+                                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                                    {runners.map((runner, index) => (
+                                      getPlayerProfilePhoto(runner.id) ? (
+                                        <img 
+                                          key={runner.id}
+                                          src={getPlayerProfilePhoto(runner.id)} 
+                                          alt={runner.name}
+                                          className={styles.playerAvatar}
+                                          style={{
+                                            marginLeft: index > 0 ? '-10px' : '0',
+                                            zIndex: runners.length - index,
+                                            border: '2px solid var(--bg-color)',
+                                            borderRadius: '50%'
+                                          }}
+                                        />
+                                      ) : (
+                                        <span 
+                                          key={runner.id} 
+                                          style={{ 
+                                            fontSize: '14px',
+                                            marginLeft: index > 0 ? '4px' : '0'
+                                          }}
+                                        >
+                                          {runner.name}
+                                        </span>
+                                      )
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+                            </td>
+                          )}
+                        </>
+                      )}
                       <td>
                         <span className={`badge ${
                           game.status === 'completed' ? 'badge-success' : 'badge-warning'
                         }`}>
-                          {game.status === 'completed' ? 'Completed' : 'In Progress'}
+                          {game.status === 'completed' ? 'Done' : 'Progress'}
                         </span>
                       </td>
                     </tr>

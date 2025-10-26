@@ -29,7 +29,8 @@ export default function GamePage({ params }) {
   const [selectedAcePlayer, setSelectedAcePlayer] = useState(null);
   const [selectedAceWinners, setSelectedAceWinners] = useState([]);
 
-  // Helper function to get profile photo for a player from players data
+  // Helper function to get profile photo for a player
+  // Players data already has profilePhoto merged from users table via API
   const getPlayerProfilePhoto = (playerId) => {
     const player = players.find(p => p.id === playerId);
     return player?.profilePhoto || null;
@@ -465,7 +466,6 @@ export default function GamePage({ params }) {
                     <th>Player</th>
                     {!isChess && <th>{isAce ? 'Points Won' : 'Total Points'}</th>}
                     {!isChess && !isAce && <th>Remaining</th>}
-                    {!isChess && !isAce && <th>Status</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -489,17 +489,30 @@ export default function GamePage({ params }) {
                       // Highlight if either condition is true (only for active players)
                       const mustPlay = mustPlayDueToDrops || cannotAffordDrop;
                       
+                      // Determine row background color based on status
+                      let rowBackground = 'transparent';
+                      let borderLeft = 'none';
+                      
+                      if (mustPlay) {
+                        // Must play warning (highest priority)
+                        rowBackground = 'rgba(251, 191, 36, 0.15)';
+                        borderLeft = '4px solid var(--warning)';
+                      } else if (player.isLost) {
+                        // Eliminated
+                        rowBackground = 'rgba(239, 68, 68, 0.1)';
+                      } else if (game.status === 'completed') {
+                        // Winner (game completed and not lost)
+                        rowBackground = 'rgba(16, 185, 129, 0.1)';
+                      }
+                      // Active players have no color change (transparent)
+                      
                       return (
                         <tr 
                           key={player.id} 
                           className={player.isLost ? styles.lostPlayer : ''}
                           style={{
-                            background: mustPlay 
-                              ? 'rgba(251, 191, 36, 0.15)' 
-                              : 'transparent',
-                            borderLeft: mustPlay 
-                              ? '4px solid var(--warning)' 
-                              : 'none'
+                            background: rowBackground,
+                            borderLeft: borderLeft
                           }}
                         >
                           <td>
@@ -535,17 +548,6 @@ export default function GamePage({ params }) {
                               <span style={{ fontWeight: '600' }}>
                                 {remainingPoints <= 0 ? 0 : remainingPoints}
                               </span>
-                            </td>
-                          )}
-                          {!isChess && !isAce && (
-                            <td>
-                              {player.isLost ? (
-                                <span className="badge badge-danger">Eliminated</span>
-                              ) : game.status === 'completed' ? (
-                                <span className="badge badge-success">Winner</span>
-                              ) : (
-                                <span className="badge badge-success">Active</span>
-                              )}
                             </td>
                           )}
                         </tr>
@@ -597,7 +599,129 @@ export default function GamePage({ params }) {
             <h2 className={styles.sectionTitle}>Game History</h2>
             <div className={styles.roundsContainer}>
               {/* Show history if available, otherwise fallback to rounds only */}
-              {[...(game.history && game.history.length > 0 ? game.history : game.rounds || [])].reverse().map((event) => {
+              {(() => {
+                // Build elimination tracking for Rummy games
+                const eliminatedPlayersMap = {}; // roundNumber -> Set of eliminated player IDs
+                const eliminationEvents = []; // Track when players got eliminated
+                
+                if (!isAce && game.maxPoints && game.rounds) {
+                  let cumulativePoints = {};
+                  let previouslyEliminated = new Set();
+                  
+                  // Process rounds in order to track when players got eliminated
+                  game.rounds.forEach((round, index) => {
+                    // Initialize cumulative points for players
+                    Object.keys(round.scores).forEach(playerId => {
+                      if (!cumulativePoints[playerId]) {
+                        // Check if player was added mid-game with starting points
+                        const playerAddEvent = game.history?.find(
+                          e => e.type === 'player_added' && e.playerId === playerId
+                        );
+                        cumulativePoints[playerId] = playerAddEvent?.startingPoints || 0;
+                      }
+                    });
+                    
+                    // Add this round's scores
+                    Object.entries(round.scores).forEach(([playerId, score]) => {
+                      cumulativePoints[playerId] = (cumulativePoints[playerId] || 0) + score;
+                    });
+                    
+                    // Track who got eliminated in this round
+                    const eliminatedInThisRound = new Set();
+                    const newlyEliminated = [];
+                    
+                    Object.entries(cumulativePoints).forEach(([playerId, points]) => {
+                      if (points >= game.maxPoints) {
+                        eliminatedInThisRound.add(playerId);
+                        // Check if this is a NEW elimination (not previously eliminated)
+                        if (!previouslyEliminated.has(playerId)) {
+                          const player = game.players.find(p => p.id === playerId);
+                          if (player) {
+                            newlyEliminated.push({
+                              playerId,
+                              playerName: player.name,
+                              playerAvatar: player.avatar,
+                              points,
+                              roundNumber: round.roundNumber,
+                              timestamp: round.timestamp
+                            });
+                          }
+                        }
+                      }
+                    });
+                    
+                    // Add elimination events for this round
+                    if (newlyEliminated.length > 0) {
+                      eliminationEvents.push({
+                        type: 'elimination',
+                        roundNumber: round.roundNumber,
+                        timestamp: round.timestamp,
+                        players: newlyEliminated,
+                        id: `elimination-${round.roundNumber}`
+                      });
+                    }
+                    
+                    eliminatedPlayersMap[round.roundNumber] = eliminatedInThisRound;
+                    // Update previously eliminated set
+                    eliminatedInThisRound.forEach(playerId => previouslyEliminated.add(playerId));
+                  });
+                }
+                
+                // Merge elimination events into history
+                const historyWithEliminations = [...(game.history && game.history.length > 0 ? game.history : game.rounds || [])];
+                eliminationEvents.forEach(elimEvent => {
+                  // Insert elimination event right after the round where it happened
+                  const roundIndex = historyWithEliminations.findIndex(
+                    e => (e.type === 'round' || !e.type) && e.roundNumber === elimEvent.roundNumber
+                  );
+                  if (roundIndex !== -1) {
+                    historyWithEliminations.splice(roundIndex + 1, 0, elimEvent);
+                  }
+                });
+                
+                return [...historyWithEliminations].reverse().map((event) => {
+                // Elimination Event
+                if (event.type === 'elimination') {
+                  return (
+                    <div key={event.id} className={styles.roundCard} style={{ 
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      borderLeft: '4px solid var(--danger)'
+                    }}>
+                      <div className={styles.roundHeader}>
+                        <h3 style={{ color: 'var(--danger)' }}>
+                          ❌ Player{event.players.length > 1 ? 's' : ''} Eliminated
+                        </h3>
+                        <span className={styles.roundTime}>
+                          {formatDate(event.timestamp)}
+                        </span>
+                      </div>
+                      <div className={styles.roundScores}>
+                        {event.players.map(player => (
+                          <div key={player.playerId} className={styles.scoreItem}>
+                            <span className={styles.playerName}>
+                              {getPlayerProfilePhoto(player.playerId) ? (
+                                <img 
+                                  src={getPlayerProfilePhoto(player.playerId)} 
+                                  alt={player.playerName}
+                                  className={styles.playerAvatar}
+                                />
+                              ) : (
+                                <span className="avatar" style={{ fontSize: '24px' }}>
+                                  {player.playerAvatar}
+                                </span>
+                              )}
+                              <strong>{player.playerName}</strong>
+                            </span>
+                            <span className={styles.scoreValue} style={{ color: 'var(--danger)' }}>
+                              {player.points} pts (Max: {game.maxPoints})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                
                 // Player Added Event
                 if (event.type === 'player_added') {
                   return (
@@ -640,9 +764,22 @@ export default function GamePage({ params }) {
                 
                 // Round Event (both new format with type='round' and old format without type)
                 if (event.type === 'round' || !event.type) {
-                  // Only show players who participated in this round (have scores)
+                  // Get players who were eliminated BEFORE this round
+                  const eliminatedBeforeThisRound = new Set();
+                  if (!isAce && game.maxPoints) {
+                    // For all rounds before this one, collect eliminated players
+                    Object.entries(eliminatedPlayersMap).forEach(([roundNum, eliminatedSet]) => {
+                      if (parseInt(roundNum) < event.roundNumber) {
+                        eliminatedSet.forEach(playerId => eliminatedBeforeThisRound.add(playerId));
+                      }
+                    });
+                  }
+                  
+                  // Only show players who participated in this round (have scores) AND were not already eliminated
                   const playersInRound = game.players.filter(player => 
-                    event.scores && event.scores[player.id] !== undefined
+                    event.scores && 
+                    event.scores[player.id] !== undefined &&
+                    !eliminatedBeforeThisRound.has(player.id)
                   );
                   
                   // For Ace games, find who got ace (0 points)
@@ -740,7 +877,8 @@ export default function GamePage({ params }) {
                 }
                 
                 return null;
-              })}
+              });
+              })()}
             </div>
           </div>
         )}
@@ -776,89 +914,145 @@ export default function GamePage({ params }) {
                       {player.name}
                     </label>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch', flexWrap: 'nowrap' }}>
-                      <input 
-                        type="number" 
-                        value={roundScores[player.id] || ''}
-                        onChange={(e) => handleScoreChange(player.id, e.target.value)}
-                        onWheel={(e) => e.target.blur()}
-                        min="0"
-                        placeholder="Enter points"
-                        disabled={droppedPlayers[player.id] || winnerPlayers[player.id]}
-                        style={{ flex: '1', minWidth: '0' }}
-                        autoFocus={player.id === game.players.filter(p => !p.isLost)[0]?.id}
-                      />
-                      <label style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        gap: '6px',
-                        cursor: 'pointer',
-                        padding: '8px 12px',
-                        background: winnerPlayers[player.id] ? 'var(--success)' : 'transparent',
-                        border: '2px solid var(--success)',
-                        borderRadius: '6px',
-                        color: winnerPlayers[player.id] ? 'white' : 'var(--success)',
-                        fontWeight: '600',
-                        fontSize: '14px',
-                        whiteSpace: 'nowrap',
-                        transition: 'all 0.2s',
-                        flexShrink: '0',
-                        marginBottom: '0'
-                      }}>
+                      <div style={{ display: 'flex', gap: '4px', flex: '1', minWidth: '0' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentValue = parseInt(roundScores[player.id]) || 0;
+                            if (currentValue > 0) {
+                              handleScoreChange(player.id, (currentValue - 1).toString());
+                            }
+                          }}
+                          disabled={droppedPlayers[player.id] || winnerPlayers[player.id]}
+                          style={{
+                            padding: '8px 12px',
+                            background: 'var(--card-bg)',
+                            border: '2px solid var(--border)',
+                            borderRadius: '6px',
+                            color: 'var(--text)',
+                            fontWeight: '700',
+                            fontSize: '16px',
+                            cursor: 'pointer',
+                            flexShrink: '0',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => !e.target.disabled && (e.target.style.background = 'var(--primary)', e.target.style.color = 'white')}
+                          onMouseLeave={(e) => (e.target.style.background = 'var(--card-bg)', e.target.style.color = 'var(--text)')}
+                        >
+                          −
+                        </button>
                         <input 
-                          type="checkbox"
-                          checked={winnerPlayers[player.id] || false}
-                          onChange={() => handleWinnerToggle(player.id)}
-                          style={{ display: 'none' }}
+                          type="number" 
+                          value={roundScores[player.id] || ''}
+                          onChange={(e) => handleScoreChange(player.id, e.target.value)}
+                          onWheel={(e) => e.target.blur()}
+                          min="0"
+                          placeholder="Enter points"
+                          disabled={droppedPlayers[player.id] || winnerPlayers[player.id]}
+                          style={{ flex: '1', minWidth: '60px', textAlign: 'center' }}
+                          autoFocus={player.id === game.players.filter(p => !p.isLost)[0]?.id}
                         />
-                        {winnerPlayers[player.id] ? '✓ Winner (0 pts)' : '⚡ Winner'}
-                      </label>
-                      {canDrop ? (
-                        <label style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          gap: '6px',
-                          cursor: 'pointer',
-                          padding: '8px 12px',
-                          background: droppedPlayers[player.id] ? 'var(--danger)' : 'transparent',
-                          border: '2px solid var(--danger)',
-                          borderRadius: '6px',
-                          color: droppedPlayers[player.id] ? 'white' : 'var(--danger)',
-                          fontWeight: '600',
-                          fontSize: '14px',
-                          whiteSpace: 'nowrap',
-                          transition: 'all 0.2s',
-                          flexShrink: '0',
-                          marginBottom: '0'
-                        }}>
-                          <input 
-                            type="checkbox"
-                            checked={droppedPlayers[player.id] || false}
-                            onChange={() => handleDropToggle(player.id)}
-                            style={{ display: 'none' }}
-                          />
-                          {droppedPlayers[player.id] ? '✓ Drop (20 pts)' : 'Drop?'}
-                        </label>
-                      ) : (
-                        <div style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          gap: '6px',
-                          padding: '8px 12px',
-                          background: 'rgba(251, 191, 36, 0.1)',
-                          border: '2px solid var(--warning)',
-                          borderRadius: '6px',
-                          color: 'var(--warning)',
-                          fontWeight: '600',
-                          fontSize: '14px',
-                          whiteSpace: 'nowrap',
-                          flexShrink: '0',
-                          marginBottom: '0'
-                        }}>
-                          ⚠️ Must Play
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentValue = parseInt(roundScores[player.id]) || 0;
+                            handleScoreChange(player.id, (currentValue + 1).toString());
+                          }}
+                          disabled={droppedPlayers[player.id] || winnerPlayers[player.id]}
+                          style={{
+                            padding: '8px 12px',
+                            background: 'var(--card-bg)',
+                            border: '2px solid var(--border)',
+                            borderRadius: '6px',
+                            color: 'var(--text)',
+                            fontWeight: '700',
+                            fontSize: '16px',
+                            cursor: 'pointer',
+                            flexShrink: '0',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => !e.target.disabled && (e.target.style.background = 'var(--primary)', e.target.style.color = 'white')}
+                          onMouseLeave={(e) => (e.target.style.background = 'var(--card-bg)', e.target.style.color = 'var(--text)')}
+                        >
+                          +
+                        </button>
+                      </div>
+                      {isRummy && (
+                        <>
+                          <label style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            gap: '6px',
+                            cursor: 'pointer',
+                            padding: '8px 12px',
+                            background: winnerPlayers[player.id] ? 'var(--success)' : 'transparent',
+                            border: '2px solid var(--success)',
+                            borderRadius: '6px',
+                            color: winnerPlayers[player.id] ? 'white' : 'var(--success)',
+                            fontWeight: '600',
+                            fontSize: '14px',
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.2s',
+                            flexShrink: '0',
+                            marginBottom: '0'
+                          }}>
+                            <input 
+                              type="checkbox"
+                              checked={winnerPlayers[player.id] || false}
+                              onChange={() => handleWinnerToggle(player.id)}
+                              style={{ display: 'none' }}
+                            />
+                            {winnerPlayers[player.id] ? '✓ Winner (0 pts)' : '⚡ Winner'}
+                          </label>
+                          {canDrop ? (
+                            <label style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              gap: '6px',
+                              cursor: 'pointer',
+                              padding: '8px 12px',
+                              background: droppedPlayers[player.id] ? 'var(--danger)' : 'transparent',
+                              border: '2px solid var(--danger)',
+                              borderRadius: '6px',
+                              color: droppedPlayers[player.id] ? 'white' : 'var(--danger)',
+                              fontWeight: '600',
+                              fontSize: '14px',
+                              whiteSpace: 'nowrap',
+                              transition: 'all 0.2s',
+                              flexShrink: '0',
+                              marginBottom: '0'
+                            }}>
+                              <input 
+                                type="checkbox"
+                                checked={droppedPlayers[player.id] || false}
+                                onChange={() => handleDropToggle(player.id)}
+                                style={{ display: 'none' }}
+                              />
+                              {droppedPlayers[player.id] ? '✓ Drop (20 pts)' : 'Drop?'}
+                            </label>
+                          ) : (
+                            <div style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              gap: '6px',
+                              padding: '8px 12px',
+                              background: 'rgba(251, 191, 36, 0.1)',
+                              border: '2px solid var(--warning)',
+                              borderRadius: '6px',
+                              color: 'var(--warning)',
+                              fontWeight: '600',
+                              fontSize: '14px',
+                              whiteSpace: 'nowrap',
+                              flexShrink: '0',
+                              marginBottom: '0'
+                            }}>
+                              ⚠️ Must Play
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
