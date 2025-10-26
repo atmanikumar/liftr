@@ -117,6 +117,16 @@ export function GameProvider({ children }) {
     setPlayers(loadedPlayers);
   };
 
+  // Refresh all data from server
+  const refreshData = async () => {
+    setLoading(true);
+    const loadedPlayers = await loadFromServer('players');
+    const loadedGames = await loadFromServer('games');
+    setPlayers(loadedPlayers);
+    setGames(loadedGames);
+    setLoading(false);
+  };
+
   const addPlayer = (name) => {
     const avatars = ['🦸‍♂️', '🦹‍♂️', '🕷️', '🦇', '⚡', '💪', '🔥', '⭐', '🎯', '🏆', '👊', '🛡️', '⚔️', '🎪', '🎭', '🎬'];
     const randomAvatar = avatars[Math.floor(Math.random() * avatars.length)];
@@ -561,7 +571,8 @@ export function GameProvider({ children }) {
     declareAceWinners,
     getGame,
     getPlayerStats,
-    refreshPlayers
+    refreshPlayers,
+    refreshData
   };
 
   return (

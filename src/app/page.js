@@ -8,13 +8,14 @@ import styles from './page.module.css';
 
 export default function Home() {
   const router = useRouter();
-  const { players, games, createGame, getPlayerStats, loading: gameLoading } = useGame();
+  const { players, games, createGame, getPlayerStats, loading: gameLoading, refreshData } = useGame();
   const { isAdmin, user, loading: authLoading } = useAuth();
   const [showNewGameModal, setShowNewGameModal] = useState(false);
   const [gameType, setGameType] = useState('rummy');
   const [filterGameType, setFilterGameType] = useState('Rummy'); // Filter for top players
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [maxPoints, setMaxPoints] = useState(120);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Helper function to get profile photo for a player from players data
   const getPlayerProfilePhoto = (playerId) => {
@@ -147,6 +148,12 @@ export default function Home() {
     router.push(`/game/${game.id}`);
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refreshData();
+    setRefreshing(false);
+  };
+
   return (
     <div className={styles.home}>
       <div className="container">
@@ -155,11 +162,21 @@ export default function Home() {
             <h1 className={styles.title}>🏆 Dashboard</h1>
             <p className={styles.subtitle}>Track your card game champions</p>
           </div>
-          {isAdmin() && (
-            <button className="btn btn-primary" onClick={handleNewGame} style={{ color: 'white' }}>
-              <span style={{ filter: 'brightness(0) invert(1)' }}>➕</span> New Game
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <button 
+              className="btn btn-secondary" 
+              onClick={handleRefresh}
+              disabled={refreshing}
+              style={{ minWidth: '100px' }}
+            >
+              {refreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
             </button>
-          )}
+            {isAdmin() && (
+              <button className="btn btn-primary" onClick={handleNewGame} style={{ color: 'white' }}>
+                <span style={{ filter: 'brightness(0) invert(1)' }}>➕</span> New Game
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="card">
