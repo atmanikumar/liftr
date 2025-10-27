@@ -1,12 +1,65 @@
 import { NextResponse } from 'next/server';
-import { getGames, saveGames, updateGameInDB } from '@/lib/storage';
+import { getGames, saveGames, updateGameInDB, getUsers, getGameById } from '@/lib/storage';
+import { verifyToken } from '@/lib/auth';
+import { cookies } from 'next/headers';
 
-// GET all games
-export async function GET() {
+// GET games with optional filtering
+export async function GET(request) {
   try {
-    const games = await getGames();
+    const { searchParams } = new URL(request.url);
+    const gameType = searchParams.get('gameType');
+    const limit = searchParams.get('limit');
+    const recent = searchParams.get('recent') === 'true';
+    
+    let games = await getGames();
+    
+    // Filter by game type if specified
+    if (gameType && gameType !== 'All') {
+      games = games.filter(game => 
+        game.type.toLowerCase() === gameType.toLowerCase()
+      );
+    }
+    
+    // Sort by creation date (most recent first) if recent flag is set
+    if (recent) {
+      games = games.sort((a, b) => 
+        new Date(b.createdAt) - new Date(a.createdAt)
+      );
+    }
+    
+    // Limit results if specified
+    if (limit) {
+      games = games.slice(0, parseInt(limit));
+    }
+    
+    // Add runner-up information for Rummy games
+    if (gameType === 'Rummy' || (!gameType)) {
+      const users = await getUsers();
+      games = games.map(game => {
+        if (game.type.toLowerCase() === 'rummy' && game.status === 'completed' && 
+            game.rounds && game.rounds.length > 0 && game.winner) {
+          const lastRound = game.rounds[game.rounds.length - 1];
+          const runners = [];
+          
+          game.players.forEach(gamePlayer => {
+            if (gamePlayer.isLost && lastRound.scores && lastRound.scores[gamePlayer.id] !== 0) {
+              const user = users.find(u => u.id === gamePlayer.id);
+              runners.push({
+                ...gamePlayer,
+                profilePhoto: user?.profilePhoto || null
+              });
+            }
+          });
+          
+          return { ...game, runners };
+        }
+        return game;
+      });
+    }
+    
     return NextResponse.json(games);
   } catch (error) {
+    console.error('Error fetching games:', error);
     return NextResponse.json([], { status: 500 });
   }
 }
@@ -18,6 +71,23 @@ export async function POST(request) {
     
     if (!game.id || !game.type) {
       return NextResponse.json({ success: false, error: 'Game ID and type required' }, { status: 400 });
+    }
+    
+    // Verify user is authenticated and is the game creator
+    const cookieStore = cookies();
+    const token = cookieStore.get('token');
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    
+    const user = verifyToken(token.value);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 });
+    }
+    
+    // For new games, verify the createdBy matches the current user
+    if (game.createdBy && game.createdBy !== user.id) {
+      return NextResponse.json({ success: false, error: 'Cannot create game on behalf of another user' }, { status: 403 });
     }
     
     const result = await updateGameInDB(game); // Uses INSERT OR REPLACE under the hood
@@ -39,6 +109,29 @@ export async function PATCH(request) {
     
     if (!game.id || !game.type) {
       return NextResponse.json({ success: false, error: 'Game ID and type required' }, { status: 400 });
+    }
+    
+    // Verify user is authenticated
+    const cookieStore = cookies();
+    const token = cookieStore.get('token');
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    
+    const user = verifyToken(token.value);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 });
+    }
+    
+    // Get existing game to verify creator
+    const existingGame = await getGameById(game.id);
+    if (!existingGame) {
+      return NextResponse.json({ success: false, error: 'Game not found' }, { status: 404 });
+    }
+    
+    // Only the game creator can update the game (even admins cannot)
+    if (existingGame.createdBy !== user.id) {
+      return NextResponse.json({ success: false, error: 'Only the game creator can edit this game' }, { status: 403 });
     }
     
     const result = await updateGameInDB(game);

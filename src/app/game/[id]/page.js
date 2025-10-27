@@ -1,16 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
 import { useAuth } from '@/context/AuthContext';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import styles from './page.module.css';
 
 export default function GamePage({ params }) {
   const router = useRouter();
-  const { getGame, addRound, addPlayerToGame, declareWinner, declareDraw, updateMaxPoints, declareAceWinners, players, games, loading: gameLoading } = useGame();
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { loadData, getGame, addRound, updateRound, addPlayerToGame, declareWinner, declareDraw, updateMaxPoints, declareAceWinners, players, games } = useGame();
+  const { user, loading: authLoading } = useAuth();
+  
   const [game, setGame] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  
+  // Check if current user is the game creator
+  const isGameCreator = () => {
+    return game && user && game.createdBy === user.id;
+  };
   const [showAddRoundModal, setShowAddRoundModal] = useState(false);
   const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
   const [showDeclareWinnerModal, setShowDeclareWinnerModal] = useState(false);
@@ -28,6 +37,81 @@ export default function GamePage({ params }) {
   const [selectedWinner, setSelectedWinner] = useState(null);
   const [selectedAcePlayer, setSelectedAcePlayer] = useState(null);
   const [selectedAceWinners, setSelectedAceWinners] = useState([]);
+  const [editingRound, setEditingRound] = useState(null); // Track which round is being edited
+  
+  // Track if players are loaded
+  const playersLoadedRef = useRef(false);
+
+  // Optimized fetch game function - can be reused for refresh
+  const fetchGame = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/games/${params.id}`);
+      if (response.ok) {
+        const gameData = await response.json();
+        setGame(gameData);
+        setNotFound(false);
+        
+        // Initialize round scores only if empty
+        if (Object.keys(roundScores).length === 0) {
+          const initialScores = {};
+          gameData.players.forEach(player => {
+            initialScores[player.id] = '';
+          });
+          setRoundScores(initialScores);
+        }
+        
+        return gameData;
+      } else if (response.status === 404) {
+        setNotFound(true);
+        return null;
+      }
+    } catch (error) {
+      console.error('Error fetching game:', error);
+      setNotFound(true);
+      return null;
+    }
+  }, [params.id, roundScores]);
+
+  // Initial load - fetch game and load players once
+  useEffect(() => {
+    const initializePage = async () => {
+      setLoading(true);
+      
+      // Fetch game
+      await fetchGame();
+      
+      // Load players only once
+      if (!playersLoadedRef.current) {
+        loadData();
+        playersLoadedRef.current = true;
+      }
+      
+      setLoading(false);
+    };
+    
+    initializePage();
+  }, [params.id]); // Only depend on params.id, not fetchGame or loadData
+
+  // Update game from context ONLY when actions are performed (addRound, etc.)
+  // This prevents unnecessary re-fetches
+  useEffect(() => {
+    if (games.length > 0) {
+      const gameData = getGame(params.id);
+      if (gameData && gameData !== game) {
+        setGame(gameData);
+      }
+    }
+  }, [games, params.id, getGame, game]);
+
+  // Redirect if game not found after loading
+  useEffect(() => {
+    if (notFound && !loading) {
+      router.push('/');
+    }
+  }, [notFound, loading, router]);
+
+  // Enable pull-to-refresh
+  usePullToRefresh(fetchGame, { enabled: !loading && !authLoading && !!game });
 
   // Helper function to get profile photo for a player
   // Players data already has profilePhoto merged from users table via API
@@ -35,25 +119,6 @@ export default function GamePage({ params }) {
     const player = players.find(p => p.id === playerId);
     return player?.profilePhoto || null;
   };
-
-  // Update game whenever games context changes
-  useEffect(() => {
-    const gameData = getGame(params.id);
-    if (gameData) {
-      setGame(gameData);
-      // Initialize round scores with empty strings only if not already set
-      if (Object.keys(roundScores).length === 0) {
-        const initialScores = {};
-        gameData.players.forEach(player => {
-          initialScores[player.id] = '';
-        });
-        setRoundScores(initialScores);
-      }
-    } else if (!gameLoading) {
-      router.push('/');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.id, games, getGame, router, gameLoading]);
 
   // Reset round scores after adding a round
   const resetRoundScores = () => {
@@ -173,7 +238,14 @@ export default function GamePage({ params }) {
       }
     });
     
-    addRound(params.id, scoresWithDefaults, dropInfo, winnerInfo);
+    if (editingRound) {
+      // Update existing round
+      updateRound(params.id, editingRound.roundNumber, scoresWithDefaults, dropInfo, winnerInfo);
+      setEditingRound(null);
+    } else {
+      // Add new round
+      addRound(params.id, scoresWithDefaults, dropInfo, winnerInfo);
+    }
     
     // Reset scores for next round with empty strings
     resetRoundScores();
@@ -314,7 +386,7 @@ export default function GamePage({ params }) {
   const isAce = game?.type.toLowerCase() === 'ace';
 
   // Show loading state
-  if (authLoading || gameLoading || !game) {
+  if (authLoading || loading || !game) {
     return (
       <div className="container">
         <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
@@ -389,7 +461,7 @@ export default function GamePage({ params }) {
               )}
             </div>
             <div className={styles.headerActions}>
-              {game.status === 'in_progress' && isAdmin() && (
+              {game.status === 'in_progress' && isGameCreator() && (
                 <>
                   {isChess ? (
                     <>
@@ -446,9 +518,9 @@ export default function GamePage({ params }) {
                   )}
                 </>
               )}
-              {game.status === 'in_progress' && !isAdmin() && (
+              {game.status === 'in_progress' && !isGameCreator() && (
                 <span className={styles.playerNote}>
-                  {isChess ? 'Only admin can declare winner' : isAce ? 'Only admin can mark ace player, add players and end game' : 'Only admin can add rounds and players'}
+                  {isChess ? 'Only game creator can declare winner' : isAce ? 'Only game creator can mark ace player, add players and end game' : 'Only game creator can add rounds and players'}
                 </span>
               )}
             </div>
@@ -558,7 +630,7 @@ export default function GamePage({ params }) {
             </div>
             
             {/* Action buttons for Rummy games - below the standings table */}
-            {!isChess && !isAce && game.status === 'in_progress' && isAdmin() && (
+            {!isChess && !isAce && game.status === 'in_progress' && isGameCreator() && (
               <div style={{ 
                 display: 'flex', 
                 gap: '12px', 
@@ -713,7 +785,7 @@ export default function GamePage({ params }) {
                               <strong>{player.playerName}</strong>
                             </span>
                             <span className={styles.scoreValue} style={{ color: 'var(--danger)' }}>
-                              {player.points} pts (Max: {game.maxPoints})
+                              {player.points} (Max: {game.maxPoints})
                             </span>
                           </div>
                         ))}
@@ -753,7 +825,7 @@ export default function GamePage({ params }) {
                           </span>
                           {!isChess && (
                             <span className={styles.scoreValue} style={{ color: 'var(--success)' }}>
-                              {isAce ? `Joined with ${event.startingPoints} pts` : `Started with ${event.startingPoints} pts`}
+                              {isAce ? `Joined with ${event.startingPoints}` : `Started with ${event.startingPoints}`}
                             </span>
                           )}
                         </div>
@@ -785,6 +857,21 @@ export default function GamePage({ params }) {
                   // For Ace games, find who got ace (0 points)
                   const acePlayer = isAce ? playersInRound.find(p => event.scores[p.id] === 0) : null;
                   
+                  // Check if this is the last round and game completed within 5 mins
+                  const isLastRound = event.roundNumber === game.rounds.length;
+                  const canEditLastRound = isLastRound && game.status === 'completed' && game.completedAt && (() => {
+                    const completedAt = new Date(game.completedAt);
+                    const now = new Date();
+                    const diffInMinutes = (now - completedAt) / (1000 * 60);
+                    return diffInMinutes <= 5;
+                  })();
+                  
+                  // Rummy in-progress: can edit any round, Rummy completed: only last round within 5 mins
+                  const canEdit = !isAce && isGameCreator() && (
+                    (game.status === 'in_progress') || 
+                    (game.status === 'completed' && canEditLastRound)
+                  );
+                  
                   return (
                     <div key={event.id} className={styles.roundCard}>
                       <div className={styles.roundHeader}>
@@ -801,9 +888,35 @@ export default function GamePage({ params }) {
                             </span>
                           )}
                         </h3>
-                        <span className={styles.roundTime}>
-                          {formatDate(event.timestamp)}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          {canEdit && (
+                            <button
+                              className="btn btn-secondary"
+                              onClick={() => {
+                                setEditingRound(event);
+                                // Pre-fill the scores for editing
+                                const editScores = {};
+                                const editDropped = {};
+                                const editWinners = {};
+                                game.players.forEach(player => {
+                                  editScores[player.id] = event.scores && event.scores[player.id] !== undefined ? event.scores[player.id].toString() : '';
+                                  editDropped[player.id] = event.drops && event.drops[player.id] === true;
+                                  editWinners[player.id] = event.winners && event.winners[player.id] === true;
+                                });
+                                setRoundScores(editScores);
+                                setDroppedPlayers(editDropped);
+                                setWinnerPlayers(editWinners);
+                                setShowAddRoundModal(true);
+                              }}
+                              style={{ padding: '4px 8px', fontSize: '12px' }}
+                            >
+                              ✏️ Edit
+                            </button>
+                          )}
+                          <span className={styles.roundTime}>
+                            {formatDate(event.timestamp)}
+                          </span>
+                        </div>
                       </div>
                       <div className={styles.roundScores}>
                         {/* Only show players who were in this round, sorted by their scores */}
@@ -819,6 +932,18 @@ export default function GamePage({ params }) {
                             const isAceInRound = isAce && score === 0;
                             const hasDropped = event.drops && event.drops[player.id] === true;
                             const isWinner = event.winners && event.winners[player.id] === true;
+                            
+                            // Calculate previous total (total before this round) for Rummy
+                            let previousTotal = 0;
+                            if (!isChess && !isAce) {
+                              // Sum all rounds before this one
+                              game.rounds.forEach(round => {
+                                if (round.roundNumber < event.roundNumber) {
+                                  previousTotal += round.scores[player.id] || 0;
+                                }
+                              });
+                            }
+                            const currentTotal = previousTotal + score;
                             
                             return (
                               <div key={player.id} className={styles.scoreItem}>
@@ -865,7 +990,18 @@ export default function GamePage({ params }) {
                                 </span>
                                 {!isChess && (
                                   <span className={styles.scoreValue} style={isAceInRound ? { color: 'var(--danger)', fontWeight: '600' } : {}}>
-                                    {isAce ? (score === 0 ? 'ACE' : `+${score} pt${score !== 1 ? 's' : ''}`) : `${score} pts`}
+                                    {isAce 
+                                      ? (score === 0 ? 'ACE' : `+${score}`) 
+                                      : (
+                                        <span>
+                                          <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{previousTotal}</span>
+                                          {' + '}
+                                          <span style={{ fontWeight: '600' }}>{score}</span>
+                                          {' = '}
+                                          <span style={{ fontWeight: '700', color: 'var(--primary)' }}>{currentTotal}</span>
+                                        </span>
+                                      )
+                                    }
                                   </span>
                                 )}
                               </div>
@@ -886,9 +1022,17 @@ export default function GamePage({ params }) {
 
       {/* Add Round Modal */}
       {showAddRoundModal && (
-        <div className="modal-overlay" onClick={() => setShowAddRoundModal(false)}>
+        <div className="modal-overlay" onClick={() => {
+          setShowAddRoundModal(false);
+          setEditingRound(null);
+        }}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>📝 Add Round {game.rounds.length + 1} Points</h2>
+            <h2>
+              {editingRound 
+                ? `✏️ Edit Round ${editingRound.roundNumber} Points` 
+                : `📝 Add Round ${game.rounds.length + 1} Points`
+              }
+            </h2>
             
             <div className={styles.scoreInputs}>
               {game.players.filter(p => !p.isLost).map(player => {
@@ -914,69 +1058,17 @@ export default function GamePage({ params }) {
                       {player.name}
                     </label>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch', flexWrap: 'nowrap' }}>
-                      <div style={{ display: 'flex', gap: '4px', flex: '1', minWidth: '0' }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const currentValue = parseInt(roundScores[player.id]) || 0;
-                            if (currentValue > 0) {
-                              handleScoreChange(player.id, (currentValue - 1).toString());
-                            }
-                          }}
-                          disabled={droppedPlayers[player.id] || winnerPlayers[player.id]}
-                          style={{
-                            padding: '8px 12px',
-                            background: 'var(--card-bg)',
-                            border: '2px solid var(--border)',
-                            borderRadius: '6px',
-                            color: 'var(--text)',
-                            fontWeight: '700',
-                            fontSize: '16px',
-                            cursor: 'pointer',
-                            flexShrink: '0',
-                            transition: 'all 0.2s'
-                          }}
-                          onMouseEnter={(e) => !e.target.disabled && (e.target.style.background = 'var(--primary)', e.target.style.color = 'white')}
-                          onMouseLeave={(e) => (e.target.style.background = 'var(--card-bg)', e.target.style.color = 'var(--text)')}
-                        >
-                          −
-                        </button>
-                        <input 
-                          type="number" 
-                          value={roundScores[player.id] || ''}
-                          onChange={(e) => handleScoreChange(player.id, e.target.value)}
-                          onWheel={(e) => e.target.blur()}
-                          min="0"
-                          placeholder="Enter points"
-                          disabled={droppedPlayers[player.id] || winnerPlayers[player.id]}
-                          style={{ flex: '1', minWidth: '60px', textAlign: 'center' }}
-                          autoFocus={player.id === game.players.filter(p => !p.isLost)[0]?.id}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const currentValue = parseInt(roundScores[player.id]) || 0;
-                            handleScoreChange(player.id, (currentValue + 1).toString());
-                          }}
-                          disabled={droppedPlayers[player.id] || winnerPlayers[player.id]}
-                          style={{
-                            padding: '8px 12px',
-                            background: 'var(--card-bg)',
-                            border: '2px solid var(--border)',
-                            borderRadius: '6px',
-                            color: 'var(--text)',
-                            fontWeight: '700',
-                            fontSize: '16px',
-                            cursor: 'pointer',
-                            flexShrink: '0',
-                            transition: 'all 0.2s'
-                          }}
-                          onMouseEnter={(e) => !e.target.disabled && (e.target.style.background = 'var(--primary)', e.target.style.color = 'white')}
-                          onMouseLeave={(e) => (e.target.style.background = 'var(--card-bg)', e.target.style.color = 'var(--text)')}
-                        >
-                          +
-                        </button>
-                      </div>
+                      <input 
+                        type="number" 
+                        value={roundScores[player.id] || ''}
+                        onChange={(e) => handleScoreChange(player.id, e.target.value)}
+                        onWheel={(e) => e.target.blur()}
+                        min="0"
+                        placeholder="0"
+                        disabled={droppedPlayers[player.id] || winnerPlayers[player.id]}
+                        style={{ flex: '1', minWidth: '60px', textAlign: 'center' }}
+                        autoFocus={player.id === game.players.filter(p => !p.isLost)[0]?.id}
+                      />
                       {isRummy && (
                         <>
                           <label style={{ 
@@ -1003,7 +1095,7 @@ export default function GamePage({ params }) {
                               onChange={() => handleWinnerToggle(player.id)}
                               style={{ display: 'none' }}
                             />
-                            {winnerPlayers[player.id] ? '✓ Winner (0 pts)' : '⚡ Winner'}
+                            W
                           </label>
                           {canDrop ? (
                             <label style={{ 
@@ -1030,7 +1122,7 @@ export default function GamePage({ params }) {
                                 onChange={() => handleDropToggle(player.id)}
                                 style={{ display: 'none' }}
                               />
-                              {droppedPlayers[player.id] ? '✓ Drop (20 pts)' : 'Drop?'}
+                              D
                             </label>
                           ) : (
                             <div style={{ 
@@ -1295,20 +1387,20 @@ export default function GamePage({ params }) {
             )}
             
             <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
-              Change the maximum points for this game.
+              Change the maximum for this game.
               <br /><br />
-              <strong>Note:</strong> Players with points equal to or above the new max will be marked as eliminated.
+              <strong>Note:</strong> Players equal to or above the new max will be marked as eliminated.
             </p>
             
             <div className="form-group">
-              <label>Max Points</label>
+              <label>Max</label>
               <input 
                 type="number" 
                 value={newMaxPoints}
                 onChange={(e) => setNewMaxPoints(e.target.value)}
                 onWheel={(e) => e.target.blur()}
                 min="1"
-                placeholder="Enter max points"
+                placeholder="0"
                 autoFocus
               />
             </div>
@@ -1351,7 +1443,7 @@ export default function GamePage({ params }) {
                     {player.name}
                   </span>
                   <span style={{ fontWeight: '600' }}>
-                    {player.totalPoints} pts
+                    {player.totalPoints}
                   </span>
                 </div>
               ))}
@@ -1389,7 +1481,7 @@ export default function GamePage({ params }) {
             <h2>🎯 Mark Ace Player (Loser)</h2>
             
             <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
-              Select the player who lost this round (gets 0 points, others get 1):
+              Select the player who lost this round (gets 0, others get 1):
             </p>
             
             <div className={styles.playerList}>
@@ -1412,7 +1504,7 @@ export default function GamePage({ params }) {
                   )}
                   <span style={{ fontSize: '16px', fontWeight: '500' }}>{player.name}</span>
                   <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-                    ({player.totalPoints} pts)
+                    ({player.totalPoints})
                   </span>
                   {selectedAcePlayer === player.id && <span style={{ fontSize: '20px' }}>✓</span>}
                 </div>
@@ -1434,7 +1526,7 @@ export default function GamePage({ params }) {
                 onClick={handleMarkAcePlayer}
                 disabled={!selectedAcePlayer}
               >
-                Mark as Ace (0 pts)
+                Mark as Ace (0)
               </button>
             </div>
           </div>
@@ -1451,7 +1543,7 @@ export default function GamePage({ params }) {
             <h2>🏁 End Game & Declare Winners</h2>
             
             <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
-              Players with highest points are pre-selected. Adjust if needed:
+              Players with highest are pre-selected. Adjust if needed:
             </p>
             
             <div className={styles.playerList}>
@@ -1474,7 +1566,7 @@ export default function GamePage({ params }) {
                   )}
                   <span style={{ fontSize: '16px', fontWeight: '500' }}>{player.name}</span>
                   <span style={{ fontSize: '14px', color: 'var(--success)', fontWeight: '600' }}>
-                    {player.totalPoints} pts
+                    {player.totalPoints}
                   </span>
                   {selectedAceWinners.includes(player.id) && <span style={{ fontSize: '20px' }}>✓</span>}
                 </div>

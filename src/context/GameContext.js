@@ -92,24 +92,22 @@ export function GameProvider({ children }) {
   const [players, setPlayers] = useState([]);
   const [games, setGames] = useState([]);
   const [initialized, setInitialized] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  // Load data from server on mount - ONLY ONCE
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      // Load users (as players) and games from API
-      const loadedPlayers = await loadFromServer('users');
-      const loadedGames = await loadFromServer('games');
-      
-      setPlayers(loadedPlayers);
-      setGames(loadedGames);
-      setInitialized(true);
-      setLoading(false);
-    };
+  // Load data on-demand (not on mount)
+  const loadData = async () => {
+    if (initialized) return; // Don't reload if already loaded
     
-    loadData();
-  }, []); // Empty dependency array = run once on mount
+    setLoading(true);
+    // Load users (as players) and games from API
+    const loadedPlayers = await loadFromServer('users');
+    const loadedGames = await loadFromServer('games');
+    
+    setPlayers(loadedPlayers);
+    setGames(loadedGames);
+    setInitialized(true);
+    setLoading(false);
+  };
 
   // Refresh players from server
   const refreshPlayers = async () => {
@@ -152,7 +150,7 @@ export function GameProvider({ children }) {
   };
 
 
-  const createGame = async (gameType, selectedPlayerIds, maxPoints = 120) => {
+  const createGame = async (gameType, selectedPlayerIds, maxPoints = 120, playerData = null, createdBy) => {
     const now = new Date();
     const gameNumber = games.filter(g => 
       new Date(g.createdAt).toDateString() === now.toDateString()
@@ -161,13 +159,21 @@ export function GameProvider({ children }) {
     // Capitalize first letter of game type
     const capitalizedGameType = gameType.charAt(0).toUpperCase() + gameType.slice(1);
 
+    // Use provided playerData if available, otherwise fall back to context players
+    const playersSource = playerData && playerData.length > 0 ? playerData : players;
+
     const newGame = {
       id: Date.now().toString(),
       type: capitalizedGameType,
       title: `${capitalizedGameType} Game ${gameNumber}`,
       createdAt: now.toISOString(),
+      createdBy: createdBy,
       players: selectedPlayerIds.map(playerId => {
-        const player = players.find(p => p.id === playerId);
+        const player = playersSource.find(p => p.id === playerId);
+        if (!player) {
+          console.error(`Player not found: ${playerId}`);
+          return null;
+        }
         return {
           id: playerId,
           name: player.name,
@@ -175,7 +181,7 @@ export function GameProvider({ children }) {
           totalPoints: 0,
           isLost: false
         };
-      }),
+      }).filter(Boolean), // Remove any null entries
       rounds: [],
       history: [], // Track all events (rounds and player additions)
       status: 'in_progress', // 'in_progress', 'completed'
@@ -396,6 +402,73 @@ export function GameProvider({ children }) {
     updateGameOnServer(updatedGame);
   };
 
+  const updateRound = (gameId, roundNumber, roundScores, dropInfo = {}, winnerInfo = {}) => {
+    const game = games.find(g => g.id === gameId);
+    if (!game) return;
+    
+    // Update the specific round
+    const updatedRounds = game.rounds.map(round => 
+      round.roundNumber === roundNumber 
+        ? { ...round, scores: roundScores, drops: dropInfo, winners: winnerInfo }
+        : round
+    );
+    
+    // Recalculate player totals from scratch
+    const initialPlayers = game.players.map(p => ({ ...p, totalPoints: 0, isLost: false }));
+    const isAce = game.type.toLowerCase() === 'ace';
+    
+    let recalculatedPlayers = [...initialPlayers];
+    updatedRounds.forEach(round => {
+      recalculatedPlayers = recalculatedPlayers.map(player => {
+        const score = round.scores[player.id] || 0;
+        const newTotal = player.totalPoints + score;
+        const hasDropped = round.drops && round.drops[player.id] === true;
+        return {
+          ...player,
+          totalPoints: newTotal,
+          isLost: isAce ? false : newTotal >= game.maxPoints,
+          isDropped: hasDropped || player.isDropped
+        };
+      });
+    });
+    
+    // Check if game should be completed
+    const playersNotLost = recalculatedPlayers.filter(p => !p.isLost);
+    let status = game.status;
+    let winner = game.winner;
+    let completedAt = game.completedAt;
+    
+    if (!isAce && playersNotLost.length === 1) {
+      status = 'completed';
+      winner = playersNotLost[0].id;
+      if (!completedAt) {
+        completedAt = new Date().toISOString();
+      }
+    } else if (!isAce && playersNotLost.length === 0) {
+      status = 'completed';
+      if (!completedAt) {
+        completedAt = new Date().toISOString();
+      }
+      // If all lost, the one with lowest score wins
+      const sortedPlayers = [...recalculatedPlayers].sort((a, b) => a.totalPoints - b.totalPoints);
+      winner = sortedPlayers[0].id;
+    }
+    
+    const updatedGame = {
+      ...game,
+      rounds: updatedRounds,
+      history: updatedRounds,
+      players: recalculatedPlayers,
+      status,
+      winner,
+      ...(completedAt && { completedAt })
+    };
+    
+    const updatedGames = games.map(g => g.id === gameId ? updatedGame : g);
+    setGames(updatedGames);
+    updateGameOnServer(updatedGame);
+  };
+
   const declareWinner = (gameId, winnerId) => {
     const game = games.find(g => g.id === gameId);
     if (!game) return;
@@ -560,11 +633,13 @@ export function GameProvider({ children }) {
     players,
     games,
     loading,
+    loadData,
     addPlayer,
     updatePlayer,
     createGame,
     addPlayerToGame,
     addRound,
+    updateRound,
     declareWinner,
     declareDraw,
     updateMaxPoints,

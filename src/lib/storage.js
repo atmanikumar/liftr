@@ -7,6 +7,7 @@ export {
   getPlayers,
   savePlayers,
   getGames,
+  getGameById,
   saveGames,
   updateGameInDB,
   initDatabase,

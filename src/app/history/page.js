@@ -1,15 +1,33 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import styles from './page.module.css';
 
 export default function HistoryPage() {
   const router = useRouter();
-  const { games, players } = useGame();
+  const { loadData, games, players, loading } = useGame();
   const [filterGameType, setFilterGameType] = useState('All');
   const [filterPlayer, setFilterPlayer] = useState('All');
+  const loadedRef = useRef(false);
+  
+  // Load game data on mount (only once)
+  useEffect(() => {
+    if (!loadedRef.current) {
+      loadData();
+      loadedRef.current = true;
+    }
+  }, [loadData]);
+
+  // Pull-to-refresh handler
+  const handleRefresh = useCallback(async () => {
+    await loadData();
+  }, [loadData]);
+
+  // Enable pull-to-refresh
+  usePullToRefresh(handleRefresh, { enabled: !loading });
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);

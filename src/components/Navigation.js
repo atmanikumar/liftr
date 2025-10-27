@@ -4,17 +4,14 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { useGame } from '@/context/GameContext';
 import styles from './Navigation.module.css';
 
 export default function Navigation() {
   const pathname = usePathname();
   const { user, logout, isAdmin } = useAuth();
-  const { refreshData } = useGame();
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallButton, setShowInstallButton] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
   // Handle PWA install prompt
   useEffect(() => {
@@ -80,12 +77,6 @@ export default function Navigation() {
     logout();
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await refreshData();
-    setRefreshing(false);
-  };
-
   return (
     <>
       <nav className={styles.nav}>
@@ -143,18 +134,6 @@ export default function Navigation() {
               </button>
             </div>
           )}
-
-          {/* Refresh Button */}
-          <button 
-            className={styles.refreshBtn}
-            onClick={handleRefresh}
-            disabled={refreshing}
-            title="Refresh data"
-          >
-            <span className="material-icons">
-              {refreshing ? 'hourglass_empty' : 'refresh'}
-            </span>
-          </button>
 
           {/* Mobile Hamburger Button */}
           <button 

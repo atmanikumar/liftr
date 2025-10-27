@@ -19,24 +19,7 @@ export function getTursoClient() {
 
 // Initialize database tables (migration only - add profilePhoto column)
 export async function initDatabase() {
-  const db = getTursoClient();
-  if (!db) return false;
 
-  try {
-    // Add profilePhoto column to users table (migration)
-    try {
-      await db.execute(`ALTER TABLE users ADD COLUMN profilePhoto TEXT`);
-    } catch (error) {
-      // Column already exists, ignore the error
-      if (!error.message.includes('duplicate column') && !error.message.includes('already exists')) {
-        throw error;
-      }
-    }
-
-    return true;
-  } catch (error) {
-    return false;
-  }
 }
 
 // Users operations
@@ -67,10 +50,16 @@ export async function saveUsers(users) {
   }
 
   try {
-    // Clear existing users
-    await db.execute('DELETE FROM users');
+    // Get existing users to preserve profilePhoto
+    const existingUsersResult = await db.execute('SELECT id, profilePhoto FROM users');
+    const existingPhotos = {};
+    existingUsersResult.rows.forEach(row => {
+      if (row.profilePhoto) {
+        existingPhotos[row.id] = row.profilePhoto;
+      }
+    });
     
-    // Insert all users
+    // Upsert all users (preserve existing profilePhotos)
     for (const user of users) {
       // Ensure all values are primitive types (strings, numbers, etc.)
       const safeUser = {
@@ -80,11 +69,14 @@ export async function saveUsers(users) {
         name: String(user.name || ''),
         role: String(user.role || 'player'),
         createdAt: String(user.createdAt || new Date().toISOString()),
-        profilePhoto: user.profilePhoto ? String(user.profilePhoto) : null
+        // Preserve existing profilePhoto if not provided in user object
+        profilePhoto: user.profilePhoto 
+          ? String(user.profilePhoto) 
+          : (existingPhotos[user.id] || null)
       };
       
       await db.execute({
-        sql: `INSERT INTO users (id, username, password, name, role, createdAt, profilePhoto) 
+        sql: `INSERT OR REPLACE INTO users (id, username, password, name, role, createdAt, profilePhoto) 
               VALUES (?, ?, ?, ?, ?, ?, ?)`,
         args: [
           safeUser.id,
@@ -100,6 +92,7 @@ export async function saveUsers(users) {
     
     return true;
   } catch (error) {
+    console.error('Error saving users:', error);
     return false;
   }
 }
@@ -131,17 +124,15 @@ export async function savePlayers(players) {
   if (!db) return false;
 
   try {
-    // Clear existing players
-    await db.execute('DELETE FROM players');
-    
-    // Insert all players (avoid duplicates)
+    // Avoid duplicates
     const uniquePlayers = Array.from(
       new Map(players.map(p => [p.id, p])).values()
     );
     
+    // Use INSERT OR REPLACE to upsert each player
     for (const player of uniquePlayers) {
       await db.execute({
-        sql: `INSERT INTO players (id, name, avatar, wins, gamesPlayed, totalGames, winPercentage, rank) 
+        sql: `INSERT OR REPLACE INTO players (id, name, avatar, wins, gamesPlayed, totalGames, winPercentage, rank) 
               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           player.id || '',
@@ -158,6 +149,7 @@ export async function savePlayers(players) {
     
     return true;
   } catch (error) {
+    console.error('Error saving players:', error);
     return false;
   }
 }
@@ -221,6 +213,83 @@ export async function getGames() {
   }
 }
 
+export async function getGameById(gameId) {
+  const db = getTursoClient();
+  if (!db) return null;
+
+  try {
+    // Try Rummy games table first
+    const rummyResult = await db.execute({
+      sql: 'SELECT * FROM games WHERE id = ?',
+      args: [gameId]
+    });
+    
+    if (rummyResult.rows.length > 0) {
+      return JSON.parse(rummyResult.rows[0].data);
+    }
+    
+    // Try Chess games table
+    const chessResult = await db.execute({
+      sql: 'SELECT * FROM chess_games WHERE id = ?',
+      args: [gameId]
+    });
+    
+    if (chessResult.rows.length > 0) {
+      const row = chessResult.rows[0];
+      return {
+        id: row.id,
+        type: 'Chess',
+        title: row.title,
+        createdAt: row.createdAt,
+        status: row.status,
+        winner: row.winner,
+        isDraw: row.isDraw === 1 || row.isDraw === true,
+        maxPoints: null,
+        players: [
+          {
+            id: row.player1_id,
+            name: row.player1_name,
+            avatar: row.player1_avatar,
+            totalPoints: 0,
+            isLost: false
+          },
+          {
+            id: row.player2_id,
+            name: row.player2_name,
+            avatar: row.player2_avatar,
+            totalPoints: 0,
+            isLost: false
+          }
+        ],
+        rounds: [],
+        history: []
+      };
+    }
+    
+    // Try Ace games table
+    const aceResult = await db.execute({
+      sql: 'SELECT * FROM ace_games WHERE id = ?',
+      args: [gameId]
+    });
+    
+    if (aceResult.rows.length > 0) {
+      const row = aceResult.rows[0];
+      const gameData = JSON.parse(row.data);
+      // Add winners array if completed
+      if (row.status === 'completed' && row.winners) {
+        gameData.winners = row.winners.split(',');
+      }
+      return gameData;
+    }
+    
+    // Game not found in any table
+    return null;
+  } catch (error) {
+    console.error('Error fetching game by ID:', error);
+    return null;
+  }
+}
+
 export async function saveGames(games) {
   const db = getTursoClient();
   if (!db) return false;
@@ -231,16 +300,11 @@ export async function saveGames(games) {
     const aceGames = games.filter(g => g.type.toLowerCase() === 'ace');
     const rummyGames = games.filter(g => g.type.toLowerCase() === 'rummy');
     
-    // Clear existing games
-    await db.execute('DELETE FROM games');
-    await db.execute('DELETE FROM chess_games');
-    await db.execute('DELETE FROM ace_games');
-    
-    // Save Rummy games only
+    // Upsert Rummy games
     for (const game of rummyGames) {
       await db.execute({
-        sql: `INSERT INTO games (id, type, title, createdAt, status, winner, maxPoints, data) 
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT OR REPLACE INTO games (id, type, title, createdAt, status, winner, maxPoints, createdBy, data) 
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           game.id,
           game.type,
@@ -249,20 +313,21 @@ export async function saveGames(games) {
           game.status,
           game.winner || null,
           game.maxPoints,
+          game.createdBy,
           JSON.stringify(game)
         ]
       });
     }
     
-    // Save Chess games to separate table
+    // Upsert Chess games to separate table
     for (const game of chessGames) {
       // Chess requires exactly 2 players
       if (game.players.length === 2) {
         await db.execute({
-          sql: `INSERT INTO chess_games (id, title, createdAt, status, winner, isDraw,
+          sql: `INSERT OR REPLACE INTO chess_games (id, title, createdAt, status, winner, isDraw, createdBy,
                 player1_id, player1_name, player1_avatar, 
                 player2_id, player2_name, player2_avatar) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
             game.id,
             game.title,
@@ -270,6 +335,7 @@ export async function saveGames(games) {
             game.status,
             game.winner || null,
             game.isDraw ? 1 : 0,
+            game.createdBy,
             game.players[0].id,
             game.players[0].name,
             game.players[0].avatar,
@@ -281,7 +347,7 @@ export async function saveGames(games) {
       }
     }
     
-    // Save Ace games to separate table
+    // Upsert Ace games to separate table
     for (const game of aceGames) {
       // winners is a comma-separated list of winner IDs
       const winners = game.status === 'completed' && game.winners 
@@ -289,14 +355,15 @@ export async function saveGames(games) {
         : null;
       
       await db.execute({
-        sql: `INSERT INTO ace_games (id, title, createdAt, status, winners, data) 
-              VALUES (?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT OR REPLACE INTO ace_games (id, title, createdAt, status, winners, createdBy, data) 
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
         args: [
           game.id,
           game.title,
           game.createdAt,
           game.status,
           winners,
+          game.createdBy,
           JSON.stringify(game)
         ]
       });
@@ -304,6 +371,7 @@ export async function saveGames(games) {
     
     return true;
   } catch (error) {
+    console.error('Error saving games:', error);
     return false;
   }
 }
@@ -325,10 +393,10 @@ export async function updateGameInDB(game) {
       // Try to insert, if exists then update
       const result = await db.execute({
         sql: `INSERT OR REPLACE INTO chess_games 
-              (id, title, createdAt, status, winner, isDraw,
+              (id, title, createdAt, status, winner, isDraw, createdBy,
                player1_id, player1_name, player1_avatar,
                player2_id, player2_name, player2_avatar)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           game.id,
           game.title,
@@ -336,6 +404,7 @@ export async function updateGameInDB(game) {
           game.status,
           game.winner || null,
           game.isDraw ? 1 : 0,
+          game.createdBy,
           game.players[0].id,
           game.players[0].name,
           game.players[0].avatar,
@@ -350,21 +419,22 @@ export async function updateGameInDB(game) {
         : null;
       
       const result = await db.execute({
-        sql: `INSERT OR REPLACE INTO ace_games (id, title, createdAt, status, winners, data)
-              VALUES (?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT OR REPLACE INTO ace_games (id, title, createdAt, status, winners, createdBy, data)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
         args: [
           game.id,
           game.title,
           game.createdAt,
           game.status,
           winners,
+          game.createdBy,
           JSON.stringify(game)
         ]
       });
     } else if (type === 'rummy') {
       const result = await db.execute({
-        sql: `INSERT OR REPLACE INTO games (id, type, title, createdAt, status, winner, maxPoints, data)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT OR REPLACE INTO games (id, type, title, createdAt, status, winner, maxPoints, createdBy, data)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           game.id,
           game.type,
@@ -373,6 +443,7 @@ export async function updateGameInDB(game) {
           game.status,
           game.winner || null,
           game.maxPoints,
+          game.createdBy,
           JSON.stringify(game)
         ]
       });

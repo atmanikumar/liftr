@@ -1,149 +1,93 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
 import { useAuth } from '@/context/AuthContext';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import styles from './page.module.css';
 
 export default function Home() {
   const router = useRouter();
-  const { players, games, createGame, getPlayerStats, loading: gameLoading } = useGame();
+  const { createGame } = useGame();
   const { isAdmin, user, loading: authLoading } = useAuth();
   const [showNewGameModal, setShowNewGameModal] = useState(false);
   const [gameType, setGameType] = useState('rummy');
   const [filterGameType, setFilterGameType] = useState('Rummy'); // Filter for top players
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [maxPoints, setMaxPoints] = useState(120);
+  const [topPlayers, setTopPlayers] = useState([]);
+  const [recentMatches, setRecentMatches] = useState([]);
+  const [inProgressGames, setInProgressGames] = useState([]);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [players, setPlayers] = useState([]);
+  const [playersLoading, setPlayersLoading] = useState(false);
 
-  // Helper function to get profile photo for a player
-  // Players data already has profilePhoto merged from users table via API
-  const getPlayerProfilePhoto = (playerId) => {
-    const player = players.find(p => p.id === playerId);
-    return player?.profilePhoto || null;
-  };
-
-  // Memoize top players calculation to prevent blocking navigation
-  // MUST be before conditional returns to follow Rules of Hooks
-  const topPlayers = useMemo(() => {
-    // Filter games by type (case-insensitive to handle both old and new games)
-    const filteredGames = games.filter(game => 
-      game.type.toLowerCase() === filterGameType.toLowerCase() && 
-      game.status === 'completed'
-    );
+  // Fetch data function that can be reused
+  const fetchData = useCallback(async () => {
+    if (!user) return;
     
-    // Calculate stats for each player in filtered games
-    const playerStatsMap = {};
-    
-    filteredGames.forEach(game => {
-      game.players.forEach(gamePlayer => {
-        if (!playerStatsMap[gamePlayer.id]) {
-          const player = players.find(p => p.id === gamePlayer.id);
-          playerStatsMap[gamePlayer.id] = {
-            id: gamePlayer.id,
-            name: gamePlayer.name,
-            avatar: gamePlayer.avatar,
-            wins: 0,
-            draws: 0,
-            totalGames: 0,
-            finals: 0,
-            winPercentage: 0
-          };
+    setStatsLoading(true);
+      try {
+        // Fetch top players stats
+        const statsResponse = await fetch(`/api/stats?gameType=${filterGameType}`);
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json();
+          setTopPlayers(statsData.topPlayers);
         }
         
-        playerStatsMap[gamePlayer.id].totalGames += 1;
-        
-        // Check for multiple winners (Ace games) or single winner
-        const isWinner = game.winners && game.winners.length > 0
-          ? game.winners.includes(gamePlayer.id)
-          : game.winner === gamePlayer.id;
-        
-        if (isWinner) {
-          playerStatsMap[gamePlayer.id].wins += 1;
+        // Fetch recent completed matches (30)
+        const matchesResponse = await fetch(`/api/recent-matches?gameType=${filterGameType}&limit=30&status=completed`);
+        if (matchesResponse.ok) {
+          const matchesData = await matchesResponse.json();
+          setRecentMatches(matchesData.matches);
         }
         
-        // For Chess: count draws (games with no winner)
-        if (game.type.toLowerCase() === 'chess' && !game.winner) {
-          playerStatsMap[gamePlayer.id].draws += 1;
+        // Fetch in-progress games (all game types)
+        const inProgressResponse = await fetch(`/api/recent-matches?limit=100&status=in_progress`);
+        if (inProgressResponse.ok) {
+          const inProgressData = await inProgressResponse.json();
+          setInProgressGames(inProgressData.matches);
         }
-        
-        // For Rummy: count finals (all players who participated in the last round, including winner)
-        if (game.type.toLowerCase() === 'rummy' && game.rounds && game.rounds.length > 0 && game.winner) {
-          // Get the last round
-          const lastRound = game.rounds[game.rounds.length - 1];
-          
-          // Check if this player scored in the last round (including winner)
-          if (lastRound.scores && lastRound.scores[gamePlayer.id] !== 0 || !gamePlayer?.isLost) {
-            // This player participated in the final
-            playerStatsMap[gamePlayer.id].finals += 1;
-          }
-        }
-      });
-    });
-
-    // Calculate win percentages and sort
-    const statsArray = Object.values(playerStatsMap).map(player => {
-      let totalPoints = 0;
-      
-      if (filterGameType.toLowerCase() === 'chess') {
-        // Chess: Win = 1 point, Draw = 0.5 point, Loss = 0 point
-        totalPoints = (player.wins * 1) + (player.draws * 0.5);
-      } else if (filterGameType.toLowerCase() === 'rummy') {
-        // Rummy: Win = 1 point, Final (without win) = 0.25 point
-        const finalsWithoutWins = player.finals - player.wins;
-        totalPoints = (player.wins * 1) + (finalsWithoutWins * 0.25);
-      } else {
-        // Ace: Simple win rate (wins only)
-        totalPoints = player.wins * 1;
+      } catch (error) {
+        console.error('Failed to fetch data:', error);
+      } finally {
+        setStatsLoading(false);
       }
-      
-      return {
-        ...player,
-        winPercentage: player.totalGames > 0 
-          ? Math.round((totalPoints / player.totalGames) * 100)
-          : 0
-      };
-    });
-    
-    // Sort by win percentage, then by wins, then by total games
-    return statsArray
-      .sort((a, b) => {
-        if (b.winPercentage !== a.winPercentage) return b.winPercentage - a.winPercentage;
-        if (b.wins !== a.wins) return b.wins - a.wins;
-        return b.totalGames - a.totalGames;
-      })
-      .slice(0, 5); // Top 5 only
-  }, [games, players, filterGameType]);
-  
-  // Helper function to get runners-up for a game (Rummy only)
-  const getRunners = (game) => {
-    if (game.type.toLowerCase() !== 'rummy' || game.status !== 'completed' || !game.rounds || game.rounds.length === 0 || !game.winner) {
-      return [];
-    }
-    
-    const runners = [];
-    const lastRound = game.rounds[game.rounds.length - 1];
-    
-      game.players.forEach(gamePlayer => {
-        if (gamePlayer.isLost && lastRound.scores && lastRound.scores[gamePlayer.id] !== 0) {
-          runners.push(gamePlayer);
-        }
-      });
-    return runners;
-  };
+  }, [filterGameType, user]);
 
-  // Memoize recent matches to prevent blocking navigation
-  // Filter by selected game type
-  const recentMatches = useMemo(() => 
-    [...games]
-      .filter(game => game.type.toLowerCase() === filterGameType.toLowerCase())
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 10),
-    [games, filterGameType]
-  );
+  // Fetch data when filter changes
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Enable pull-to-refresh
+  usePullToRefresh(fetchData, { enabled: !authLoading && !!user });
+
+  // Fetch players only when New Game modal is opened
+  useEffect(() => {
+    const fetchPlayers = async () => {
+      if (!showNewGameModal || players.length > 0) return;
+      
+      setPlayersLoading(true);
+      try {
+        const response = await fetch('/api/users');
+        if (response.ok) {
+          const data = await response.json();
+          setPlayers(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch players:', error);
+      } finally {
+        setPlayersLoading(false);
+      }
+    };
+    
+    fetchPlayers();
+  }, [showNewGameModal, players.length]);
 
   // Show loading state - AFTER all hooks
-  if (authLoading || gameLoading) {
+  if (authLoading) {
     return (
       <div className={styles.home}>
         <div className="container">
@@ -163,11 +107,6 @@ export default function Home() {
   }
 
   const handleNewGame = () => {
-    if (players.length === 0) {
-      alert('Please add users first!');
-      router.push('/users');
-      return;
-    }
     setShowNewGameModal(true);
   };
 
@@ -195,7 +134,7 @@ export default function Home() {
 
     // Chess and Ace games don't have max points
     const points = (gameType === 'chess' || gameType === 'ace') ? null : parseInt(maxPoints);
-    const game = await createGame(gameType, selectedPlayers, points);
+    const game = await createGame(gameType, selectedPlayers, points, players, user?.id);
     setShowNewGameModal(false);
     router.push(`/game/${game.id}`);
   };
@@ -214,6 +153,105 @@ export default function Home() {
             </button>
           )}
         </div>
+
+        {/* In-Progress Games Section */}
+        {inProgressGames.length > 0 && (
+          <div className="card">
+            <h2 className={styles.sectionTitle}>
+              Games in Progress
+              <span style={{
+                marginLeft: '8px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <style dangerouslySetInnerHTML={{__html: `
+                  @keyframes livePulse {
+                    0%, 100% { opacity: 1; transform: scale(1); }
+                    50% { opacity: 0.6; transform: scale(0.9); }
+                  }
+                `}} />
+                <span style={{ 
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '50%',
+                  backgroundColor: '#22c55e',
+                  animation: 'livePulse 1.5s ease-in-out infinite',
+                  boxShadow: '0 0 8px rgba(34, 197, 94, 0.6)'
+                }}></span>
+                <span style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#22c55e',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  Live
+                </span>
+              </span>
+            </h2>
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'center' }}>Game Type</th>
+                    <th style={{ textAlign: 'center' }}>Players</th>
+                    <th style={{ textAlign: 'center' }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inProgressGames.map((game) => (
+                    <tr key={game.id}>
+                      <td style={{ textAlign: 'center' }}>
+                        <strong>{game.type}</strong>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {game.players.map((p, index) => (
+                            p.profilePhoto ? (
+                              <img 
+                                key={p.id}
+                                src={p.profilePhoto} 
+                                alt={p.name}
+                                className={styles.playerAvatar}
+                                style={{
+                                  marginLeft: index > 0 ? '-10px' : '0',
+                                  zIndex: game.players.length - index,
+                                  border: '2px solid var(--bg-color)',
+                                  borderRadius: '50%'
+                                }}
+                              />
+                            ) : (
+                              <span 
+                                key={p.id} 
+                                className="avatar" 
+                                style={{ 
+                                  fontSize: '16px',
+                                  marginLeft: index > 0 ? '4px' : '0'
+                                }}
+                              >
+                                {p.avatar}
+                              </span>
+                            )
+                          ))}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button 
+                          className="btn btn-primary"
+                          onClick={() => router.push(`/game/${game.id}`)}
+                          style={{ padding: '4px 12px', fontSize: '14px' }}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="card">
           <h2 className={styles.sectionTitle}>Top 5 Players</h2>
@@ -239,7 +277,12 @@ export default function Home() {
               Ace
             </button>
           </div>
-          {topPlayers.length === 0 ? (
+          {statsLoading ? (
+            <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+              <div className="spinner"></div>
+              <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>Loading {filterGameType} stats...</p>
+            </div>
+          ) : topPlayers.length === 0 ? (
             <div className={styles.empty}>
               <p>No {filterGameType} games played yet!</p>
               {isAdmin() && (
@@ -273,15 +316,15 @@ export default function Home() {
                           {index === 0 && '🥇'}
                           {index === 1 && '🥈'}
                           {index === 2 && '🥉'}
-                          {index === 3 && '🏅'}
-                          {index === 4 && '⭐'}
+                          {index === 3 && '💰'}
+                          {index === 4 && '🎁'}
                         </span>
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         <div className={styles.playerCell}>
-                          {getPlayerProfilePhoto(player.id) ? (
+                          {player.profilePhoto ? (
                             <img 
-                              src={getPlayerProfilePhoto(player.id)} 
+                              src={player.profilePhoto} 
                               alt={player.name}
                               className={styles.playerAvatar}
                             />
@@ -313,27 +356,32 @@ export default function Home() {
 
         {/* Recent Matches Section */}
         <div className="card" style={{ marginTop: '24px' }}>
-          <h2 className={styles.sectionTitle}>Recent {filterGameType} Matches (Last 10)</h2>
-          {recentMatches.length > 0 ? (
+          <h2 className={styles.sectionTitle}>Last 30 Completed {filterGameType} Matches</h2>
+          {statsLoading ? (
+            <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+              <div className="spinner"></div>
+              <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>Loading matches...</p>
+            </div>
+          ) : recentMatches.length > 0 ? (
             <div className="table-container">
               <table className={styles.recentMatchesTable}>
                 <thead>
                   <tr>
-                    <th className={styles.hideOnMobile}>Game</th>
-                    <th className={styles.hideOnMobile}>Date</th>
+                    <th className={styles.hideOnMobile} style={{ textAlign: 'center' }}>Game</th>
+                    <th className={styles.hideOnMobile} style={{ textAlign: 'center' }}>Date</th>
                     {filterGameType === 'Chess' ? (
                       <>
-                        <th>Winner</th>
-                        <th>Opponent</th>
+                        <th style={{ textAlign: 'center' }}>Winner</th>
+                        <th style={{ textAlign: 'center' }}>Opponent</th>
                       </>
                     ) : (
                       <>
-                        <th className={styles.hideOnMobile}>Players</th>
-                        <th>Winner</th>
-                        {filterGameType === 'Rummy' && <th>Runner</th>}
+                    <th className={styles.hideOnMobile} style={{ textAlign: 'center' }}>Players</th>
+                    <th style={{ textAlign: 'center' }}>Winner</th>
+                        {filterGameType === 'Rummy' && <th style={{ textAlign: 'center' }}>Runner</th>}
+                        <th style={{ textAlign: 'center' }}>Rounds</th>
                       </>
                     )}
-                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -345,10 +393,10 @@ export default function Home() {
                       onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.05)'}
                       onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                     >
-                      <td className={styles.hideOnMobile}>
+                      <td className={styles.hideOnMobile} style={{ textAlign: 'center' }}>
                         <strong>{game.title}</strong>
                       </td>
-                      <td className={styles.hideOnMobile}>
+                      <td className={styles.hideOnMobile} style={{ textAlign: 'center' }}>
                         {new Date(game.createdAt).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
@@ -358,22 +406,24 @@ export default function Home() {
                       </td>
                       {filterGameType === 'Chess' ? (
                         <>
-                          <td>
-                            {game.winner ? (
-                              getPlayerProfilePhoto(game.winner) ? (
+                          <td style={{ textAlign: 'center' }}>
+                            {game.winner ? (() => {
+                              const winner = game.players.find(p => p.id === game.winner);
+                              return winner?.profilePhoto ? (
                                 <img 
-                                  src={getPlayerProfilePhoto(game.winner)} 
-                                  alt={game.players.find(p => p.id === game.winner)?.name}
+                                  src={winner.profilePhoto} 
+                                  alt={winner.name}
                                   className={styles.playerAvatar}
+                                  title={player1.name}
                                 />
                               ) : (
-                                <span>{game.players.find(p => p.id === game.winner)?.name}</span>
-                              )
-                            ) : (
+                                <span>{winner?.name}</span>
+                              );
+                            })() : (
                               <span style={{ color: 'var(--text-secondary)' }}>-</span>
                             )}
                           </td>
-                          <td>
+                          <td style={{ textAlign: 'center' }}>
                             {(() => {
                               // For Chess, show the opponent (non-winner player)
                               const opponent = game.winner 
@@ -384,9 +434,9 @@ export default function Home() {
                                 return <span style={{ color: 'var(--text-secondary)' }}>-</span>;
                               }
                               
-                              return getPlayerProfilePhoto(opponent.id) ? (
+                              return opponent.profilePhoto ? (
                                 <img 
-                                  src={getPlayerProfilePhoto(opponent.id)} 
+                                  src={opponent.profilePhoto} 
                                   alt={opponent.name}
                                   className={styles.playerAvatar}
                                 />
@@ -398,60 +448,61 @@ export default function Home() {
                         </>
                       ) : (
                         <>
-                          <td className={styles.hideOnMobile}>
-                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                              {game.players.slice(0, 3).map(p => (
-                                getPlayerProfilePhoto(p.id) ? (
-                                  <img 
-                                    key={p.id}
-                                    src={getPlayerProfilePhoto(p.id)} 
-                                    alt={p.name}
-                                    className={styles.playerAvatarSmall}
-                                  />
-                                ) : (
-                                  <span key={p.id} className="avatar" style={{ fontSize: '16px' }}>
-                                    {p.avatar}
-                                  </span>
-                                )
-                              ))}
-                              {game.players.length > 3 && (
-                                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                  +{game.players.length - 3}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td>
-                            {game.winner ? (
-                              getPlayerProfilePhoto(game.winner) ? (
-                                <img 
-                                  src={getPlayerProfilePhoto(game.winner)} 
-                                  alt={game.players.find(p => p.id === game.winner)?.name}
-                                  className={styles.playerAvatar}
-                                />
-                              ) : (
-                                <span>{game.players.find(p => p.id === game.winner)?.name}</span>
-                              )
+                          <td className={styles.hideOnMobile} style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                          {game.players.slice(0, 3).map(p => (
+                            p.profilePhoto ? (
+                              <img 
+                                key={p.id}
+                                src={p.profilePhoto} 
+                                alt={p.name}
+                                className={styles.playerAvatarSmall}
+                              />
                             ) : (
-                              <span style={{ color: 'var(--text-secondary)' }}>-</span>
-                            )}
-                          </td>
-                          {filterGameType === 'Rummy' && (
-                            <td>
-                              {(() => {
-                                const runners = getRunners(game);
-                                if (runners.length === 0) {
-                                  return <span style={{ color: 'var(--text-secondary)' }}>-</span>;
-                                }
-                                
-                                return (
-                                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <span key={p.id} className="avatar" style={{ fontSize: '16px' }}>
+                                {p.avatar}
+                              </span>
+                            )
+                          ))}
+                          {game.players.length > 3 && (
+                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                              +{game.players.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        {game.winner ? (() => {
+                          const winner = game.players.find(p => p.id === game.winner);
+                          return winner?.profilePhoto ? (
+                            <img 
+                              src={winner.profilePhoto} 
+                              alt={winner.name}
+                              className={styles.playerAvatar}
+                            />
+                          ) : (
+                            <span>{winner?.name}</span>
+                          );
+                        })() : (
+                          <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                        )}
+                      </td>
+                      {filterGameType === 'Rummy' && (
+                            <td style={{ textAlign: 'center' }}>
+                          {(() => {
+                            const runners = game.runners || [];
+                            if (runners.length === 0) {
+                              return <span style={{ color: 'var(--text-secondary)' }}>-</span>;
+                            }
+                            
+                            return (
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     {runners.map((runner, index) => (
-                                      getPlayerProfilePhoto(runner.id) ? (
-                                        <img 
-                                          key={runner.id}
-                                          src={getPlayerProfilePhoto(runner.id)} 
-                                          alt={runner.name}
+                                  runner.profilePhoto ? (
+                                    <img 
+                                      key={runner.id}
+                                      src={runner.profilePhoto} 
+                                      alt={runner.name}
                                           className={styles.playerAvatar}
                                           style={{
                                             marginLeft: index > 0 ? '-10px' : '0',
@@ -459,8 +510,8 @@ export default function Home() {
                                             border: '2px solid var(--bg-color)',
                                             borderRadius: '50%'
                                           }}
-                                        />
-                                      ) : (
+                                    />
+                                  ) : (
                                         <span 
                                           key={runner.id} 
                                           style={{ 
@@ -468,24 +519,20 @@ export default function Home() {
                                             marginLeft: index > 0 ? '4px' : '0'
                                           }}
                                         >
-                                          {runner.name}
-                                        </span>
-                                      )
-                                    ))}
-                                  </div>
-                                );
-                              })()}
-                            </td>
-                          )}
+                                      {runner.name}
+                                    </span>
+                                  )
+                                ))}
+                              </div>
+                            );
+                          })()}
+                        </td>
+                      )}
+                      <td style={{ textAlign: 'center' }}>
+                        {game.roundsCount || 0}
+                      </td>
                         </>
                       )}
-                      <td>
-                        <span className={`badge ${
-                          game.status === 'completed' ? 'badge-success' : 'badge-warning'
-                        }`}>
-                          {game.status === 'completed' ? 'Done' : 'Progress'}
-                        </span>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -538,6 +585,26 @@ export default function Home() {
               <label>
                 Select Players {gameType === 'chess' ? '(exactly 2)' : '(minimum 2)'}
               </label>
+              {playersLoading ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <div className="spinner"></div>
+                  <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>Loading players...</p>
+                </div>
+              ) : players.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <p style={{ color: 'var(--text-secondary)' }}>No players found. Please add users first.</p>
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={() => {
+                      setShowNewGameModal(false);
+                      router.push('/users');
+                    }}
+                    style={{ marginTop: '16px' }}
+                  >
+                    Go to Users
+                  </button>
+                </div>
+              ) : (
               <div className={styles.playerList}>
                 {players.map(player => (
                   <div 
@@ -555,9 +622,9 @@ export default function Home() {
                       handlePlayerToggle(player.id);
                     }}
                   >
-                    {getPlayerProfilePhoto(player.id) ? (
+                    {player.profilePhoto ? (
                       <img 
-                        src={getPlayerProfilePhoto(player.id)} 
+                        src={player.profilePhoto} 
                         alt={player.name}
                         className={styles.playerAvatar}
                       />
@@ -569,6 +636,7 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+              )}
             </div>
 
             <div className={styles.modalActions}>
