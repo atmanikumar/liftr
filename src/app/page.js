@@ -256,19 +256,19 @@ export default function Home() {
               <table>
                 <thead>
                   <tr>
-                    <th>Rank</th>
-                    <th>Player</th>
-                    <th>Total</th>
-                    {filterGameType === 'Rummy' && <th>Finals</th>}
-                    {filterGameType === 'Chess' && <th>Draws</th>}
-                    <th>Wins</th>
-                    <th>Win %</th>
+                    <th style={{ textAlign: 'center' }}>Rank</th>
+                    <th style={{ textAlign: 'center' }}>Player</th>
+                    <th style={{ textAlign: 'center' }}>Total</th>
+                    {filterGameType === 'Rummy' && <th style={{ textAlign: 'center' }}>Finals</th>}
+                    {filterGameType === 'Chess' && <th style={{ textAlign: 'center' }}>Draws</th>}
+                    <th style={{ textAlign: 'center' }}>Wins</th>
+                    <th style={{ textAlign: 'center' }}>Win %</th>
                   </tr>
                 </thead>
                 <tbody>
                   {topPlayers.map((player, index) => (
                     <tr key={player.id}>
-                      <td>
+                      <td style={{ textAlign: 'center' }}>
                         <span className={styles.rank}>
                           {index === 0 && '🥇'}
                           {index === 1 && '🥈'}
@@ -277,7 +277,7 @@ export default function Home() {
                           {index === 4 && '⭐'}
                         </span>
                       </td>
-                      <td>
+                      <td style={{ textAlign: 'center' }}>
                         <div className={styles.playerCell}>
                           {getPlayerProfilePhoto(player.id) ? (
                             <img 
@@ -290,11 +290,11 @@ export default function Home() {
                           )}
                         </div>
                       </td>
-                      <td>{player.totalGames}</td>
-                      {filterGameType === 'Rummy' && <td>{player.finals || 0}</td>}
-                      {filterGameType === 'Chess' && <td>{player.draws || 0}</td>}
-                      <td><strong>{player.wins}</strong></td>
-                      <td>
+                      <td style={{ textAlign: 'center' }}>{player.totalGames}</td>
+                      {filterGameType === 'Rummy' && <td style={{ textAlign: 'center' }}>{player.finals || 0}</td>}
+                      {filterGameType === 'Chess' && <td style={{ textAlign: 'center' }}>{player.draws || 0}</td>}
+                      <td style={{ textAlign: 'center' }}><strong>{player.wins}</strong></td>
+                      <td style={{ textAlign: 'center' }}>
                         <span className={`badge ${
                           player.winPercentage >= 50 ? 'badge-success' : 
                           player.winPercentage >= 30 ? 'badge-warning' : 
