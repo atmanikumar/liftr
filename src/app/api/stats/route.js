@@ -97,7 +97,7 @@ export async function GET(request) {
         if (b.wins !== a.wins) return b.wins - a.wins;
         return b.totalGames - a.totalGames;
       })
-      .slice(0, 5); // Top 5 only
+      .slice(0, 10); // Top 10 players
     
     return NextResponse.json({
       gameType,

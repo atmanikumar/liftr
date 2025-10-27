@@ -145,12 +145,12 @@ export default function Home() {
     console.log('[Home handleCreateGame] Calling createGame with userId:', user.id);
 
     try {
-      // Chess and Ace games don't have max points
-      const points = (gameType === 'chess' || gameType === 'ace') ? null : parseInt(maxPoints);
+    // Chess and Ace games don't have max points
+    const points = (gameType === 'chess' || gameType === 'ace') ? null : parseInt(maxPoints);
       const game = await createGame(gameType, selectedPlayers, points, players, user.id);
       console.log('[Home handleCreateGame] Game created successfully:', game.id);
-      setShowNewGameModal(false);
-      router.push(`/game/${game.id}`);
+    setShowNewGameModal(false);
+    router.push(`/game/${game.id}`);
     } catch (error) {
       console.error('[Home handleCreateGame] Failed to create game:', error);
       alert('Failed to create game: ' + error.message);
@@ -272,7 +272,7 @@ export default function Home() {
         )}
 
         <div className="card">
-          <h2 className={styles.sectionTitle}>Top 5 Players</h2>
+          <h2 className={styles.sectionTitle}>Top 10 Players</h2>
           
           {/* Game Type Tabs */}
           <div className={styles.tabsContainer}>
@@ -336,10 +336,20 @@ export default function Home() {
                           {index === 2 && '🥉'}
                           {index === 3 && '💰'}
                           {index === 4 && '🎁'}
+                          {index === 5 && '⭐'}
+                          {index === 6 && '🌟'}
+                          {index === 7 && '✨'}
+                          {index === 8 && '💫'}
+                          {index === 9 && '🏅'}
                         </span>
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        <div className={styles.playerCell}>
+                        <div 
+                          className={styles.playerCell}
+                          onClick={() => router.push(`/profile?userId=${player.id}`)}
+                          style={{ cursor: 'pointer' }}
+                          title="View profile"
+                        >
                           {player.profilePhoto ? (
                             <img 
                               src={player.profilePhoto} 

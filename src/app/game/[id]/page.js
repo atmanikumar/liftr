@@ -588,7 +588,12 @@ export default function GamePage({ params }) {
                           }}
                         >
                           <td>
-                            <div className={styles.playerCell}>
+                            <div 
+                              className={styles.playerCell}
+                              onClick={() => router.push(`/profile?userId=${player.id}`)}
+                              style={{ cursor: 'pointer' }}
+                              title="View profile"
+                            >
                               {getPlayerProfilePhoto(player.id) ? (
                                 <img 
                                   src={getPlayerProfilePhoto(player.id)} 

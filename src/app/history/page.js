@@ -221,7 +221,12 @@ export default function HistoryPage() {
                     {game.winners && game.winners.length > 1 ? (
                       <div className={styles.winnerInfo} style={{ flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
                         {game.winners.map(winnerId => (
-                          <div key={winnerId} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div 
+                            key={winnerId} 
+                            style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                            onClick={() => router.push(`/profile?userId=${winnerId}`)}
+                            title="View profile"
+                          >
                             {getPlayerProfilePhoto(winnerId) ? (
                               <img 
                                 src={getPlayerProfilePhoto(winnerId)} 
@@ -240,7 +245,12 @@ export default function HistoryPage() {
                         ))}
                       </div>
                     ) : (
-                      <div className={styles.winnerInfo}>
+                      <div 
+                        className={styles.winnerInfo}
+                        onClick={() => router.push(`/profile?userId=${game.winner}`)}
+                        style={{ cursor: 'pointer' }}
+                        title="View profile"
+                      >
                         {getPlayerProfilePhoto(game.winner) ? (
                           <img 
                             src={getPlayerProfilePhoto(game.winner)} 
@@ -264,7 +274,16 @@ export default function HistoryPage() {
                   <p className={styles.playersLabel}>Players:</p>
                   <div className={styles.players}>
                     {game.players.map(player => (
-                      <div key={player.id} className={styles.playerChip}>
+                      <div 
+                        key={player.id} 
+                        className={styles.playerChip}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/profile?userId=${player.id}`);
+                        }}
+                        style={{ cursor: 'pointer' }}
+                        title="View profile"
+                      >
                         {getPlayerProfilePhoto(player.id) ? (
                           <img 
                             src={getPlayerProfilePhoto(player.id)} 

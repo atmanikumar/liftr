@@ -1,19 +1,23 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, Suspense } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import styles from './page.module.css';
 
-export default function ProfilePage() {
+function ProfileContent() {
   const { user, loading, checkAuth } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const viewUserId = searchParams.get('userId'); // View another player's profile
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [players, setPlayers] = useState([]);
+  const [playerStats, setPlayerStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
   
   // Image crop states
   const [selectedImage, setSelectedImage] = useState(null);
@@ -25,6 +29,29 @@ export default function ProfilePage() {
   const [completedCrop, setCompletedCrop] = useState(null);
   const imgRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Fetch player stats
+  useEffect(() => {
+    const fetchPlayerStats = async () => {
+      if (!user && !viewUserId) return;
+      
+      setStatsLoading(true);
+      try {
+        const targetUserId = viewUserId || user?.id;
+        const response = await fetch(`/api/player-stats/${targetUserId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setPlayerStats(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch player stats:', error);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+    
+    fetchPlayerStats();
+  }, [user, viewUserId]);
 
   // Fetch players to get avatar
   useEffect(() => {
@@ -196,94 +223,170 @@ export default function ProfilePage() {
     }
   };
 
+  const isOwnProfile = !viewUserId || (user && viewUserId === user.id);
+  const displayUser = playerStats?.player || user;
+
   return (
     <div className={styles.container}>
       <div className={styles.card}>
-        <h1 className={styles.title}>Profile Settings</h1>
+        <h1 className={styles.title}>
+          {isOwnProfile ? 'Profile Settings' : `${displayUser?.name}'s Profile`}
+        </h1>
 
         <div className={styles.profileInfo}>
           <div className={styles.photoSection}>
             <div className={styles.currentPhoto}>
-              {user.profilePhoto ? (
-                <img src={user.profilePhoto} alt="Profile" className={styles.profileImage} />
+              {displayUser?.profilePhoto ? (
+                <img src={displayUser.profilePhoto} alt="Profile" className={styles.profileImage} />
               ) : (
                 <div className={styles.placeholderPhoto}>
-                  {players.find(p => p.id === user.id)?.avatar || '👤'}
+                  {players.find(p => p.id === displayUser?.id)?.avatar || '👤'}
                 </div>
               )}
             </div>
           </div>
+        </div>
 
-          <div className={styles.userDetails}>
-            <p><strong>Name:</strong> {user.name}</p>
-            <p><strong>Username:</strong> {user.username}</p>
-            <p><strong>Role:</strong> {user.role}</p>
+        {/* Player Stats Section */}
+        {statsLoading ? (
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <div className="spinner"></div>
+            <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>Loading stats...</p>
           </div>
-        </div>
+        ) : playerStats && (
+          <div className={styles.statsSection}>
+            <h2 className={styles.subtitle}>Game Statistics</h2>
+            
+            {['Rummy', 'Chess', 'Ace'].map(gameType => {
+              const stats = playerStats.stats[gameType];
+              if (!stats || stats.totalGames === 0) return null;
+              
+              return (
+                <div key={gameType} className={styles.gameStats}>
+                  <h3 className={styles.gameTitle}>{gameType}</h3>
+                  <div className={styles.statsGrid}>
+                    <div className={styles.statCard}>
+                      <div className={styles.statValue}>{stats.rank || 'N/A'}</div>
+                      <div className={styles.statLabel}>Rank (of {stats.totalPlayers})</div>
+                    </div>
+                    <div className={styles.statCard}>
+                      <div className={styles.statValue}>{stats.winPercentage}%</div>
+                      <div className={styles.statLabel}>Win Rate</div>
+                    </div>
+                    <div className={styles.statCard}>
+                      <div className={styles.statValue}>{stats.totalGames}</div>
+                      <div className={styles.statLabel}>Total Games</div>
+                    </div>
+                    <div className={styles.statCard}>
+                      <div className={styles.statValue}>{stats.wins}</div>
+                      <div className={styles.statLabel}>Wins</div>
+                    </div>
+                    {gameType === 'Chess' && (
+                      <div className={styles.statCard}>
+                        <div className={styles.statValue}>{stats.draws}</div>
+                        <div className={styles.statLabel}>Draws</div>
+                      </div>
+                    )}
+                    {gameType === 'Rummy' && (
+                      <div className={styles.statCard}>
+                        <div className={styles.statValue}>{stats.finals}</div>
+                        <div className={styles.statLabel}>Finals</div>
+                      </div>
+                    )}
+                    <div className={styles.statCard}>
+                      <div className={styles.statValue}>{stats.losses}</div>
+                      <div className={styles.statLabel}>Losses</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
-        <div className={styles.uploadSection}>
-          <h2 className={styles.subtitle}>Update Profile Photo</h2>
-          <p className={styles.description}>
-            Maximum file size: 10MB. Allowed formats: JPG, PNG, WebP
-          </p>
+        {/* Only show photo upload section for own profile */}
+        {isOwnProfile && (
+          <div className={styles.uploadSection}>
+            <h2 className={styles.subtitle}>Update Profile Photo</h2>
+            <p className={styles.description}>
+              Maximum file size: 10MB. Allowed formats: JPG, PNG, WebP
+            </p>
 
-          {!selectedImage ? (
-            <div className={styles.fileInputWrapper}>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/jpg,image/png,image/webp"
-                onChange={handleFileSelect}
-                className={styles.fileInput}
-                id="photo-upload"
-              />
-              <label htmlFor="photo-upload" className={styles.fileLabel}>
-                Choose Photo
-              </label>
-            </div>
-          ) : (
-            <div className={styles.cropSection}>
-              <div className={styles.cropContainer}>
-                <ReactCrop
-                  crop={crop}
-                  onChange={(c) => setCrop(c)}
-                  onComplete={(c) => setCompletedCrop(c)}
-                  aspect={1}
-                  circularCrop
-                >
-                  <img
-                    ref={imgRef}
-                    src={selectedImage}
-                    alt="Crop preview"
-                    className={styles.cropImage}
-                  />
-                </ReactCrop>
+            {!selectedImage ? (
+              <div className={styles.fileInputWrapper}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  onChange={handleFileSelect}
+                  className={styles.fileInput}
+                  id="photo-upload"
+                />
+                <label htmlFor="photo-upload" className={styles.fileLabel}>
+                  Choose Photo
+                </label>
               </div>
+            ) : (
+              <div className={styles.cropSection}>
+                <div className={styles.cropContainer}>
+                  <ReactCrop
+                    crop={crop}
+                    onChange={(c) => setCrop(c)}
+                    onComplete={(c) => setCompletedCrop(c)}
+                    aspect={1}
+                    circularCrop
+                  >
+                    <img
+                      ref={imgRef}
+                      src={selectedImage}
+                      alt="Crop preview"
+                      className={styles.cropImage}
+                    />
+                  </ReactCrop>
+                </div>
 
-              <div className={styles.cropActions}>
-                <button
-                  onClick={handleUpload}
-                  disabled={uploading || !completedCrop}
-                  className={styles.uploadButton}
-                >
-                  {uploading ? 'Uploading...' : 'Upload Photo'}
-                </button>
-                <button
-                  onClick={handleCancel}
-                  disabled={uploading}
-                  className={styles.cancelButton}
-                >
-                  Cancel
-                </button>
+                <div className={styles.cropActions}>
+                  <button
+                    onClick={handleUpload}
+                    disabled={uploading || !completedCrop}
+                    className={styles.uploadButton}
+                  >
+                    {uploading ? 'Uploading...' : 'Upload Photo'}
+                  </button>
+                  <button
+                    onClick={handleCancel}
+                    disabled={uploading}
+                    className={styles.cancelButton}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {error && <div className={styles.error}>{error}</div>}
-          {success && <div className={styles.success}>{success}</div>}
-        </div>
+            {error && <div className={styles.error}>{error}</div>}
+            {success && <div className={styles.success}>{success}</div>}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={
+      <div className={styles.container}>
+        <div className={styles.card}>
+          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <div className="spinner-large" style={{ margin: '0 auto 20px' }}></div>
+            <p style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>Loading profile...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <ProfileContent />
+    </Suspense>
   );
 }
 

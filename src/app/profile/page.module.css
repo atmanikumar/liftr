@@ -5,16 +5,16 @@
 }
 
 .card {
-  background: white;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 2rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .title {
   font-size: 2rem;
   font-weight: bold;
-  color: #1e3a8a;
+  color: var(--text-primary);
   margin-bottom: 2rem;
   text-align: center;
 }
@@ -22,17 +22,16 @@
 .subtitle {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #1e3a8a;
+  color: var(--text-primary);
   margin-bottom: 1rem;
 }
 
 .profileInfo {
   display: flex;
-  gap: 2rem;
+  justify-content: center;
   margin-bottom: 3rem;
   padding-bottom: 2rem;
-  border-bottom: 2px solid #e5e7eb;
-  align-items: center;
+  border-bottom: 2px solid var(--border-color);
 }
 
 .photoSection {
@@ -47,7 +46,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f3f4f6;
+  background: var(--border-color);
+  border: 3px solid var(--primary);
 }
 
 .profileImage {
@@ -58,21 +58,47 @@
 
 .placeholderPhoto {
   font-size: 3rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .userDetails {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.userName {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 0 0 0.5rem 0;
+  background: linear-gradient(135deg, var(--primary) 0%, #1e40af 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.userRole {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  border-radius: 20px;
+  display: inline-block;
+  width: fit-content;
 }
 
 .userDetails p {
   margin: 0.75rem 0;
   font-size: 1.1rem;
-  color: #374151;
+  color: var(--text-primary);
 }
 
 .userDetails strong {
-  color: #1e3a8a;
+  color: var(--primary);
   margin-right: 0.5rem;
 }
 
@@ -81,7 +107,7 @@
 }
 
 .description {
-  color: #6b7280;
+  color: var(--text-secondary);
   margin-bottom: 1.5rem;
   font-size: 0.95rem;
 }
@@ -97,7 +123,7 @@
 .fileLabel {
   display: inline-block;
   padding: 0.75rem 2rem;
-  background: #1e3a8a;
+  background: var(--primary);
   color: white;
   border-radius: 8px;
   cursor: pointer;
@@ -106,7 +132,7 @@
 }
 
 .fileLabel:hover {
-  background: #1e40af;
+  background: var(--primary-dark);
 }
 
 .cropSection {
@@ -116,7 +142,7 @@
 .cropContainer {
   max-width: 500px;
   margin: 0 auto 2rem;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -134,7 +160,7 @@
 
 .uploadButton {
   padding: 0.75rem 2rem;
-  background: #1e3a8a;
+  background: var(--primary);
   color: white;
   border: none;
   border-radius: 8px;
@@ -144,17 +170,17 @@
 }
 
 .uploadButton:hover:not(:disabled) {
-  background: #1e40af;
+  background: var(--primary-dark);
 }
 
 .uploadButton:disabled {
-  background: #9ca3af;
+  background: var(--text-secondary);
   cursor: not-allowed;
 }
 
 .cancelButton {
   padding: 0.75rem 2rem;
-  background: #6b7280;
+  background: var(--text-secondary);
   color: white;
   border: none;
   border-radius: 8px;
@@ -164,7 +190,7 @@
 }
 
 .cancelButton:hover:not(:disabled) {
-  background: #4b5563;
+  background: #555;
 }
 
 .cancelButton:disabled {
@@ -216,5 +242,71 @@
   .cancelButton {
     width: 100%;
   }
+  
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .statValue {
+    font-size: 1.25rem;
+  }
+}
+
+/* Stats Section */
+.statsSection {
+  margin: 2rem 0;
+  padding-top: 2rem;
+  border-top: 2px solid var(--border-color);
+}
+
+.gameStats {
+  margin-bottom: 2.5rem;
+  background: rgba(59, 130, 246, 0.05);
+  padding: 1.5rem;
+  border-radius: 12px;
+}
+
+.gameTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1rem;
+}
+
+.statCard {
+  background: var(--card-bg);
+  padding: 1.25rem;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid var(--border-color);
+}
+
+.statCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+}
+
+.statValue {
+  font-size: 1.75rem;
+  font-weight: bold;
+  color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+
+.statLabel {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
