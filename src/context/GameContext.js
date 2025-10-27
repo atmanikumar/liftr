@@ -40,18 +40,40 @@ const saveToServer = async (key, data) => {
 // Helper function to create a new game on server
 const createGameOnServer = async (game) => {
   try {
+    console.log('[createGameOnServer] Preparing to send game to API...');
+    console.log('[createGameOnServer] Game data:', {
+      id: game.id,
+      type: game.type,
+      createdBy: game.createdBy,
+      status: game.status
+    });
+    
+    // Check if cookies are available
+    console.log('[createGameOnServer] Document.cookie:', document.cookie ? 'Cookies present' : 'No cookies');
+    
+    console.log('[createGameOnServer] Sending POST request to /api/games with credentials: include');
+    
     const response = await fetch(`/api/games`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // IMPORTANT: Include cookies for authentication
       body: JSON.stringify(game),
     });
     
+    console.log('[createGameOnServer] Response status:', response.status);
+    console.log('[createGameOnServer] Response ok:', response.ok);
+    
     if (!response.ok) {
+      const errorData = await response.json();
+      console.error('[createGameOnServer] Failed to create game on server:', errorData);
       return false;
     }
     
+    const successData = await response.json();
+    console.log('[createGameOnServer] Game created successfully on server:', successData);
     return true;
   } catch (error) {
+    console.error('[createGameOnServer] Error creating game on server:', error);
     return false;
   }
 };
@@ -62,6 +84,7 @@ const updateGameOnServer = async (game) => {
     const response = await fetch(`/api/games`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // IMPORTANT: Include cookies for authentication
       body: JSON.stringify(game),
     });
     
@@ -151,6 +174,14 @@ export function GameProvider({ children }) {
 
 
   const createGame = async (gameType, selectedPlayerIds, maxPoints = 120, playerData = null, createdBy) => {
+    console.log('[GameContext createGame] Starting with createdBy:', createdBy);
+    
+    // Validate createdBy is provided
+    if (!createdBy) {
+      console.error('[GameContext createGame] Cannot create game: createdBy is required');
+      throw new Error('User ID is required to create a game');
+    }
+    
     const now = new Date();
     const gameNumber = games.filter(g => 
       new Date(g.createdAt).toDateString() === now.toDateString()
@@ -161,6 +192,8 @@ export function GameProvider({ children }) {
 
     // Use provided playerData if available, otherwise fall back to context players
     const playersSource = playerData && playerData.length > 0 ? playerData : players;
+
+    console.log('[GameContext createGame] Creating game object with createdBy:', createdBy);
 
     const newGame = {
       id: Date.now().toString(),
@@ -192,8 +225,16 @@ export function GameProvider({ children }) {
     const updatedGames = [...games, newGame];
     setGames(updatedGames);
     
+    console.log('[GameContext createGame] Game object created, sending to server...');
+    
     // Create new game on server (await to ensure it completes)
-    await createGameOnServer(newGame);
+    const serverResult = await createGameOnServer(newGame);
+    
+    if (!serverResult) {
+      console.error('[GameContext createGame] Failed to save game to server');
+    } else {
+      console.log('[GameContext createGame] Game saved to server successfully');
+    }
     
     return newGame;
   };

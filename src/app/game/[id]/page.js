@@ -390,7 +390,7 @@ export default function GamePage({ params }) {
     return (
       <div className="container">
         <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
-          <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
+          <div className="spinner-large" style={{ margin: '0 auto 20px' }}></div>
           <p style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>Loading game...</p>
         </div>
       </div>

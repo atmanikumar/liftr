@@ -92,7 +92,7 @@ export default function Home() {
       <div className={styles.home}>
         <div className="container">
           <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
+            <div className="spinner-large" style={{ margin: '0 auto 20px' }}></div>
             <p style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>Loading...</p>
           </div>
         </div>
@@ -119,6 +119,9 @@ export default function Home() {
   };
 
   const handleCreateGame = async () => {
+    console.log('[Home handleCreateGame] Starting game creation...');
+    console.log('[Home handleCreateGame] User:', { id: user?.id, username: user?.username, role: user?.role });
+    
     // Chess requires exactly 2 players
     if (gameType === 'chess') {
       if (selectedPlayers.length !== 2) {
@@ -132,11 +135,26 @@ export default function Home() {
       }
     }
 
-    // Chess and Ace games don't have max points
-    const points = (gameType === 'chess' || gameType === 'ace') ? null : parseInt(maxPoints);
-    const game = await createGame(gameType, selectedPlayers, points, players, user?.id);
-    setShowNewGameModal(false);
-    router.push(`/game/${game.id}`);
+    // Validate user is logged in
+    if (!user || !user.id) {
+      console.error('[Home handleCreateGame] No user logged in');
+      alert('You must be logged in to create a game');
+      return;
+    }
+
+    console.log('[Home handleCreateGame] Calling createGame with userId:', user.id);
+
+    try {
+      // Chess and Ace games don't have max points
+      const points = (gameType === 'chess' || gameType === 'ace') ? null : parseInt(maxPoints);
+      const game = await createGame(gameType, selectedPlayers, points, players, user.id);
+      console.log('[Home handleCreateGame] Game created successfully:', game.id);
+      setShowNewGameModal(false);
+      router.push(`/game/${game.id}`);
+    } catch (error) {
+      console.error('[Home handleCreateGame] Failed to create game:', error);
+      alert('Failed to create game: ' + error.message);
+    }
   };
 
   return (
@@ -414,7 +432,7 @@ export default function Home() {
                                   src={winner.profilePhoto} 
                                   alt={winner.name}
                                   className={styles.playerAvatar}
-                                  title={player1.name}
+                                  title={winner.name}
                                 />
                               ) : (
                                 <span>{winner?.name}</span>

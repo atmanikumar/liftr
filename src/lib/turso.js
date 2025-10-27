@@ -379,10 +379,19 @@ export async function saveGames(games) {
 // Update or Insert a specific game in database
 export async function updateGameInDB(game) {
   const db = getTursoClient();
-  if (!db) return false;
+  if (!db) {
+    console.error('[Turso updateGameInDB] No database client');
+    return false;
+  }
 
   try {
     const type = game.type.toLowerCase();
+    console.log('[Turso updateGameInDB] Inserting game:', {
+      id: game.id,
+      type: type,
+      createdBy: game.createdBy,
+      status: game.status
+    });
     
     if (type === 'chess') {
       // Chess requires exactly 2 players
@@ -432,6 +441,7 @@ export async function updateGameInDB(game) {
         ]
       });
     } else if (type === 'rummy') {
+      console.log('[Turso updateGameInDB] Inserting Rummy game with createdBy:', game.createdBy);
       const result = await db.execute({
         sql: `INSERT OR REPLACE INTO games (id, type, title, createdAt, status, winner, maxPoints, createdBy, data)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -447,12 +457,16 @@ export async function updateGameInDB(game) {
           JSON.stringify(game)
         ]
       });
+      console.log('[Turso updateGameInDB] Rummy game inserted successfully, rows affected:', result.rowsAffected);
     } else {
+      console.error('[Turso updateGameInDB] Unknown game type:', type);
       return false;
     }
     
+    console.log('[Turso updateGameInDB] Game saved successfully');
     return true;
   } catch (error) {
+    console.error('[Turso updateGameInDB] Error saving game:', error);
     return false;
   }
 }

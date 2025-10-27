@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from 'react';
  * Custom hook for pull-to-refresh functionality with visual indicator
  * @param {Function} onRefresh - Callback function to execute on refresh
  * @param {Object} options - Configuration options
- * @param {number} options.threshold - Pull distance threshold (default: 80px)
+ * @param {number} options.threshold - Pull distance threshold (default: 180px)
  * @param {boolean} options.enabled - Enable/disable the feature (default: true)
  */
 export function usePullToRefresh(onRefresh, options = {}) {
-  const { threshold = 80, enabled = true } = options;
+  const { threshold = 180, enabled = true } = options;
   const startY = useRef(0);
   const currentY = useRef(0);
   const pulling = useRef(false);
@@ -24,24 +24,24 @@ export function usePullToRefresh(onRefresh, options = {}) {
     indicator.innerHTML = '↻';
     indicator.style.cssText = `
       position: fixed;
-      top: 20px;
+      top: 30px;
       left: 50%;
       transform: translateX(-50%) scale(0);
-      width: 40px;
-      height: 40px;
+      width: 50px;
+      height: 50px;
       border-radius: 50%;
       background: var(--primary);
       color: white;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
+      font-size: 28px;
       font-weight: bold;
       z-index: 9999;
       pointer-events: none;
-      transition: transform 0.2s ease, opacity 0.2s ease;
+      transition: transform 0.3s ease, opacity 0.3s ease, background 0.2s ease;
       opacity: 0;
-      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+      box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
     `;
     document.body.appendChild(indicator);
 
@@ -66,24 +66,31 @@ export function usePullToRefresh(onRefresh, options = {}) {
           e.preventDefault();
         }
 
-        // Calculate progress (0 to 1+)
-        const progress = Math.min(pullDistance / threshold, 1.5);
+        // Calculate progress - no upper limit for infinite pull
+        const progress = pullDistance / threshold;
         setPullProgress(progress);
 
         // Show and scale indicator based on pull distance
-        const scale = Math.min(progress, 1);
-        const rotation = progress * 360;
+        // Use easing for smoother feel, but allow infinite growth with diminishing returns
+        const scale = Math.min(0.5 + Math.log(1 + progress) * 0.6, 2);
+        const rotation = (progress * 180) % 360; // Continuous rotation
         
-        indicator.style.opacity = Math.min(progress, 1);
+        indicator.style.opacity = Math.min(progress * 1.5, 1);
         indicator.style.transform = `translateX(-50%) scale(${scale}) rotate(${rotation}deg)`;
 
         // Change indicator color based on threshold (keep refresh icon)
         if (pullDistance > threshold) {
           indicator.style.background = 'var(--success)';
-          document.body.style.transform = `translateY(${Math.min(pullDistance * 0.3, 50)}px)`;
+          // Infinite body translation with diminishing returns (logarithmic)
+          const bodyTranslate = pullDistance * 0.5;
+          document.body.style.transform = `translateY(${bodyTranslate}px)`;
           document.body.style.transition = 'none';
         } else {
           indicator.style.background = 'var(--primary)';
+          // Even before threshold, allow body to move
+          const bodyTranslate = pullDistance * 0.3;
+          document.body.style.transform = `translateY(${bodyTranslate}px)`;
+          document.body.style.transition = 'none';
         }
       }
     };

@@ -69,35 +69,53 @@ export async function POST(request) {
   try {
     const game = await request.json();
     
+    console.log('[API /games POST] Received game:', {
+      id: game.id,
+      type: game.type,
+      createdBy: game.createdBy,
+      status: game.status
+    });
+    
     if (!game.id || !game.type) {
+      console.error('[API /games POST] Missing game ID or type');
       return NextResponse.json({ success: false, error: 'Game ID and type required' }, { status: 400 });
     }
     
     // Verify user is authenticated and is the game creator
     const cookieStore = cookies();
-    const token = cookieStore.get('token');
+    const token = cookieStore.get('auth-token'); // Changed from 'token' to 'auth-token'
+    console.log('[API /games POST] Auth token:', token ? 'Found' : 'Not found');
+    
     if (!token) {
+      console.error('[API /games POST] No auth-token found in cookies');
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
     
     const user = verifyToken(token.value);
     if (!user) {
+      console.error('[API /games POST] Invalid token');
       return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 });
     }
     
+    console.log('[API /games POST] User verified:', { userId: user.id, gameCreatedBy: game.createdBy });
+    
     // For new games, verify the createdBy matches the current user
     if (game.createdBy && game.createdBy !== user.id) {
+      console.error('[API /games POST] CreatedBy mismatch:', { userId: user.id, gameCreatedBy: game.createdBy });
       return NextResponse.json({ success: false, error: 'Cannot create game on behalf of another user' }, { status: 403 });
     }
     
     const result = await updateGameInDB(game); // Uses INSERT OR REPLACE under the hood
     
     if (!result) {
+      console.error('[API /games POST] Database insert failed');
       return NextResponse.json({ success: false, error: 'Create failed' }, { status: 500 });
     }
     
+    console.log('[API /games POST] Game created successfully in DB');
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error('[API /games POST] Error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -113,7 +131,7 @@ export async function PATCH(request) {
     
     // Verify user is authenticated
     const cookieStore = cookies();
-    const token = cookieStore.get('token');
+    const token = cookieStore.get('auth-token'); // Changed from 'token' to 'auth-token'
     if (!token) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
