@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
 import { useAuth } from '@/context/AuthContext';
-import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import styles from './page.module.css';
 
 export default function GamePage({ params }) {
@@ -121,9 +120,6 @@ export default function GamePage({ params }) {
       router.push('/');
     }
   }, [notFound, loading, router]);
-
-  // Enable pull-to-refresh
-  usePullToRefresh(fetchGame, { enabled: !loading && !authLoading && !!game });
 
   // Helper function to get profile photo for a player
   // Now gets from game.players array which includes profilePhoto from API

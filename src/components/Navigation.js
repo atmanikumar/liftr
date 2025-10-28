@@ -106,7 +106,13 @@ export default function Navigation() {
               href="/" 
               className={pathname === '/' ? styles.active : ''}
             >
-              Dashboard
+              Home
+            </Link>
+            <Link 
+              href="/stats" 
+              className={pathname === '/stats' ? styles.active : ''}
+            >
+              Stats
             </Link>
             <Link 
               href="/history" 
@@ -194,7 +200,15 @@ export default function Navigation() {
             onClick={handleLinkClick}
           >
             <span className="material-icons">home</span>
-            Dashboard
+            Home
+          </Link>
+          <Link 
+            href="/stats" 
+            className={pathname === '/stats' ? styles.active : ''}
+            onClick={handleLinkClick}
+          >
+            <span className="material-icons">bar_chart</span>
+            Stats
           </Link>
           <Link 
             href="/history" 

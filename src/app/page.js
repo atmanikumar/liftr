@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
 import { useAuth } from '@/context/AuthContext';
-import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import styles from './page.module.css';
 
 export default function Home() {
@@ -16,96 +15,58 @@ export default function Home() {
   const [filterGameType, setFilterGameType] = useState('Rummy'); // Filter for top players
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [maxPoints, setMaxPoints] = useState(120);
-  const [topPlayersCache, setTopPlayersCache] = useState({}); // Cache by game type
-  const [recentMatchesCache, setRecentMatchesCache] = useState({}); // Cache by game type
-  const [interestingStatsCache, setInterestingStatsCache] = useState({}); // Cache by game type
-  const [statsLoading, setStatsLoading] = useState(true);
+  const [topPlayers, setTopPlayers] = useState([]);
+  const [recentMatches, setRecentMatches] = useState([]);
+  const [statsLoading, setStatsLoading] = useState(false);
   const [players, setPlayers] = useState([]);
   const [playersLoading, setPlayersLoading] = useState(false);
   const [creatingGame, setCreatingGame] = useState(false);
-
-  // Derived state based on current filter
-  const topPlayers = topPlayersCache[filterGameType] || [];
-  const recentMatches = recentMatchesCache[filterGameType] || [];
-  const interestingStats = interestingStatsCache[filterGameType] || null;
   
   // State for in-progress games with profile photos
   const [inProgressGames, setInProgressGames] = useState([]);
 
-  // Fetch data for home page (optimized - only what we need!)
-  const fetchData = useCallback(async () => {
+  // Fetch in-progress games
+  const fetchInProgressGames = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      const response = await fetch(`/api/recent-matches?limit=100&status=in_progress`);
+      if (response.ok) {
+        const data = await response.json();
+        setInProgressGames(data.matches || []);
+      }
+    } catch (error) {
+      console.error('[Home] Failed to fetch in-progress games:', error);
+    }
+  }, [user]);
+
+  // Fetch data for selected game type (lazy load)
+  const fetchGameTypeData = useCallback(async () => {
     if (!user) return;
     
     setStatsLoading(true);
     try {
-      const gameTypes = ['Rummy', 'Chess', 'Ace'];
-      
-      // Fetch all data in parallel
-      const statsPromises = gameTypes.map(type =>
-        fetch(`/api/stats?gameType=${type}`)
-          .then(res => res.ok ? res.json() : null)
-          .then(data => ({ type, data }))
-      );
-      
-      const matchesPromises = gameTypes.map(type =>
-        fetch(`/api/recent-matches?gameType=${type}&limit=10&status=completed`)
-          .then(res => res.ok ? res.json() : null)
-          .then(data => ({ type, data }))
-      );
-      
-      const interestingStatsPromises = gameTypes.map(type =>
-        fetch(`/api/interesting-stats?gameType=${type}`)
-          .then(res => res.ok ? res.json() : null)
-          .then(data => ({ type, data }))
-      );
-      
-      const inProgressPromise = fetch(`/api/recent-matches?limit=100&status=in_progress`)
-        .then(res => res.ok ? res.json() : null);
-      
-      // Wait for all requests
-      const [statsResults, matchesResults, interestingStatsResults, inProgressData] = await Promise.all([
-        Promise.all(statsPromises),
-        Promise.all(matchesPromises),
-        Promise.all(interestingStatsPromises),
-        inProgressPromise
+      // Fetch stats and matches for the selected game type only
+      const [statsResponse, matchesResponse] = await Promise.all([
+        fetch(`/api/stats?gameType=${filterGameType}`),
+        fetch(`/api/recent-matches?gameType=${filterGameType}&limit=10&status=completed`)
       ]);
       
-      // Build cache objects
-      const statsCache = {};
-      const matchesCache = {};
-      const interestingCache = {};
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json();
+        setTopPlayers(statsData.topPlayers || []);
+      }
       
-      statsResults.forEach(({ type, data }) => {
-        if (data) {
-          statsCache[type] = data.topPlayers;
-        }
-      });
-      
-      matchesResults.forEach(({ type, data }) => {
-        if (data) {
-          matchesCache[type] = data.matches;
-        }
-      });
-      
-      interestingStatsResults.forEach(({ type, data }) => {
-        if (data) {
-          interestingCache[type] = data;
-        }
-      });
-      
-      setTopPlayersCache(statsCache);
-      setRecentMatchesCache(matchesCache);
-      setInterestingStatsCache(interestingCache);
-      
-      if (inProgressData) {
-        setInProgressGames(inProgressData.matches);
+      if (matchesResponse.ok) {
+        const matchesData = await matchesResponse.json();
+        setRecentMatches(matchesData.matches || []);
       }
     } catch (error) {
-      console.error('[Home] Failed to fetch data:', error);
+      console.error('[Home] Failed to fetch game type data:', error);
     } finally {
       setStatsLoading(false);
     }
-  }, [user]);
+  }, [user, filterGameType]);
 
   // Initialize SSE (lightweight - doesn't load all games)
   useEffect(() => {
@@ -114,12 +75,19 @@ export default function Home() {
     }
   }, [user, initializeSSE]);
 
-  // Fetch data on mount
+  // Fetch in-progress games on mount
   useEffect(() => {
     if (user) {
-      fetchData();
+      fetchInProgressGames();
     }
-  }, [user, fetchData]);
+  }, [user, fetchInProgressGames]);
+
+  // Fetch data for selected game type
+  useEffect(() => {
+    if (user) {
+      fetchGameTypeData();
+    }
+  }, [user, filterGameType, fetchGameTypeData]);
 
   // Listen to SSE messages via GameContext to refresh data
   useEffect(() => {
@@ -127,7 +95,8 @@ export default function Home() {
 
     // Set up custom event listener for SSE updates
     const handleSSEUpdate = () => {
-      fetchData();
+      fetchInProgressGames();
+      fetchGameTypeData();
     };
 
     window.addEventListener('game_updated', handleSSEUpdate);
@@ -137,10 +106,7 @@ export default function Home() {
       window.removeEventListener('game_updated', handleSSEUpdate);
       window.removeEventListener('game_created', handleSSEUpdate);
     };
-  }, [sseConnected, fetchData]);
-
-  // Enable pull-to-refresh
-  usePullToRefresh(fetchData, { enabled: !authLoading && !!user });
+  }, [sseConnected, fetchInProgressGames, fetchGameTypeData]);
 
   // Fetch players only when New Game modal is opened
   useEffect(() => {
@@ -198,6 +164,44 @@ export default function Home() {
     );
   };
 
+  const generateGameTitle = async () => {
+    // Get current date
+    const now = new Date();
+    const day = now.getDate();
+    const month = now.toLocaleDateString('en-US', { month: 'short' });
+    
+    try {
+      // Fetch all games to count today's games
+      const response = await fetch('/api/games');
+      if (response.ok) {
+        const allGames = await response.json();
+        
+        // Get today's start time (midnight)
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        
+        // Count ALL games created today (in-progress + completed)
+        const todayGamesCount = allGames.filter(game => {
+          const gameDate = new Date(game.createdAt).getTime();
+          return gameDate >= todayStart;
+        }).length;
+        
+        // Generate title: "28 Oct - Game 1"
+        return `${day} ${month} - Game ${todayGamesCount + 1}`;
+      }
+    } catch (error) {
+      console.error('Failed to fetch games for title generation:', error);
+    }
+    
+    // Fallback: count only in-progress games if API fails
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const todayGamesCount = inProgressGames.filter(game => {
+      const gameDate = new Date(game.createdAt).getTime();
+      return gameDate >= todayStart;
+    }).length;
+    
+    return `${day} ${month} - Game ${todayGamesCount + 1}`;
+  };
+
   const handleCreateGame = async () => {
     console.log('[Home handleCreateGame] Starting game creation...');
     console.log('[Home handleCreateGame] User:', { id: user?.id, username: user?.username, role: user?.role });
@@ -227,6 +231,9 @@ export default function Home() {
     setCreatingGame(true);
     
     try {
+      // Generate game title automatically
+      const gameTitle = await generateGameTitle();
+      
       // Chess and Ace games don't have max points
       const points = (gameType === 'chess' || gameType === 'ace') ? null : parseInt(maxPoints);
       
@@ -234,10 +241,11 @@ export default function Home() {
         gameType,
         selectedPlayers,
         points,
-        playerCount: players.length
+        playerCount: players.length,
+        title: gameTitle
       });
       
-      const game = await createGame(gameType, selectedPlayers, points, players, user.id);
+      const game = await createGame(gameType, selectedPlayers, points, players, user.id, gameTitle);
       
       if (!game || !game.id) {
         throw new Error('Game creation failed - no game object returned');
@@ -270,7 +278,7 @@ export default function Home() {
       <div className="container">
         <div className={styles.header}>
           <div>
-            <h1 className={styles.title}>🏆 Dashboard</h1>
+            <h1 className={styles.title}>🏆 Home</h1>
             <p className={styles.subtitle}>
               Track your card game champions
               {sseConnected && (
@@ -514,197 +522,6 @@ export default function Home() {
             </div>
           )}
         </div>
-
-        {/* Interesting Statistics Section */}
-        {interestingStats && interestingStats.stats && Object.keys(interestingStats.stats).length > 0 && (
-          <div className="card" style={{ marginTop: '24px' }}>
-            <h2 className={styles.sectionTitle}>🏆 Interesting Statistics - {filterGameType}</h2>
-            <div className={styles.interestingStatsGrid}>
-              {interestingStats.stats.patientGuy && (
-                <div 
-                  className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.patientGuy.player.id}`)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className={styles.badgeIcon}>🧘</div>
-                  <div className={styles.badgeContent}>
-                    <div className={styles.badgeTitle}>Patient Guy</div>
-                    <div className={styles.badgeSubtitle}>Most Drops</div>
-                    <div className={styles.badgeName}>
-                      {interestingStats.stats.patientGuy.player.profilePhoto ? (
-                        <img 
-                          src={interestingStats.stats.patientGuy.player.profilePhoto} 
-                          alt={interestingStats.stats.patientGuy.player.name}
-                          className={styles.badgeAvatar}
-                        />
-                      ) : null}
-                      {interestingStats.stats.patientGuy.player.name}
-                    </div>
-                    <div className={styles.badgeValue}>{interestingStats.stats.patientGuy.value} drops</div>
-                  </div>
-                </div>
-              )}
-
-              {interestingStats.stats.strategist && (
-                <div 
-                  className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.strategist.player.id}`)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className={styles.badgeIcon}>♟️</div>
-                  <div className={styles.badgeContent}>
-                    <div className={styles.badgeTitle}>Strategist</div>
-                    <div className={styles.badgeSubtitle}>Most Finals Reached</div>
-                    <div className={styles.badgeName}>
-                      {interestingStats.stats.strategist.player.profilePhoto ? (
-                        <img 
-                          src={interestingStats.stats.strategist.player.profilePhoto} 
-                          alt={interestingStats.stats.strategist.player.name}
-                          className={styles.badgeAvatar}
-                        />
-                      ) : null}
-                      {interestingStats.stats.strategist.player.name}
-                    </div>
-                    <div className={styles.badgeValue}>{interestingStats.stats.strategist.value} finals</div>
-                  </div>
-                </div>
-              )}
-
-              {interestingStats.stats.finalHero && (
-                <div 
-                  className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.finalHero.player.id}`)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className={styles.badgeIcon}>🎖️</div>
-                  <div className={styles.badgeContent}>
-                    <div className={styles.badgeTitle}>Final Hero</div>
-                    <div className={styles.badgeSubtitle}>Most Final Wins</div>
-                    <div className={styles.badgeName}>
-                      {interestingStats.stats.finalHero.player.profilePhoto ? (
-                        <img 
-                          src={interestingStats.stats.finalHero.player.profilePhoto} 
-                          alt={interestingStats.stats.finalHero.player.name}
-                          className={styles.badgeAvatar}
-                        />
-                      ) : null}
-                      {interestingStats.stats.finalHero.player.name}
-                    </div>
-                    <div className={styles.badgeValue}>{interestingStats.stats.finalHero.value} final wins</div>
-                  </div>
-                </div>
-              )}
-
-              {interestingStats.stats.consecutiveWinner && (
-                <div 
-                  className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.consecutiveWinner.player.id}`)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className={styles.badgeIcon}>🔥</div>
-                  <div className={styles.badgeContent}>
-                    <div className={styles.badgeTitle}>On Fire!</div>
-                    <div className={styles.badgeSubtitle}>Most Consecutive Match Wins</div>
-                    <div className={styles.badgeName}>
-                      {interestingStats.stats.consecutiveWinner.player.profilePhoto ? (
-                        <img 
-                          src={interestingStats.stats.consecutiveWinner.player.profilePhoto} 
-                          alt={interestingStats.stats.consecutiveWinner.player.name}
-                          className={styles.badgeAvatar}
-                        />
-                      ) : null}
-                      {interestingStats.stats.consecutiveWinner.player.name}
-                    </div>
-                    <div className={styles.badgeValue}>{interestingStats.stats.consecutiveWinner.value} match streak</div>
-                  </div>
-                </div>
-              )}
-
-              {interestingStats.stats.consecutiveRoundWinner && (
-                <div 
-                  className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => {
-                    // Link to game if available, otherwise to profile
-                    const gameId = interestingStats.stats.consecutiveRoundWinner.gameId;
-                    if (gameId) {
-                      router.push(`/game/${gameId}`);
-                    } else {
-                      router.push(`/profile?userId=${interestingStats.stats.consecutiveRoundWinner.player.id}`);
-                    }
-                  }}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className={styles.badgeIcon}>⚡</div>
-                  <div className={styles.badgeContent}>
-                    <div className={styles.badgeTitle}>Round Dominator</div>
-                    <div className={styles.badgeSubtitle}>Most Consecutive Round Wins</div>
-                    <div className={styles.badgeName}>
-                      {interestingStats.stats.consecutiveRoundWinner.player.profilePhoto ? (
-                        <img 
-                          src={interestingStats.stats.consecutiveRoundWinner.player.profilePhoto} 
-                          alt={interestingStats.stats.consecutiveRoundWinner.player.name}
-                          className={styles.badgeAvatar}
-                        />
-                      ) : null}
-                      {interestingStats.stats.consecutiveRoundWinner.player.name}
-                    </div>
-                    <div className={styles.badgeValue}>{interestingStats.stats.consecutiveRoundWinner.value} round streak</div>
-                  </div>
-                </div>
-              )}
-
-              {interestingStats.stats.eightyClub && (
-                <div 
-                  className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.eightyClub.player.id}`)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className={styles.badgeIcon}>💥</div>
-                  <div className={styles.badgeContent}>
-                    <div className={styles.badgeTitle}>80 Club</div>
-                    <div className={styles.badgeSubtitle}>Most 80s</div>
-                    <div className={styles.badgeName}>
-                      {interestingStats.stats.eightyClub.player.profilePhoto ? (
-                        <img 
-                          src={interestingStats.stats.eightyClub.player.profilePhoto} 
-                          alt={interestingStats.stats.eightyClub.player.name}
-                          className={styles.badgeAvatar}
-                        />
-                      ) : null}
-                      {interestingStats.stats.eightyClub.player.name}
-                    </div>
-                    <div className={styles.badgeValue}>{interestingStats.stats.eightyClub.value} times</div>
-                  </div>
-                </div>
-              )}
-
-              {interestingStats.stats.roundWinChampion && (
-                <div 
-                  className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.roundWinChampion.player.id}`)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className={styles.badgeIcon}>👑</div>
-                  <div className={styles.badgeContent}>
-                    <div className={styles.badgeTitle}>Round Win Champion</div>
-                    <div className={styles.badgeSubtitle}>Most Round Wins</div>
-                    <div className={styles.badgeName}>
-                      {interestingStats.stats.roundWinChampion.player.profilePhoto ? (
-                        <img 
-                          src={interestingStats.stats.roundWinChampion.player.profilePhoto} 
-                          alt={interestingStats.stats.roundWinChampion.player.name}
-                          className={styles.badgeAvatar}
-                        />
-                      ) : null}
-                      {interestingStats.stats.roundWinChampion.player.name}
-                    </div>
-                    <div className={styles.badgeValue}>{interestingStats.stats.roundWinChampion.value} round wins</div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Recent Matches Section */}
         <div className="card" style={{ marginTop: '24px' }}>

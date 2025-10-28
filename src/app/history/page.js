@@ -1,33 +1,55 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useGame } from '@/context/GameContext';
-import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import styles from './page.module.css';
 
 export default function HistoryPage() {
   const router = useRouter();
-  const { loadData, games, players, loading } = useGame();
-  const [filterGameType, setFilterGameType] = useState('All');
-  const [filterPlayer, setFilterPlayer] = useState('All');
-  const loadedRef = useRef(false);
+  const [games, setGames] = useState([]);
+  const [players, setPlayers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterGameType, setFilterGameType] = useState('Rummy');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(5);
   
-  // Load game data on mount (only once)
+  // Fetch players
   useEffect(() => {
-    if (!loadedRef.current) {
-      loadData();
-      loadedRef.current = true;
-    }
-  }, [loadData]);
-
-  // Pull-to-refresh handler
-  const handleRefresh = useCallback(async () => {
-    await loadData();
-  }, [loadData]);
-
-  // Enable pull-to-refresh
-  usePullToRefresh(handleRefresh, { enabled: !loading });
+    const fetchPlayers = async () => {
+      try {
+        const response = await fetch('/api/users');
+        if (response.ok) {
+          const playersData = await response.json();
+          setPlayers(playersData);
+        }
+      } catch (error) {
+        console.error('Failed to fetch players:', error);
+      }
+    };
+    
+    fetchPlayers();
+  }, []);
+  
+  // Fetch games based on selected game type
+  useEffect(() => {
+    const fetchGames = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/games?gameType=${filterGameType}`);
+        
+        if (response.ok) {
+          const gamesData = await response.json();
+          setGames(gamesData);
+        }
+      } catch (error) {
+        console.error('Failed to fetch games:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchGames();
+  }, [filterGameType]);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -63,27 +85,22 @@ export default function HistoryPage() {
     return player?.profilePhoto || null;
   };
 
-  // Memoize sorted and filtered games to prevent blocking navigation
+  // Memoize sorted games (already filtered by API)
   const sortedGames = useMemo(() => {
-    let filtered = [...games];
-    
-    // Filter by game type
-    if (filterGameType !== 'All') {
-      filtered = filtered.filter(game => 
-        game.type.toLowerCase() === filterGameType.toLowerCase()
-      );
-    }
-    
-    // Filter by player
-    if (filterPlayer !== 'All') {
-      filtered = filtered.filter(game => 
-        game.players.some(p => p.id === filterPlayer)
-      );
-    }
-    
     // Sort by date (newest first)
-    return filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [games, filterGameType, filterPlayer]);
+    return [...games].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [games]);
+
+  // Calculate pagination
+  const totalPages = Math.ceil(sortedGames.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedGames = sortedGames.slice(startIndex, endIndex);
+
+  // Reset to page 1 when game type changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterGameType]);
 
   return (
     <div className={styles.historyPage}>
@@ -95,89 +112,63 @@ export default function HistoryPage() {
           </div>
         </div>
 
-        {/* Filters Section */}
+        {/* Loading State */}
+        {loading ? (
+          <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <span className="material-icons" style={{ fontSize: '60px', color: 'var(--primary)', animation: 'spin 1s linear infinite' }}>
+              refresh
+            </span>
+            <p style={{ fontSize: '18px', color: 'var(--text-secondary)', marginTop: '20px' }}>Loading games...</p>
+          </div>
+        ) : (
+          <>
+        {/* Game Type Filter */}
         <div className="card" style={{ marginBottom: '24px' }}>
-          <div className={styles.filtersContainer}>
-            {/* Game Type Filter */}
-            <div className={styles.filterGroup}>
-              <label className={styles.filterLabel}>Game Type:</label>
-              <div className={styles.tabsContainer}>
-                <button 
-                  className={`${styles.tab} ${filterGameType === 'All' ? styles.tabActive : ''}`}
-                  onClick={() => setFilterGameType('All')}
-                >
-                  All
-                </button>
-                <button 
-                  className={`${styles.tab} ${filterGameType === 'Rummy' ? styles.tabActive : ''}`}
-                  onClick={() => setFilterGameType('Rummy')}
-                >
-                  Rummy
-                </button>
-                <button 
-                  className={`${styles.tab} ${filterGameType === 'Chess' ? styles.tabActive : ''}`}
-                  onClick={() => setFilterGameType('Chess')}
-                >
-                  Chess
-                </button>
-                <button 
-                  className={`${styles.tab} ${filterGameType === 'Ace' ? styles.tabActive : ''}`}
-                  onClick={() => setFilterGameType('Ace')}
-                >
-                  Ace
-                </button>
-              </div>
-            </div>
-
-            {/* Player Filter */}
-            <div className={styles.filterGroup}>
-              <label className={styles.filterLabel}>Player:</label>
-              <select 
-                className={styles.filterSelect}
-                value={filterPlayer}
-                onChange={(e) => setFilterPlayer(e.target.value)}
-              >
-                <option value="All">All Players</option>
-                {players.map(player => (
-                  <option key={player.id} value={player.id}>
-                    {player.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className={styles.tabsContainer}>
+            <button 
+              className={`${styles.tab} ${filterGameType === 'Rummy' ? styles.tabActive : ''}`}
+              onClick={() => setFilterGameType('Rummy')}
+            >
+              Rummy
+            </button>
+            <button 
+              className={`${styles.tab} ${filterGameType === 'Chess' ? styles.tabActive : ''}`}
+              onClick={() => setFilterGameType('Chess')}
+            >
+              Chess
+            </button>
+            <button 
+              className={`${styles.tab} ${filterGameType === 'Ace' ? styles.tabActive : ''}`}
+              onClick={() => setFilterGameType('Ace')}
+            >
+              Ace
+            </button>
           </div>
         </div>
+
+        {/* Results Summary */}
+        {sortedGames.length > 0 && (
+          <div style={{ marginBottom: '16px', color: '#666', fontSize: '14px' }}>
+            Showing {startIndex + 1}-{Math.min(endIndex, sortedGames.length)} of {sortedGames.length} game{sortedGames.length !== 1 ? 's' : ''}
+          </div>
+        )}
 
         {games.length === 0 ? (
           <div className="card">
             <div className={styles.empty}>
-              <p>No games played yet. Start a new game to see it here!</p>
+              <p>No {filterGameType} games played yet. Start a new game to see it here!</p>
               <button 
                 className="btn btn-primary" 
                 onClick={() => router.push('/')}
               >
-                Go to Dashboard
-              </button>
-            </div>
-          </div>
-        ) : sortedGames.length === 0 ? (
-          <div className="card">
-            <div className={styles.empty}>
-              <p>No games match your selected filters.</p>
-              <button 
-                className="btn btn-secondary" 
-                onClick={() => {
-                  setFilterGameType('All');
-                  setFilterPlayer('All');
-                }}
-              >
-                Clear Filters
+                Go to Home
               </button>
             </div>
           </div>
         ) : (
-          <div className={styles.gamesGrid}>
-            {sortedGames.map((game) => (
+          <>
+            <div className={styles.gamesGrid}>
+              {paginatedGames.map((game) => (
               <div 
                 key={game.id} 
                 className={styles.gameCard}
@@ -347,6 +338,71 @@ export default function HistoryPage() {
               </div>
             ))}
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className={styles.pagination}>
+              <button
+                className={styles.pageBtn}
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                title="First page"
+              >
+                <span className="material-icons">first_page</span>
+              </button>
+              <button
+                className={styles.pageBtn}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                title="Previous page"
+              >
+                <span className="material-icons">chevron_left</span>
+              </button>
+              
+              <div className={styles.pageNumbers}>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(page => {
+                    // Show first page, last page, current page, and pages around current
+                    if (page === 1 || page === totalPages) return true;
+                    if (Math.abs(page - currentPage) <= 1) return true;
+                    return false;
+                  })
+                  .map((page, index, array) => (
+                    <div key={page}>
+                      {index > 0 && array[index - 1] !== page - 1 && (
+                        <span className={styles.ellipsis}>...</span>
+                      )}
+                      <button
+                        className={`${styles.pageBtn} ${currentPage === page ? styles.activePage : ''}`}
+                        onClick={() => setCurrentPage(page)}
+                      >
+                        {page}
+                      </button>
+                    </div>
+                  ))}
+              </div>
+
+              <button
+                className={styles.pageBtn}
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                title="Next page"
+              >
+                <span className="material-icons">chevron_right</span>
+              </button>
+              <button
+                className={styles.pageBtn}
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                title="Last page"
+              >
+                <span className="material-icons">last_page</span>
+              </button>
+            </div>
+          )}
+          </>
+        )}
+        </>
         )}
       </div>
     </div>

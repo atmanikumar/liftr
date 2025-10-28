@@ -372,24 +372,31 @@ export function GameProvider({ children }) {
   };
 
 
-  const createGame = async (gameType, selectedPlayerIds, maxPoints = 120, playerData = null, createdBy) => {
+  const createGame = async (gameType, selectedPlayerIds, maxPoints = 120, playerData = null, createdBy, customTitle = null) => {
     if (!createdBy) {
       console.error('[GameContext] Cannot create game: createdBy is required');
       throw new Error('User ID is required to create a game');
     }
     
     const now = new Date();
-    const gameNumber = games.filter(g => 
-      new Date(g.createdAt).toDateString() === now.toDateString()
-    ).length + 1;
-
     const capitalizedGameType = gameType.charAt(0).toUpperCase() + gameType.slice(1);
     const playersSource = playerData && playerData.length > 0 ? playerData : players;
+
+    // Use custom title if provided, otherwise generate default
+    let gameTitle;
+    if (customTitle) {
+      gameTitle = customTitle;
+    } else {
+      const gameNumber = games.filter(g => 
+        new Date(g.createdAt).toDateString() === now.toDateString()
+      ).length + 1;
+      gameTitle = `${capitalizedGameType} Game ${gameNumber}`;
+    }
 
     const newGame = {
       id: Date.now().toString(),
       type: capitalizedGameType,
-      title: `${capitalizedGameType} Game ${gameNumber}`,
+      title: gameTitle,
       createdAt: now.toISOString(),
       createdBy: createdBy,
       players: selectedPlayerIds.map(playerId => {

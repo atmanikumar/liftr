@@ -367,3 +367,82 @@
   }
 }
 
+/* Pagination Styles */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 32px;
+  padding: 24px 0;
+  flex-wrap: wrap;
+}
+
+.pageBtn {
+  padding: 10px 14px;
+  min-width: 44px;
+  background: var(--card-bg);
+  border: 2px solid var(--border);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pageBtn:hover:not(:disabled) {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.pageBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pageBtn.activePage {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.pageNumbers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pageNumbers > div {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ellipsis {
+  padding: 0 8px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+@media (max-width: 480px) {
+  .pagination {
+    gap: 4px;
+  }
+  
+  .pageBtn {
+    padding: 8px 10px;
+    min-width: 38px;
+    font-size: 13px;
+  }
+  
+  .pageBtn .material-icons {
+    font-size: 18px;
+  }
+}
+
