@@ -26,6 +26,7 @@ export default function GamePage({ params }) {
   const [showUpdateMaxPointsModal, setShowUpdateMaxPointsModal] = useState(false);
   const [showMarkAcePlayerModal, setShowMarkAcePlayerModal] = useState(false);
   const [showEndAceGameModal, setShowEndAceGameModal] = useState(false);
+  const [addingRound, setAddingRound] = useState(false);
   const [roundScores, setRoundScores] = useState({});
   const [droppedPlayers, setDroppedPlayers] = useState({});
   const [doubleDropPlayers, setDoubleDropPlayers] = useState({});
@@ -350,56 +351,65 @@ export default function GamePage({ params }) {
     }
   };
 
-  const handleAddRound = () => {
-    // Convert empty strings to 0 before saving, but use 20 for dropped players, 40 for double drops, 80 for full, and 0 for winners
-    const scoresWithDefaults = {};
-    const dropInfo = {};
-    const doubleDropInfo = {};
-    const winnerInfo = {};
+  const handleAddRound = async () => {
+    setAddingRound(true);
     
-    Object.keys(roundScores).forEach(playerId => {
-      if (droppedPlayers[playerId]) {
-        scoresWithDefaults[playerId] = 20; // Drop = 20 points
-        dropInfo[playerId] = true;
-        doubleDropInfo[playerId] = false;
-        winnerInfo[playerId] = false;
-      } else if (doubleDropPlayers[playerId]) {
-        scoresWithDefaults[playerId] = 40; // Double Drop = 40 points
-        dropInfo[playerId] = false;
-        doubleDropInfo[playerId] = true;
-        winnerInfo[playerId] = false;
-      } else if (fullPlayers[playerId]) {
-        scoresWithDefaults[playerId] = 80; // Full = 80 points
-        dropInfo[playerId] = false;
-        doubleDropInfo[playerId] = false;
-        winnerInfo[playerId] = false;
-      } else if (winnerPlayers[playerId]) {
-        scoresWithDefaults[playerId] = 0; // Winner = 0 points
-        dropInfo[playerId] = false;
-        doubleDropInfo[playerId] = false;
-        winnerInfo[playerId] = true;
+    try {
+      // Convert empty strings to 0 before saving, but use 20 for dropped players, 40 for double drops, 80 for full, and 0 for winners
+      const scoresWithDefaults = {};
+      const dropInfo = {};
+      const doubleDropInfo = {};
+      const winnerInfo = {};
+      
+      Object.keys(roundScores).forEach(playerId => {
+        if (droppedPlayers[playerId]) {
+          scoresWithDefaults[playerId] = 20; // Drop = 20 points
+          dropInfo[playerId] = true;
+          doubleDropInfo[playerId] = false;
+          winnerInfo[playerId] = false;
+        } else if (doubleDropPlayers[playerId]) {
+          scoresWithDefaults[playerId] = 40; // Double Drop = 40 points
+          dropInfo[playerId] = false;
+          doubleDropInfo[playerId] = true;
+          winnerInfo[playerId] = false;
+        } else if (fullPlayers[playerId]) {
+          scoresWithDefaults[playerId] = 80; // Full = 80 points
+          dropInfo[playerId] = false;
+          doubleDropInfo[playerId] = false;
+          winnerInfo[playerId] = false;
+        } else if (winnerPlayers[playerId]) {
+          scoresWithDefaults[playerId] = 0; // Winner = 0 points
+          dropInfo[playerId] = false;
+          doubleDropInfo[playerId] = false;
+          winnerInfo[playerId] = true;
+        } else {
+          scoresWithDefaults[playerId] = parseInt(roundScores[playerId]) || 0;
+          dropInfo[playerId] = false;
+          doubleDropInfo[playerId] = false;
+          winnerInfo[playerId] = false;
+        }
+      });
+      
+      if (editingRound) {
+        // Update existing round
+        await updateRound(params.id, editingRound.roundNumber, scoresWithDefaults, dropInfo, winnerInfo, doubleDropInfo);
+        setEditingRound(null);
       } else {
-        scoresWithDefaults[playerId] = parseInt(roundScores[playerId]) || 0;
-        dropInfo[playerId] = false;
-        doubleDropInfo[playerId] = false;
-        winnerInfo[playerId] = false;
+        // Add new round
+        await addRound(params.id, scoresWithDefaults, dropInfo, winnerInfo, doubleDropInfo);
       }
-    });
-    
-    if (editingRound) {
-      // Update existing round
-      updateRound(params.id, editingRound.roundNumber, scoresWithDefaults, dropInfo, winnerInfo, doubleDropInfo);
-      setEditingRound(null);
-    } else {
-      // Add new round
-      addRound(params.id, scoresWithDefaults, dropInfo, winnerInfo, doubleDropInfo);
+      
+      // Reset scores for next round with empty strings
+      resetRoundScores();
+      setShowAddRoundModal(false);
+      
+      // Game will auto-update via useEffect watching 'games'
+    } catch (error) {
+      console.error('Failed to add/update round:', error);
+      alert('Failed to add round. Please try again.');
+    } finally {
+      setAddingRound(false);
     }
-    
-    // Reset scores for next round with empty strings
-    resetRoundScores();
-    setShowAddRoundModal(false);
-    
-    // Game will auto-update via useEffect watching 'games'
   };
 
   const handleConfirmAddPlayer = () => {
@@ -1398,14 +1408,16 @@ export default function GamePage({ params }) {
               <button 
                 className="btn btn-secondary" 
                 onClick={() => setShowAddRoundModal(false)}
+                disabled={addingRound}
               >
                 Cancel
               </button>
               <button 
                 className="btn btn-success" 
                 onClick={handleAddRound}
+                disabled={addingRound}
               >
-                Add Round Points
+                {addingRound ? 'Adding...' : 'Add Round Points'}
               </button>
             </div>
           </div>

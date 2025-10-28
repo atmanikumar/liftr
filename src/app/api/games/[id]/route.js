@@ -36,7 +36,14 @@ export async function GET(request, { params }) {
       });
     }
     
-    return NextResponse.json(game);
+    // Return with no-cache headers to prevent PWA caching
+    return NextResponse.json(game, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
   } catch (error) {
     console.error('Error fetching game:', error);
     return NextResponse.json(

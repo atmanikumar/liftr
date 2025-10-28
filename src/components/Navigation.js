@@ -92,6 +92,11 @@ export default function Navigation() {
     setMobileMenuOpen(false);
   };
 
+  const handleHardRefresh = () => {
+    // Hard reload the page (bypasses cache)
+    window.location.reload();
+  };
+
   return (
     <>
       <nav className={styles.nav}>
@@ -144,6 +149,17 @@ export default function Navigation() {
               </button>
             )}
           </div>
+
+          {/* Refresh Button */}
+          {user && (
+            <button 
+              onClick={handleHardRefresh}
+              className={styles.refreshBtn}
+              title="Refresh page"
+            >
+              <span className="material-icons">refresh</span>
+            </button>
+          )}
           
           {user && (
             <div className={styles.userSection}>
@@ -252,6 +268,16 @@ export default function Navigation() {
 
         {user && (
           <div className={styles.mobileMenuFooter}>
+            <button 
+              onClick={() => {
+                setMobileMenuOpen(false);
+                handleHardRefresh();
+              }} 
+              className={styles.mobileRefreshBtn}
+            >
+              <span className="material-icons">refresh</span>
+              Refresh
+            </button>
             <button onClick={handleClearCache} className={styles.mobileClearCacheBtn}>
               <span className="material-icons">cached</span>
               Clear Cache
