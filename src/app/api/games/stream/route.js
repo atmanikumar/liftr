@@ -5,6 +5,9 @@
 
 import { NextResponse } from 'next/server';
 
+export const runtime = 'edge'; 
+export const dynamic = 'force-dynamic';
+
 // Global store for connected SSE clients with metadata
 global.sseClients = global.sseClients || new Map();
 global.sseClientMeta = global.sseClientMeta || new Map(); // Track last successful write time

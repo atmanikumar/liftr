@@ -2,6 +2,17 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "framework": "nextjs",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    {
+      "src": "/api/games/stream",
+      "dest": "/api/games/stream",
+      "headers": {
+        "Cache-Control": "no-cache, no-transform",
+        "X-Accel-Buffering": "no"
+      }
+    }
+  ]
 }
 
