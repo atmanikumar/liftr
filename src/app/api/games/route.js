@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { getGames, saveGames, updateGameInDB, getUsers, getGameById } from '@/lib/storage';
 import { verifyToken } from '@/lib/auth';
 import { cookies } from 'next/headers';
+import { broadcastToClients, initializeSSE, getConnectedClientsCount } from '@/lib/sseBroadcaster';
+
+// Initialize SSE on module load
+initializeSSE();
 
 // GET games with optional filtering
 export async function GET(request) {
@@ -57,7 +61,13 @@ export async function GET(request) {
       });
     }
     
-    return NextResponse.json(games);
+    return NextResponse.json(games, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      }
+    });
   } catch (error) {
     console.error('Error fetching games:', error);
     return NextResponse.json([], { status: 500 });
@@ -112,12 +122,44 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: 'Create failed' }, { status: 500 });
     }
     
-    console.log('[API /games POST] Game created successfully in DB');
+    // Broadcast the update to all connected SSE clients (non-blocking)
+    (async () => {
+      try {
+        console.log('[API /games POST] 📡 Starting broadcast for game:', game.id);
+        const completeGame = await getGameById(game.id);
+        console.log('[API /games POST] 📦 Complete game data retrieved:', {
+          id: completeGame.id,
+          type: completeGame.type,
+          status: completeGame.status,
+          players: completeGame.players?.length || 0
+        });
+        
+        await broadcastToClients({
+          type: 'game_created',
+          payload: {
+            gameId: game.id,
+            gameType: game.type,
+            status: game.status,
+            timestamp: new Date().toISOString(),
+            game: completeGame
+          }
+        });
+        console.log('[API /games POST] ✅ Broadcast completed successfully');
+      } catch (error) {
+        console.error('[API /games POST] ❌ Broadcast failed:', error.message);
+      }
+    })();
+    
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[API /games POST] Error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
+}
+
+// PUT - Update a specific game (alias for PATCH)
+export async function PUT(request) {
+  return PATCH(request);
 }
 
 // PATCH - Update a specific game
@@ -157,6 +199,25 @@ export async function PATCH(request) {
     if (!result) {
       return NextResponse.json({ success: false, error: 'Update failed' }, { status: 500 });
     }
+    
+    // Broadcast the update to all connected SSE clients (non-blocking)
+    (async () => {
+      try {
+        const completeGame = await getGameById(game.id);
+        await broadcastToClients({
+          type: 'game_updated',
+          payload: {
+            gameId: game.id,
+            gameType: game.type,
+            status: game.status,
+            timestamp: new Date().toISOString(),
+            game: completeGame
+          }
+        });
+      } catch (error) {
+        console.error('[API /games PATCH] Broadcast failed:', error.message);
+      }
+    })();
     
     return NextResponse.json({ success: true });
   } catch (error) {

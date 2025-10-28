@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { clearAPICaches } from '@/lib/pwaCache';
 import styles from './Navigation.module.css';
 
 export default function Navigation() {
@@ -75,6 +76,20 @@ export default function Navigation() {
   const handleLogout = () => {
     setMobileMenuOpen(false);
     logout();
+  };
+
+  const handleClearCache = async () => {
+    const confirmed = confirm('Clear cached data? This will refresh your app data.');
+    if (confirmed) {
+      const success = await clearAPICaches();
+      if (success) {
+        alert('Cache cleared! Refreshing page...');
+        window.location.reload();
+      } else {
+        alert('Failed to clear cache. Try refreshing the page manually.');
+      }
+    }
+    setMobileMenuOpen(false);
   };
 
   return (
@@ -223,7 +238,12 @@ export default function Navigation() {
 
         {user && (
           <div className={styles.mobileMenuFooter}>
+            <button onClick={handleClearCache} className={styles.mobileClearCacheBtn}>
+              <span className="material-icons">cached</span>
+              Clear Cache
+            </button>
             <button onClick={handleLogout} className={styles.mobileLogoutBtn}>
+              <span className="material-icons">logout</span>
               Logout
             </button>
           </div>

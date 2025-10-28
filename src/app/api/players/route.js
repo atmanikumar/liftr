@@ -16,7 +16,13 @@ export async function GET() {
       };
     });
     
-    return NextResponse.json(playersWithPhotos);
+    return NextResponse.json(playersWithPhotos, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      }
+    });
   } catch (error) {
     return NextResponse.json([], { status: 500 });
   }

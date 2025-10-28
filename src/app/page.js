@@ -9,57 +9,136 @@ import styles from './page.module.css';
 
 export default function Home() {
   const router = useRouter();
-  const { createGame } = useGame();
+  const { createGame, sseConnected, initializeSSE } = useGame();
   const { isAdmin, user, loading: authLoading } = useAuth();
   const [showNewGameModal, setShowNewGameModal] = useState(false);
   const [gameType, setGameType] = useState('rummy');
   const [filterGameType, setFilterGameType] = useState('Rummy'); // Filter for top players
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [maxPoints, setMaxPoints] = useState(120);
-  const [topPlayers, setTopPlayers] = useState([]);
-  const [recentMatches, setRecentMatches] = useState([]);
-  const [inProgressGames, setInProgressGames] = useState([]);
+  const [topPlayersCache, setTopPlayersCache] = useState({}); // Cache by game type
+  const [recentMatchesCache, setRecentMatchesCache] = useState({}); // Cache by game type
   const [statsLoading, setStatsLoading] = useState(true);
   const [players, setPlayers] = useState([]);
   const [playersLoading, setPlayersLoading] = useState(false);
+  const [creatingGame, setCreatingGame] = useState(false);
 
-  // Fetch data function that can be reused
+  // Derived state based on current filter
+  const topPlayers = topPlayersCache[filterGameType] || [];
+  const recentMatches = recentMatchesCache[filterGameType] || [];
+  
+  // State for in-progress games with profile photos
+  const [inProgressGames, setInProgressGames] = useState([]);
+
+  // Fetch data for home page (optimized - only what we need!)
   const fetchData = useCallback(async () => {
     if (!user) return;
     
     setStatsLoading(true);
-      try {
-        // Fetch top players stats
-        const statsResponse = await fetch(`/api/stats?gameType=${filterGameType}`);
-        if (statsResponse.ok) {
-          const statsData = await statsResponse.json();
-          setTopPlayers(statsData.topPlayers);
+    try {
+      const gameTypes = ['Rummy', 'Chess', 'Ace'];
+      
+      // Fetch all data in parallel
+      const statsPromises = gameTypes.map(type =>
+        fetch(`/api/stats?gameType=${type}`)
+          .then(res => res.ok ? res.json() : null)
+          .then(data => ({ type, data }))
+      );
+      
+      const matchesPromises = gameTypes.map(type =>
+        fetch(`/api/recent-matches?gameType=${type}&limit=30&status=completed`)
+          .then(res => res.ok ? res.json() : null)
+          .then(data => ({ type, data }))
+      );
+      
+      const inProgressPromise = fetch(`/api/recent-matches?limit=100&status=in_progress`)
+        .then(res => res.ok ? res.json() : null);
+      
+      // Wait for all requests
+      const [statsResults, matchesResults, inProgressData] = await Promise.all([
+        Promise.all(statsPromises),
+        Promise.all(matchesPromises),
+        inProgressPromise
+      ]);
+      
+      // Build cache objects
+      const statsCache = {};
+      const matchesCache = {};
+      
+      statsResults.forEach(({ type, data }) => {
+        if (data) {
+          statsCache[type] = data.topPlayers;
         }
-        
-        // Fetch recent completed matches (30)
-        const matchesResponse = await fetch(`/api/recent-matches?gameType=${filterGameType}&limit=30&status=completed`);
-        if (matchesResponse.ok) {
-          const matchesData = await matchesResponse.json();
-          setRecentMatches(matchesData.matches);
+      });
+      
+      matchesResults.forEach(({ type, data }) => {
+        if (data) {
+          matchesCache[type] = data.matches;
         }
-        
-        // Fetch in-progress games (all game types)
-        const inProgressResponse = await fetch(`/api/recent-matches?limit=100&status=in_progress`);
-        if (inProgressResponse.ok) {
-          const inProgressData = await inProgressResponse.json();
-          setInProgressGames(inProgressData.matches);
-        }
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
-      } finally {
-        setStatsLoading(false);
+      });
+      
+      setTopPlayersCache(statsCache);
+      setRecentMatchesCache(matchesCache);
+      
+      if (inProgressData) {
+        setInProgressGames(inProgressData.matches);
       }
-  }, [filterGameType, user]);
+      
+      console.log('[Home] 📦 Data loaded - Stats:', Object.keys(statsCache).length, 'types | In-progress:', inProgressData?.matches.length || 0);
+    } catch (error) {
+      console.error('[Home] Failed to fetch data:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, [user]);
 
-  // Fetch data when filter changes
+  // Initialize SSE (lightweight - doesn't load all games)
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (user && initializeSSE) {
+      console.log('[Home] 🚀 Initializing SSE connection...');
+      initializeSSE();
+    }
+  }, [user, initializeSSE]);
+
+  // Log SSE connection status
+  useEffect(() => {
+    if (sseConnected) {
+      console.log('[Home] ✅ SSE Connected! Will refresh data on updates');
+    }
+  }, [sseConnected]);
+
+  // Fetch data on mount
+  useEffect(() => {
+    if (user) {
+      fetchData();
+    }
+  }, [user, fetchData]);
+
+  // Log when switching game types (instant - uses cached data)
+  useEffect(() => {
+    if (topPlayersCache[filterGameType]) {
+      console.log(`[Home] ⚡ Switched to ${filterGameType} (instant - cached)`);
+    }
+  }, [filterGameType, topPlayersCache]);
+
+  // Listen to SSE messages via GameContext to refresh data
+  useEffect(() => {
+    if (!sseConnected) return;
+
+    // Set up custom event listener for SSE updates
+    const handleSSEUpdate = () => {
+      console.log('[Home] 🔄 SSE update received - refreshing data...');
+      fetchData();
+    };
+
+    window.addEventListener('game_updated', handleSSEUpdate);
+    window.addEventListener('game_created', handleSSEUpdate);
+
+    return () => {
+      window.removeEventListener('game_updated', handleSSEUpdate);
+      window.removeEventListener('game_created', handleSSEUpdate);
+    };
+  }, [sseConnected, fetchData]);
 
   // Enable pull-to-refresh
   usePullToRefresh(fetchData, { enabled: !authLoading && !!user });
@@ -144,16 +223,44 @@ export default function Home() {
 
     console.log('[Home handleCreateGame] Calling createGame with userId:', user.id);
 
+    setCreatingGame(true);
+    
     try {
-    // Chess and Ace games don't have max points
-    const points = (gameType === 'chess' || gameType === 'ace') ? null : parseInt(maxPoints);
+      // Chess and Ace games don't have max points
+      const points = (gameType === 'chess' || gameType === 'ace') ? null : parseInt(maxPoints);
+      
+      console.log('[Home handleCreateGame] Creating game with:', {
+        gameType,
+        selectedPlayers,
+        points,
+        playerCount: players.length
+      });
+      
       const game = await createGame(gameType, selectedPlayers, points, players, user.id);
+      
+      if (!game || !game.id) {
+        throw new Error('Game creation failed - no game object returned');
+      }
+      
       console.log('[Home handleCreateGame] Game created successfully:', game.id);
-    setShowNewGameModal(false);
-    router.push(`/game/${game.id}`);
+      
+      // Reset form state
+      setSelectedPlayers([]);
+      setGameType('rummy');
+      setMaxPoints(120);
+      
+      // Close modal
+      setShowNewGameModal(false);
+      
+      // Small delay to ensure modal closes before navigation
+      setTimeout(() => {
+        router.push(`/game/${game.id}`);
+      }, 100);
     } catch (error) {
       console.error('[Home handleCreateGame] Failed to create game:', error);
       alert('Failed to create game: ' + error.message);
+    } finally {
+      setCreatingGame(false);
     }
   };
 
@@ -163,7 +270,29 @@ export default function Home() {
         <div className={styles.header}>
           <div>
             <h1 className={styles.title}>🏆 Dashboard</h1>
-            <p className={styles.subtitle}>Track your card game champions</p>
+            <p className={styles.subtitle}>
+              Track your card game champions
+              {sseConnected && (
+                <span style={{
+                  marginLeft: '12px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '11px',
+                  color: '#22c55e',
+                  fontWeight: '600'
+                }}>
+                  <span style={{ 
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: '#22c55e',
+                    animation: 'livePulse 1.5s ease-in-out infinite'
+                  }}></span>
+                  LIVE
+                </span>
+              )}
+            </p>
           </div>
           {isAdmin() && (
             <button className="btn btn-primary" onClick={handleNewGame} style={{ color: 'white' }}>
@@ -670,7 +799,14 @@ export default function Home() {
             <div className={styles.modalActions}>
               <button 
                 className="btn btn-secondary" 
-                onClick={() => setShowNewGameModal(false)}
+                onClick={() => {
+                  setShowNewGameModal(false);
+                  // Reset form when canceling
+                  setSelectedPlayers([]);
+                  setGameType('rummy');
+                  setMaxPoints(120);
+                }}
+                disabled={creatingGame}
               >
                 Cancel
               </button>
@@ -678,12 +814,13 @@ export default function Home() {
                 className="btn btn-success" 
                 onClick={handleCreateGame}
                 disabled={
-                  gameType === 'chess' 
+                  creatingGame ||
+                  (gameType === 'chess' 
                     ? selectedPlayers.length !== 2 
-                    : selectedPlayers.length < 2
+                    : selectedPlayers.length < 2)
                 }
               >
-                Start Game
+                {creatingGame ? 'Creating...' : 'Start Game'}
               </button>
             </div>
           </div>

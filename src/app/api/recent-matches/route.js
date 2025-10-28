@@ -84,6 +84,12 @@ export async function GET(request) {
     return NextResponse.json({
       gameType,
       matches: minimalMatches
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      }
     });
   } catch (error) {
     console.error('Error fetching recent matches:', error);

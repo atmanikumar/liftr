@@ -9,7 +9,7 @@ import styles from './page.module.css';
 
 export default function GamePage({ params }) {
   const router = useRouter();
-  const { loadData, getGame, addRound, updateRound, addPlayerToGame, declareWinner, declareDraw, updateMaxPoints, declareAceWinners, players, games } = useGame();
+  const { loadData, getGame, addRound, updateRound, addPlayerToGame, declareWinner, declareDraw, updateMaxPoints, declareAceWinners, players, games, sseConnected } = useGame();
   const { user, loading: authLoading } = useAuth();
   
   const [game, setGame] = useState(null);
@@ -90,18 +90,28 @@ export default function GamePage({ params }) {
     };
     
     initializePage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]); // Only depend on params.id, not fetchGame or loadData
 
-  // Update game from context ONLY when actions are performed (addRound, etc.)
-  // This prevents unnecessary re-fetches
+  // Update game from context when games array changes (triggered by SSE or local actions)
+  // This ensures real-time updates from other clients
   useEffect(() => {
     if (games.length > 0) {
       const gameData = getGame(params.id);
-      if (gameData && gameData !== game) {
-        setGame(gameData);
+      if (gameData) {
+        // Always update if there's a difference to ensure SSE updates are reflected
+        const hasChanged = !game || JSON.stringify(gameData) !== JSON.stringify(game);
+        if (hasChanged) {
+          console.log('[Game Page] Updating game from context (SSE or local action)');
+          setGame(gameData);
+        }
       }
     }
-  }, [games, params.id, getGame, game]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [games, params.id, getGame]); // Don't include 'game' to avoid unnecessary re-renders
+
+  // Note: SSE updates are handled by GameContext
+  // The game will update automatically via the games array change detection above, fetchGame not needed in deps
 
   // Redirect if game not found after loading
   useEffect(() => {

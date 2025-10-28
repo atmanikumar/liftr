@@ -102,6 +102,12 @@ export async function GET(request) {
     return NextResponse.json({
       gameType,
       topPlayers
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      }
     });
   } catch (error) {
     console.error('Error fetching player stats:', error);

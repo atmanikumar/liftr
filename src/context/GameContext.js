@@ -40,38 +40,36 @@ const saveToServer = async (key, data) => {
 // Helper function to create a new game on server
 const createGameOnServer = async (game) => {
   try {
-    console.log('[createGameOnServer] Preparing to send game to API...');
-    console.log('[createGameOnServer] Game data:', {
-      id: game.id,
-      type: game.type,
-      createdBy: game.createdBy,
-      status: game.status
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     
-    // Check if cookies are available
-    console.log('[createGameOnServer] Document.cookie:', document.cookie ? 'Cookies present' : 'No cookies');
-    
-    console.log('[createGameOnServer] Sending POST request to /api/games with credentials: include');
-    
-    const response = await fetch(`/api/games`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include', // IMPORTANT: Include cookies for authentication
-      body: JSON.stringify(game),
-    });
-    
-    console.log('[createGameOnServer] Response status:', response.status);
-    console.log('[createGameOnServer] Response ok:', response.ok);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('[createGameOnServer] Failed to create game on server:', errorData);
+    try {
+      const response = await fetch(`/api/games`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(game),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('[createGameOnServer] Failed:', errorData.error);
+        return false;
+      }
+      
+      return true;
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        console.error('[createGameOnServer] Request timeout');
+      } else {
+        console.error('[createGameOnServer] Error:', fetchError.message);
+      }
       return false;
     }
-    
-    const successData = await response.json();
-    console.log('[createGameOnServer] Game created successfully on server:', successData);
-    return true;
   } catch (error) {
     console.error('[createGameOnServer] Error creating game on server:', error);
     return false;
@@ -116,6 +114,61 @@ export function GameProvider({ children }) {
   const [games, setGames] = useState([]);
   const [initialized, setInitialized] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [sseConnected, setSseConnected] = useState(false);
+  const [sseClientId, setSseClientId] = useState(null);
+
+  // Helper functions for managing SSE client ID (using localStorage as primary, cookie as backup)
+  const getClientIdFromStorage = () => {
+    if (typeof window === 'undefined') return null;
+    
+    try {
+      const stored = localStorage.getItem('sse_client_id');
+      if (stored) return stored;
+    } catch (e) {
+      console.error('[GameContext SSE] localStorage error:', e);
+    }
+    
+    try {
+      const cookies = document.cookie.split(';');
+      for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'sse_client_id') return value;
+      }
+    } catch (e) {
+      console.error('[GameContext SSE] cookie error:', e);
+    }
+    
+    return null;
+  };
+
+  const setClientIdInStorage = (clientId) => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      localStorage.setItem('sse_client_id', clientId);
+    } catch (e) {
+      console.error('[GameContext SSE] Failed to save to localStorage:', e);
+    }
+    
+    try {
+      const expires = new Date();
+      expires.setTime(expires.getTime() + 24 * 60 * 60 * 1000);
+      document.cookie = `sse_client_id=${clientId}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
+    } catch (e) {
+      console.error('[GameContext SSE] Failed to save to cookie:', e);
+    }
+  };
+
+  const removeClientIdFromStorage = () => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      localStorage.removeItem('sse_client_id');
+      document.cookie = 'sse_client_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    } catch (e) {
+      console.error('[GameContext SSE] Error removing client ID:', e);
+    }
+  };
 
   // Load data on-demand (not on mount)
   const loadData = async () => {
@@ -148,6 +201,165 @@ export function GameProvider({ children }) {
     setLoading(false);
   };
 
+  // Initialize SSE without loading all games (lightweight for home page)
+  const initializeSSE = () => {
+    if (!initialized) {
+      console.log('[GameContext] Initializing SSE without loading games...');
+      setInitialized(true); // This triggers the SSE useEffect
+    }
+  };
+
+  // Set up Server-Sent Events (SSE) for real-time updates
+  useEffect(() => {
+    if (!initialized) return;
+    
+    const existingClientId = getClientIdFromStorage();
+    if (existingClientId) {
+      setSseClientId(existingClientId);
+    }
+    
+    let eventSource = null;
+    let reconnectTimeout = null;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    let isCleanedUp = false;
+    
+    const connectSSE = () => {
+      if (isCleanedUp) return;
+      
+      if (eventSource) {
+        try {
+          eventSource.close();
+        } catch (e) {
+          // Ignore
+        }
+      }
+      
+      try {
+        const currentClientId = getClientIdFromStorage();
+        const streamUrl = currentClientId 
+          ? `/api/games/stream?clientId=${currentClientId}`
+          : '/api/games/stream';
+        
+        eventSource = new EventSource(streamUrl);
+        
+        eventSource.onopen = () => {
+          setSseConnected(true);
+          reconnectAttempts = 0;
+        };
+        
+        eventSource.onmessage = async (event) => {
+          try {
+            console.log('[GameContext SSE] 📨 Raw message received, length:', event.data.length);
+            const data = JSON.parse(event.data);
+            console.log('[GameContext SSE] 📦 Parsed message type:', data.type);
+            
+            switch (data.type) {
+              case 'connected':
+                console.log('[GameContext SSE] 🔗 Connected event, clientId:', data.clientId);
+                if (data.clientId) {
+                  setSseClientId(data.clientId);
+                  setClientIdInStorage(data.clientId);
+                }
+                break;
+                
+              case 'game_created':
+                console.log('[GameContext SSE] 🎮 Game created event received:', data.payload.gameId);
+                
+                // Dispatch custom event for home page to listen
+                window.dispatchEvent(new CustomEvent('game_created', { detail: data.payload }));
+                
+                if (data.payload.game) {
+                  setGames(prevGames => {
+                    const exists = prevGames.find(g => g.id === data.payload.gameId);
+                    if (exists) {
+                      console.log('[GameContext SSE] Game already exists, updating...');
+                      return prevGames.map(g => 
+                        g.id === data.payload.gameId ? data.payload.game : g
+                      );
+                    } else {
+                      console.log('[GameContext SSE] Adding new game, total will be:', prevGames.length + 1);
+                      return [...prevGames, data.payload.game];
+                    }
+                  });
+                } else {
+                  const loadedGames = await loadFromServer('games');
+                  setGames(loadedGames);
+                }
+                break;
+                
+              case 'game_updated':
+                console.log('[GameContext SSE] 🔄 Game updated event received:', data.payload.gameId);
+                
+                // Dispatch custom event for home page to listen
+                window.dispatchEvent(new CustomEvent('game_updated', { detail: data.payload }));
+                
+                if (data.payload.game) {
+                  setGames(prevGames => 
+                    prevGames.map(g => 
+                      g.id === data.payload.gameId ? data.payload.game : g
+                    )
+                  );
+                  console.log('[GameContext SSE] Game updated in state');
+                } else {
+                  const loadedGames = await loadFromServer('games');
+                  setGames(loadedGames);
+                }
+                break;
+                
+              default:
+                console.log('[GameContext SSE] ⚠️ Unknown event type:', data.type);
+                break;
+            }
+          } catch (error) {
+            console.error('[GameContext SSE] ❌ Error parsing message:', error);
+            console.error('[GameContext SSE] Raw data:', event.data);
+          }
+        };
+        
+        eventSource.onerror = () => {
+          setSseConnected(false);
+          eventSource.close();
+          
+          if (reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+            reconnectTimeout = setTimeout(connectSSE, delay);
+          }
+        };
+      } catch (error) {
+        console.error('[GameContext SSE] Error creating EventSource:', error);
+      }
+    };
+    
+    // Initial connection
+    connectSSE();
+    
+    // Note: We no longer need to explicitly disconnect on page unload
+    // The server will detect the disconnection via the EventSource close
+    // and the cookie ensures we reuse the same client ID on refresh
+    
+    // Cleanup on unmount
+    return () => {
+      isCleanedUp = true;
+      
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      
+      if (eventSource) {
+        try {
+          eventSource.close();
+        } catch (e) {
+          // Ignore
+        }
+      }
+      
+      setSseConnected(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialized]); // Only depend on initialized to avoid reconnection loops
+
   const addPlayer = (name) => {
     const avatars = ['🦸‍♂️', '🦹‍♂️', '🕷️', '🦇', '⚡', '💪', '🔥', '⭐', '🎯', '🏆', '👊', '🛡️', '⚔️', '🎪', '🎭', '🎬'];
     const randomAvatar = avatars[Math.floor(Math.random() * avatars.length)];
@@ -174,11 +386,8 @@ export function GameProvider({ children }) {
 
 
   const createGame = async (gameType, selectedPlayerIds, maxPoints = 120, playerData = null, createdBy) => {
-    console.log('[GameContext createGame] Starting with createdBy:', createdBy);
-    
-    // Validate createdBy is provided
     if (!createdBy) {
-      console.error('[GameContext createGame] Cannot create game: createdBy is required');
+      console.error('[GameContext] Cannot create game: createdBy is required');
       throw new Error('User ID is required to create a game');
     }
     
@@ -187,13 +396,8 @@ export function GameProvider({ children }) {
       new Date(g.createdAt).toDateString() === now.toDateString()
     ).length + 1;
 
-    // Capitalize first letter of game type
     const capitalizedGameType = gameType.charAt(0).toUpperCase() + gameType.slice(1);
-
-    // Use provided playerData if available, otherwise fall back to context players
     const playersSource = playerData && playerData.length > 0 ? playerData : players;
-
-    console.log('[GameContext createGame] Creating game object with createdBy:', createdBy);
 
     const newGame = {
       id: Date.now().toString(),
@@ -214,26 +418,21 @@ export function GameProvider({ children }) {
           totalPoints: 0,
           isLost: false
         };
-      }).filter(Boolean), // Remove any null entries
+      }).filter(Boolean),
       rounds: [],
-      history: [], // Track all events (rounds and player additions)
-      status: 'in_progress', // 'in_progress', 'completed'
+      history: [],
+      status: 'in_progress',
       winner: null,
-      maxPoints: maxPoints // null for chess/ace, number for rummy
+      maxPoints: maxPoints
     };
 
     const updatedGames = [...games, newGame];
     setGames(updatedGames);
     
-    console.log('[GameContext createGame] Game object created, sending to server...');
-    
-    // Create new game on server (await to ensure it completes)
     const serverResult = await createGameOnServer(newGame);
     
     if (!serverResult) {
-      console.error('[GameContext createGame] Failed to save game to server');
-    } else {
-      console.log('[GameContext createGame] Game saved to server successfully');
+      console.error('[GameContext] Failed to save game to server');
     }
     
     return newGame;
@@ -674,7 +873,9 @@ export function GameProvider({ children }) {
     players,
     games,
     loading,
+    sseConnected,
     loadData,
+    initializeSSE,
     addPlayer,
     updatePlayer,
     createGame,
