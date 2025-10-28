@@ -26,7 +26,6 @@ export async function GET(request) {
     // Reuse existing client ID - close old connection and replace with new one
     clientId = existingClientId;
     isReconnect = true;
-    console.log(`[SSE] Client reconnecting: ${clientId}`);
     
     // Close the old writer if it exists
     const oldWriter = global.sseClients.get(clientId);
@@ -40,11 +39,9 @@ export async function GET(request) {
   } else if (existingClientId) {
     // Client has ID but not in our map - reuse it
     clientId = existingClientId;
-    console.log(`[SSE] Reusing client ID: ${clientId}`);
   } else {
     // Generate new unique client ID
     clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`[SSE] New client: ${clientId}`);
   }
   
   // Store/replace the writer for this client
@@ -54,8 +51,6 @@ export async function GET(request) {
     lastSuccessfulWrite: Date.now(),
     isReconnect
   });
-  
-  console.log(`[SSE] Total clients: ${global.sseClients.size}`);
   
   // IMPORTANT: Return the response FIRST, then send messages
   // This starts the stream flowing before we try to write
@@ -101,10 +96,6 @@ export async function GET(request) {
         global.sseClientMeta.delete(id);
       });
       
-      if (staleClients.length > 0) {
-        console.log(`[SSE] Removed ${staleClients.length} stale connection(s), total: ${global.sseClients.size}`);
-      }
-      
       // Send keepalive to current client
       if (!global.sseClients.has(clientId)) {
         clearInterval(keepaliveInterval);
@@ -138,7 +129,6 @@ export async function GET(request) {
   
   // Clean up on connection close
   request.signal.addEventListener('abort', () => {
-    console.log(`[SSE] Client disconnected: ${clientId}, total: ${global.sseClients.size - 1}`);
     clearInterval(keepaliveInterval);
     global.sseClients.delete(clientId);
     global.sseClientMeta.delete(clientId);

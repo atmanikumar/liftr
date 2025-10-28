@@ -83,8 +83,6 @@ export default function Home() {
       if (inProgressData) {
         setInProgressGames(inProgressData.matches);
       }
-      
-      console.log('[Home] 📦 Data loaded - Stats:', Object.keys(statsCache).length, 'types | In-progress:', inProgressData?.matches.length || 0);
     } catch (error) {
       console.error('[Home] Failed to fetch data:', error);
     } finally {
@@ -95,17 +93,9 @@ export default function Home() {
   // Initialize SSE (lightweight - doesn't load all games)
   useEffect(() => {
     if (user && initializeSSE) {
-      console.log('[Home] 🚀 Initializing SSE connection...');
       initializeSSE();
     }
   }, [user, initializeSSE]);
-
-  // Log SSE connection status
-  useEffect(() => {
-    if (sseConnected) {
-      console.log('[Home] ✅ SSE Connected! Will refresh data on updates');
-    }
-  }, [sseConnected]);
 
   // Fetch data on mount
   useEffect(() => {
@@ -114,20 +104,12 @@ export default function Home() {
     }
   }, [user, fetchData]);
 
-  // Log when switching game types (instant - uses cached data)
-  useEffect(() => {
-    if (topPlayersCache[filterGameType]) {
-      console.log(`[Home] ⚡ Switched to ${filterGameType} (instant - cached)`);
-    }
-  }, [filterGameType, topPlayersCache]);
-
   // Listen to SSE messages via GameContext to refresh data
   useEffect(() => {
     if (!sseConnected) return;
 
     // Set up custom event listener for SSE updates
     const handleSSEUpdate = () => {
-      console.log('[Home] 🔄 SSE update received - refreshing data...');
       fetchData();
     };
 
@@ -496,8 +478,8 @@ export default function Home() {
                       <td style={{ textAlign: 'center' }}><strong>{player.wins}</strong></td>
                       <td style={{ textAlign: 'center' }}>
                         <span className={`badge ${
-                          player.winPercentage >= 50 ? 'badge-success' : 
-                          player.winPercentage >= 30 ? 'badge-warning' : 
+                          player.winPercentage > 30 ? 'badge-success' : 
+                          player.winPercentage >= 15 ? 'badge-warning' : 
                           'badge-danger'
                         }`}>
                           {player.winPercentage}%

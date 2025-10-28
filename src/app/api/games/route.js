@@ -107,33 +107,21 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 });
     }
     
-    console.log('[API /games POST] User verified:', { userId: user.id, gameCreatedBy: game.createdBy });
-    
     // For new games, verify the createdBy matches the current user
     if (game.createdBy && game.createdBy !== user.id) {
-      console.error('[API /games POST] CreatedBy mismatch:', { userId: user.id, gameCreatedBy: game.createdBy });
       return NextResponse.json({ success: false, error: 'Cannot create game on behalf of another user' }, { status: 403 });
     }
     
     const result = await updateGameInDB(game); // Uses INSERT OR REPLACE under the hood
     
     if (!result) {
-      console.error('[API /games POST] Database insert failed');
       return NextResponse.json({ success: false, error: 'Create failed' }, { status: 500 });
     }
     
     // Broadcast the update to all connected SSE clients (non-blocking)
     (async () => {
       try {
-        console.log('[API /games POST] 📡 Starting broadcast for game:', game.id);
         const completeGame = await getGameById(game.id);
-        console.log('[API /games POST] 📦 Complete game data retrieved:', {
-          id: completeGame.id,
-          type: completeGame.type,
-          status: completeGame.status,
-          players: completeGame.players?.length || 0
-        });
-        
         await broadcastToClients({
           type: 'game_created',
           payload: {
@@ -144,9 +132,8 @@ export async function POST(request) {
             game: completeGame
           }
         });
-        console.log('[API /games POST] ✅ Broadcast completed successfully');
       } catch (error) {
-        console.error('[API /games POST] ❌ Broadcast failed:', error.message);
+        console.error('[API /games POST] Broadcast failed:', error.message);
       }
     })();
     

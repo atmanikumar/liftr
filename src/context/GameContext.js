@@ -204,7 +204,6 @@ export function GameProvider({ children }) {
   // Initialize SSE without loading all games (lightweight for home page)
   const initializeSSE = () => {
     if (!initialized) {
-      console.log('[GameContext] Initializing SSE without loading games...');
       setInitialized(true); // This triggers the SSE useEffect
     }
   };
@@ -250,13 +249,10 @@ export function GameProvider({ children }) {
         
         eventSource.onmessage = async (event) => {
           try {
-            console.log('[GameContext SSE] 📨 Raw message received, length:', event.data.length);
             const data = JSON.parse(event.data);
-            console.log('[GameContext SSE] 📦 Parsed message type:', data.type);
             
             switch (data.type) {
               case 'connected':
-                console.log('[GameContext SSE] 🔗 Connected event, clientId:', data.clientId);
                 if (data.clientId) {
                   setSseClientId(data.clientId);
                   setClientIdInStorage(data.clientId);
@@ -264,8 +260,6 @@ export function GameProvider({ children }) {
                 break;
                 
               case 'game_created':
-                console.log('[GameContext SSE] 🎮 Game created event received:', data.payload.gameId);
-                
                 // Dispatch custom event for home page to listen
                 window.dispatchEvent(new CustomEvent('game_created', { detail: data.payload }));
                 
@@ -273,12 +267,10 @@ export function GameProvider({ children }) {
                   setGames(prevGames => {
                     const exists = prevGames.find(g => g.id === data.payload.gameId);
                     if (exists) {
-                      console.log('[GameContext SSE] Game already exists, updating...');
                       return prevGames.map(g => 
                         g.id === data.payload.gameId ? data.payload.game : g
                       );
                     } else {
-                      console.log('[GameContext SSE] Adding new game, total will be:', prevGames.length + 1);
                       return [...prevGames, data.payload.game];
                     }
                   });
@@ -289,8 +281,6 @@ export function GameProvider({ children }) {
                 break;
                 
               case 'game_updated':
-                console.log('[GameContext SSE] 🔄 Game updated event received:', data.payload.gameId);
-                
                 // Dispatch custom event for home page to listen
                 window.dispatchEvent(new CustomEvent('game_updated', { detail: data.payload }));
                 
@@ -300,7 +290,6 @@ export function GameProvider({ children }) {
                       g.id === data.payload.gameId ? data.payload.game : g
                     )
                   );
-                  console.log('[GameContext SSE] Game updated in state');
                 } else {
                   const loadedGames = await loadFromServer('games');
                   setGames(loadedGames);
@@ -308,12 +297,10 @@ export function GameProvider({ children }) {
                 break;
                 
               default:
-                console.log('[GameContext SSE] ⚠️ Unknown event type:', data.type);
                 break;
             }
           } catch (error) {
-            console.error('[GameContext SSE] ❌ Error parsing message:', error);
-            console.error('[GameContext SSE] Raw data:', event.data);
+            console.error('[GameContext SSE] Error parsing message:', error);
           }
         };
         
