@@ -1217,10 +1217,23 @@ export default function GamePage({ params }) {
 
       {/* Add Round Modal */}
       {showAddRoundModal && (
-        <div className="modal-overlay" onClick={() => {
-          setShowAddRoundModal(false);
-          setEditingRound(null);
-        }}>
+        <div 
+          className="modal-overlay" 
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              e.stopPropagation();
+              setShowAddRoundModal(false);
+              setEditingRound(null);
+            }
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              e.stopPropagation();
+              setShowAddRoundModal(false);
+              setEditingRound(null);
+            }
+          }}
+        >
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ position: 'relative' }}>
             {/* Loading Overlay */}
             {addingRound && (
@@ -1297,7 +1310,6 @@ export default function GamePage({ params }) {
                         placeholder="0"
                         disabled={droppedPlayers[player.id] || doubleDropPlayers[player.id] || winnerPlayers[player.id] || fullPlayers[player.id]}
                         style={{ flex: '1', minWidth: '60px', textAlign: 'center' }}
-                        autoFocus={player.id === game.players.filter(p => !p.isLost)[0]?.id}
                       />
                       {isRummy && (
                         <>
@@ -1441,15 +1453,31 @@ export default function GamePage({ params }) {
             <div className={styles.modalActions}>
               <button 
                 className="btn btn-secondary" 
-                onClick={() => setShowAddRoundModal(false)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowAddRoundModal(false);
+                }}
                 disabled={addingRound}
+                type="button"
               >
                 Cancel
               </button>
               <button 
                 className="btn btn-success" 
-                onClick={handleAddRound}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!addingRound) {
+                    handleAddRound();
+                  }
+                }}
                 disabled={addingRound}
+                type="button"
               >
                 {addingRound ? 'Adding...' : 'Add Round Points'}
               </button>

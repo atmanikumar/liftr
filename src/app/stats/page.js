@@ -226,6 +226,31 @@ export default function StatsPage() {
                 </div>
               )}
 
+              {interestingStats.stats.consistent && (
+                <div 
+                  className={`${styles.statBadge} ${styles.clickableBadge}`}
+                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.consistent.player.id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className={styles.badgeIcon}>🎯</div>
+                  <div className={styles.badgeContent}>
+                    <div className={styles.badgeTitle}>Consistent</div>
+                    <div className={styles.badgeSubtitle}>Most Consecutive Finals</div>
+                    <div className={styles.badgeName}>
+                      {interestingStats.stats.consistent.player.profilePhoto ? (
+                        <img 
+                          src={interestingStats.stats.consistent.player.profilePhoto} 
+                          alt={interestingStats.stats.consistent.player.name}
+                          className={styles.badgeAvatar}
+                        />
+                      ) : null}
+                      {interestingStats.stats.consistent.player.name}
+                    </div>
+                    <div className={styles.badgeValue}>{interestingStats.stats.consistent.value} consecutive finals</div>
+                  </div>
+                </div>
+              )}
+
               {interestingStats.stats.consecutiveWinner && (
                 <div 
                   className={`${styles.statBadge} ${styles.clickableBadge}`}
@@ -304,6 +329,95 @@ export default function StatsPage() {
                       {interestingStats.stats.eightyClub.player.name}
                     </div>
                     <div className={styles.badgeValue}>{interestingStats.stats.eightyClub.value} times</div>
+                  </div>
+                </div>
+              )}
+
+              {interestingStats.stats.bravePlayer && filterGameType === 'Rummy' && (
+                <div 
+                  className={`${styles.statBadge} ${styles.clickableBadge}`}
+                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.bravePlayer.player.id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className={styles.badgeIcon}>🦁</div>
+                  <div className={styles.badgeContent}>
+                    <div className={styles.badgeTitle}>Brave Player</div>
+                    <div className={styles.badgeSubtitle}>Most Played Rounds (Not Dropped)</div>
+                    <div className={styles.badgeName}>
+                      {interestingStats.stats.bravePlayer.player.profilePhoto ? (
+                        <img 
+                          src={interestingStats.stats.bravePlayer.player.profilePhoto} 
+                          alt={interestingStats.stats.bravePlayer.player.name}
+                          className={styles.badgeAvatar}
+                        />
+                      ) : null}
+                      {interestingStats.stats.bravePlayer.player.name}
+                    </div>
+                    <div className={styles.badgeValue}>{interestingStats.stats.bravePlayer.value} rounds played</div>
+                  </div>
+                </div>
+              )}
+
+              {interestingStats.stats.earliestElimination && filterGameType !== 'Rummy' && (
+                <div 
+                  className={`${styles.statBadge} ${styles.clickableBadge}`}
+                  onClick={() => {
+                    const gameId = interestingStats.stats.earliestElimination.gameId;
+                    if (gameId) {
+                      router.push(`/game/${gameId}`);
+                    } else {
+                      router.push(`/profile?userId=${interestingStats.stats.earliestElimination.player.id}`);
+                    }
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className={styles.badgeIcon}>⏰</div>
+                  <div className={styles.badgeContent}>
+                    <div className={styles.badgeTitle}>Early Exit</div>
+                    <div className={styles.badgeSubtitle}>Earliest Elimination</div>
+                    <div className={styles.badgeName}>
+                      {interestingStats.stats.earliestElimination.player.profilePhoto ? (
+                        <img 
+                          src={interestingStats.stats.earliestElimination.player.profilePhoto} 
+                          alt={interestingStats.stats.earliestElimination.player.name}
+                          className={styles.badgeAvatar}
+                        />
+                      ) : null}
+                      {interestingStats.stats.earliestElimination.player.name}
+                    </div>
+                    <div className={styles.badgeValue}>Round {interestingStats.stats.earliestElimination.value}</div>
+                  </div>
+                </div>
+              )}
+
+              {interestingStats.stats.maxRoundsInSingleGame && filterGameType === 'Rummy' && (
+                <div 
+                  className={`${styles.statBadge} ${styles.clickableBadge}`}
+                  onClick={() => {
+                    const gameId = interestingStats.stats.maxRoundsInSingleGame.gameId;
+                    if (gameId) {
+                      router.push(`/game/${gameId}`);
+                    } else {
+                      router.push(`/profile?userId=${interestingStats.stats.maxRoundsInSingleGame.player.id}`);
+                    }
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className={styles.badgeIcon}>🏃</div>
+                  <div className={styles.badgeContent}>
+                    <div className={styles.badgeTitle}>Marathon Player</div>
+                    <div className={styles.badgeSubtitle}>Most Rounds in Single Game</div>
+                    <div className={styles.badgeName}>
+                      {interestingStats.stats.maxRoundsInSingleGame.player.profilePhoto ? (
+                        <img 
+                          src={interestingStats.stats.maxRoundsInSingleGame.player.profilePhoto} 
+                          alt={interestingStats.stats.maxRoundsInSingleGame.player.name}
+                          className={styles.badgeAvatar}
+                        />
+                      ) : null}
+                      {interestingStats.stats.maxRoundsInSingleGame.player.name}
+                    </div>
+                    <div className={styles.badgeValue}>{interestingStats.stats.maxRoundsInSingleGame.value} rounds</div>
                   </div>
                 </div>
               )}

@@ -38,6 +38,7 @@ export async function GET(request) {
           doubleDrops: 0,
           finals: 0,
           finalWins: 0,
+          finalLosses: 0,
           roundWins: 0,
           scores80: 0,
           matchWins: 0,
@@ -48,6 +49,14 @@ export async function GET(request) {
           maxRoundWinStreak: 0,
           maxRoundWinStreakGameId: null, // Track which game had the max streak
           currentRoundStreak: 0,
+          playedRounds: 0, // Rounds played (not dropped)
+          earliestElimination: null, // Minimum round number at elimination
+          earliestEliminationGameId: null, // Track which game
+          maxRoundsInSingleGame: 0,
+          maxRoundsInSingleGameId: null, // Track which game
+          consecutiveFinals: 0, // Consecutive finals streak
+          currentFinalsStreak: 0, // Current finals streak
+          maxConsecutiveFinals: 0, // Max consecutive finals
           gameHistory: [] // Track game order for streak calculation
         };
       }
@@ -63,6 +72,9 @@ export async function GET(request) {
     sortedGames.forEach(game => {
       if (!game.players) return;
       
+      // Track which players participated in finals for this game
+      const playersInFinal = new Set();
+      
       // For Rummy: Count finals (all players who participated in the last round)
       // This mimics the logic from /api/stats
       if (gameType.toLowerCase() === 'rummy' && game.rounds && game.rounds.length > 0 && game.winner) {
@@ -75,10 +87,14 @@ export async function GET(request) {
           if (lastRound.scores && (lastRound.scores[gamePlayer.id] !== 0 || !gamePlayer?.isLost)) {
             const playerStats = initPlayer(gamePlayer.id);
             playerStats.finals++;
+            playersInFinal.add(gamePlayer.id);
             
             // Check if they won the finals
             if (game.winner === gamePlayer.id) {
               playerStats.finalWins++;
+            } else {
+              // They participated in final but didn't win = final loss
+              playerStats.finalLosses++;
             }
           }
         });
@@ -102,7 +118,8 @@ export async function GET(request) {
         stats.gameHistory.push({
           gameId: game.id,
           date: game.completedAt || game.createdAt,
-          isWinner: game.winner === player.id
+          isWinner: game.winner === player.id,
+          inFinal: playersInFinal.has(player.id)
         });
       });
       
@@ -110,8 +127,10 @@ export async function GET(request) {
       if (game.rounds) {
         // Track each player's total points as we go through rounds
         const playerPointsAtRound = {};
+        const playerRoundsInThisGame = {}; // Track rounds played per player in this game
         game.players.forEach(p => {
           playerPointsAtRound[p.id] = 0;
+          playerRoundsInThisGame[p.id] = 0;
         });
         
         game.rounds.forEach((round, roundIndex) => {
@@ -120,12 +139,23 @@ export async function GET(request) {
           Object.keys(round.scores).forEach(playerId => {
             const stats = initPlayer(playerId);
             
-            // Count drops and double drops
-            if (round.drops && round.drops[playerId]) {
+            // Count drops and double drops (Rummy only)
+            const isDropped = round.drops && round.drops[playerId];
+            const isDoubleDropped = round.doubleDrops && round.doubleDrops[playerId];
+            
+            if (isDropped) {
               stats.drops++;
             }
-            if (round.doubleDrops && round.doubleDrops[playerId]) {
+            if (isDoubleDropped) {
               stats.doubleDrops++;
+            }
+            
+            // Count played rounds (not dropped) - Rummy only
+            if (gameType.toLowerCase() === 'rummy') {
+              if (!isDropped && !isDoubleDropped) {
+                stats.playedRounds++;
+                playerRoundsInThisGame[playerId]++;
+              }
             }
             
             // Count round wins (0 points)
@@ -177,7 +207,68 @@ export async function GET(request) {
             playerPointsAtRound[playerId] = (playerPointsAtRound[playerId] || 0) + (round.scores[playerId] || 0);
           });
         });
+        
+        // After processing all rounds in this game, update max rounds in single game (Rummy only)
+        if (gameType.toLowerCase() === 'rummy') {
+          Object.keys(playerRoundsInThisGame).forEach(playerId => {
+            const stats = initPlayer(playerId);
+            const roundsInThisGame = playerRoundsInThisGame[playerId];
+            if (roundsInThisGame > stats.maxRoundsInSingleGame) {
+              stats.maxRoundsInSingleGame = roundsInThisGame;
+              stats.maxRoundsInSingleGameId = game.id;
+            }
+          });
+        }
       }
+      
+      // Track earliest elimination (for players who were eliminated) - Chess and Ace only
+      if (gameType.toLowerCase() !== 'rummy' && game.rounds && game.rounds.length > 0) {
+        game.players.forEach(player => {
+          if (player.isLost) {
+            const stats = initPlayer(player.id);
+            // Find the round number where they were eliminated
+            // They were eliminated after the round where their total reached maxPoints
+            let eliminationRound = null;
+            let totalPoints = 0;
+            const maxPoints = game.maxPoints || 120;
+            
+            for (let i = 0; i < game.rounds.length; i++) {
+              const round = game.rounds[i];
+              if (round.scores && round.scores[player.id] !== undefined) {
+                totalPoints += round.scores[player.id];
+                if (totalPoints >= maxPoints) {
+                  eliminationRound = i + 1; // 1-indexed
+                  break;
+                }
+              }
+            }
+            
+            if (eliminationRound !== null) {
+              if (stats.earliestElimination === null || eliminationRound < stats.earliestElimination) {
+                stats.earliestElimination = eliminationRound;
+                stats.earliestEliminationGameId = game.id;
+              }
+            }
+          }
+        });
+      }
+    });
+    
+    // Calculate consecutive finals streaks for each player
+    Object.values(playerStats).forEach(player => {
+      let currentStreak = 0;
+      let maxStreak = 0;
+      
+      player.gameHistory.forEach(game => {
+        if (game.inFinal) {
+          currentStreak++;
+          maxStreak = Math.max(maxStreak, currentStreak);
+        } else {
+          currentStreak = 0;
+        }
+      });
+      
+      player.maxConsecutiveFinals = maxStreak;
     });
     
     // Find top players for each category
@@ -219,14 +310,51 @@ export async function GET(request) {
       return result;
     })();
     
+    // Special handling for maxRoundsInSingleGame to include gameId
+    const maxRoundsInSingleGameStat = (() => {
+      const result = findTop('maxRoundsInSingleGame');
+      if (result) {
+        const topPlayer = playerList.find(p => p.id === result.player.id);
+        return {
+          ...result,
+          gameId: topPlayer?.maxRoundsInSingleGameId || null
+        };
+      }
+      return result;
+    })();
+    
+    // Special handling for earliestElimination (find minimum, not maximum)
+    const earliestEliminationStat = (() => {
+      const filtered = playerList.filter(p => p.gamesPlayed >= 1 && p.earliestElimination !== null);
+      if (filtered.length === 0) return null;
+      
+      const sorted = filtered.sort((a, b) => a.earliestElimination - b.earliestElimination);
+      const topPlayer = sorted[0];
+      
+      return {
+        player: {
+          id: topPlayer.id,
+          name: topPlayer.name,
+          profilePhoto: topPlayer.profilePhoto
+        },
+        value: topPlayer.earliestElimination,
+        gameId: topPlayer.earliestEliminationGameId || null
+      };
+    })();
+    
     const stats = {
       patientGuy: findTop('totalDrops'), // Most drops (single + double)
       strategist: findTop('finals'), // Most finals reached
       finalHero: findTop('finalWins'), // Most final wins
+      warrior: findTop('finalLosses'), // Most final losses
+      consistent: findTop('maxConsecutiveFinals'), // Most consecutive finals
       consecutiveWinner: findTop('consecutiveMatchWins'), // Most consecutive match wins
       consecutiveRoundWinner: consecutiveRoundWinnerStat, // Most consecutive round wins (with game link)
       eightyClub: findTop('scores80'), // Most 80s (avoidable only)
-      roundWinChampion: findTop('roundWins') // Most round wins
+      roundWinChampion: findTop('roundWins'), // Most round wins
+      bravePlayer: findTop('playedRounds'), // Most played rounds (not dropped)
+      earliestElimination: earliestEliminationStat, // Earliest elimination
+      maxRoundsInSingleGame: maxRoundsInSingleGameStat // Most rounds played in a single game (with game link)
     };
     
     return NextResponse.json({

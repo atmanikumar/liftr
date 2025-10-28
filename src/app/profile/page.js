@@ -70,15 +70,27 @@ function ProfileContent() {
             const data = await response.json();
             
             // Check each stat category
-            const categories = [
+            const allCategories = [
               { key: 'patientGuy', title: 'Patient Guy', subtitle: 'Most Drops', icon: '🧘' },
               { key: 'strategist', title: 'Strategist', subtitle: 'Most Finals Reached', icon: '♟️' },
               { key: 'finalHero', title: 'Final Hero', subtitle: 'Most Final Wins', icon: '🎖️' },
+              { key: 'warrior', title: 'Warrior', subtitle: 'Most Final Losses', icon: '⚔️' },
+              { key: 'consistent', title: 'Consistent', subtitle: 'Most Consecutive Finals', icon: '🎯' },
               { key: 'consecutiveWinner', title: 'On Fire!', subtitle: 'Most Consecutive Match Wins', icon: '🔥' },
               { key: 'consecutiveRoundWinner', title: 'Round Dominator', subtitle: 'Most Consecutive Round Wins', icon: '⚡' },
               { key: 'eightyClub', title: '80 Club', subtitle: 'Most 80s', icon: '💥' },
               { key: 'roundWinChampion', title: 'Round Win Champion', subtitle: 'Most Round Wins', icon: '👑' },
+              { key: 'bravePlayer', title: 'Brave Player', subtitle: 'Most Played Rounds (Not Dropped)', icon: '🦁', rummyOnly: true },
+              { key: 'earliestElimination', title: 'Early Exit', subtitle: 'Earliest Elimination', icon: '⏰', excludeRummy: true },
+              { key: 'maxRoundsInSingleGame', title: 'Marathon Player', subtitle: 'Most Rounds in Single Game', icon: '🏃', rummyOnly: true },
             ];
+            
+            // Filter categories based on game type
+            const categories = allCategories.filter(cat => {
+              if (cat.rummyOnly && gameType !== 'Rummy') return false;
+              if (cat.excludeRummy && gameType === 'Rummy') return false;
+              return true;
+            });
 
             categories.forEach(category => {
               const stat = data.stats[category.key];
