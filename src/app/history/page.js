@@ -50,8 +50,15 @@ export default function HistoryPage() {
     return player ? player.avatar : '👤';
   };
 
-  const getPlayerProfilePhoto = (playerId) => {
-    // Players data already has profilePhoto merged from users table via API
+  const getPlayerProfilePhoto = (playerId, game) => {
+    // First try to get from game.players (most reliable, includes profile photos from API)
+    if (game && game.players) {
+      const gamePlayer = game.players.find(p => p.id === playerId);
+      if (gamePlayer?.profilePhoto) {
+        return gamePlayer.profilePhoto;
+      }
+    }
+    // Fallback to global players array
     const player = players.find(p => p.id === playerId);
     return player?.profilePhoto || null;
   };
@@ -227,9 +234,9 @@ export default function HistoryPage() {
                             onClick={() => router.push(`/profile?userId=${winnerId}`)}
                             title="View profile"
                           >
-                            {getPlayerProfilePhoto(winnerId) ? (
+                            {getPlayerProfilePhoto(winnerId, game) ? (
                               <img 
-                                src={getPlayerProfilePhoto(winnerId)} 
+                                src={getPlayerProfilePhoto(winnerId, game)} 
                                 alt={getPlayerName(winnerId)}
                                 className={styles.winnerAvatar}
                               />
@@ -251,9 +258,9 @@ export default function HistoryPage() {
                         style={{ cursor: 'pointer' }}
                         title="View profile"
                       >
-                        {getPlayerProfilePhoto(game.winner) ? (
+                        {getPlayerProfilePhoto(game.winner, game) ? (
                           <img 
-                            src={getPlayerProfilePhoto(game.winner)} 
+                            src={getPlayerProfilePhoto(game.winner, game)} 
                             alt={getPlayerName(game.winner)}
                             className={styles.winnerAvatar}
                           />
@@ -284,9 +291,9 @@ export default function HistoryPage() {
                         style={{ cursor: 'pointer' }}
                         title="View profile"
                       >
-                        {getPlayerProfilePhoto(player.id) ? (
+                        {getPlayerProfilePhoto(player.id, game) ? (
                           <img 
-                            src={getPlayerProfilePhoto(player.id)} 
+                            src={getPlayerProfilePhoto(player.id, game)} 
                             alt={player.name}
                             className={styles.playerAvatarSmall}
                           />
@@ -316,9 +323,9 @@ export default function HistoryPage() {
                           <div className={styles.roundScores}>
                             {Object.entries(round.scores).slice(0, 3).map(([playerId, score]) => (
                               <span key={playerId} className={styles.miniScore}>
-                                {getPlayerProfilePhoto(playerId) ? (
+                                {getPlayerProfilePhoto(playerId, game) ? (
                                   <img 
-                                    src={getPlayerProfilePhoto(playerId)} 
+                                    src={getPlayerProfilePhoto(playerId, game)} 
                                     alt={getPlayerName(playerId)}
                                     style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'cover' }}
                                   />

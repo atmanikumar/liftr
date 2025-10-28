@@ -36,30 +36,37 @@ export async function GET(request) {
       games = games.slice(0, parseInt(limit));
     }
     
-    // Add runner-up information for Rummy games
-    if (gameType === 'Rummy' || (!gameType)) {
-      const users = await getUsers();
-      games = games.map(game => {
-        if (game.type.toLowerCase() === 'rummy' && game.status === 'completed' && 
-            game.rounds && game.rounds.length > 0 && game.winner) {
-          const lastRound = game.rounds[game.rounds.length - 1];
-          const runners = [];
-          
-          game.players.forEach(gamePlayer => {
-            if (gamePlayer.isLost && lastRound.scores && lastRound.scores[gamePlayer.id] !== 0) {
-              const user = users.find(u => u.id === gamePlayer.id);
-              runners.push({
-                ...gamePlayer,
-                profilePhoto: user?.profilePhoto || null
-              });
-            }
-          });
-          
-          return { ...game, runners };
-        }
-        return game;
-      });
-    }
+    // Fetch users to merge profile photos into all games
+    const users = await getUsers();
+    
+    // Merge profile photos into game players and add runner-up info for Rummy
+    games = games.map(game => {
+      // Merge profile photos into all players
+      const playersWithPhotos = game.players ? game.players.map(player => {
+        const user = users.find(u => u.id === player.id);
+        return {
+          ...player,
+          profilePhoto: user?.profilePhoto || null
+        };
+      }) : [];
+      
+      // Add runner-up information for completed Rummy games
+      if (game.type.toLowerCase() === 'rummy' && game.status === 'completed' && 
+          game.rounds && game.rounds.length > 0 && game.winner) {
+        const lastRound = game.rounds[game.rounds.length - 1];
+        const runners = [];
+        
+        playersWithPhotos.forEach(gamePlayer => {
+          if (gamePlayer.isLost && lastRound.scores && lastRound.scores[gamePlayer.id] !== 0) {
+            runners.push(gamePlayer);
+          }
+        });
+        
+        return { ...game, players: playersWithPhotos, runners };
+      }
+      
+      return { ...game, players: playersWithPhotos };
+    });
     
     return NextResponse.json(games, {
       headers: {

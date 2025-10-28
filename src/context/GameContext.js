@@ -508,7 +508,7 @@ export function GameProvider({ children }) {
     return { success: true };
   };
 
-  const addRound = (gameId, roundScores, dropInfo = {}, winnerInfo = {}) => {
+  const addRound = (gameId, roundScores, dropInfo = {}, winnerInfo = {}, doubleDropInfo = {}) => {
     const game = games.find(g => g.id === gameId);
     if (!game) return;
     
@@ -519,7 +519,8 @@ export function GameProvider({ children }) {
       type: 'round',
       roundNumber: game.rounds.length + 1,
       scores: roundScores,
-      drops: dropInfo, // Track which players dropped in this round
+      drops: dropInfo, // Track which players dropped in this round (20 points)
+      doubleDrops: doubleDropInfo, // Track which players double dropped (40 points)
       winners: winnerInfo, // Track which players won (got 0 points) in this round
       timestamp: new Date().toISOString()
     };
@@ -629,14 +630,14 @@ export function GameProvider({ children }) {
     updateGameOnServer(updatedGame);
   };
 
-  const updateRound = (gameId, roundNumber, roundScores, dropInfo = {}, winnerInfo = {}) => {
+  const updateRound = (gameId, roundNumber, roundScores, dropInfo = {}, winnerInfo = {}, doubleDropInfo = {}) => {
     const game = games.find(g => g.id === gameId);
     if (!game) return;
     
     // Update the specific round
     const updatedRounds = game.rounds.map(round => 
       round.roundNumber === roundNumber 
-        ? { ...round, scores: roundScores, drops: dropInfo, winners: winnerInfo }
+        ? { ...round, scores: roundScores, drops: dropInfo, doubleDrops: doubleDropInfo, winners: winnerInfo }
         : round
     );
     

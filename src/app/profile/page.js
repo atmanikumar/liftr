@@ -18,6 +18,7 @@ function ProfileContent() {
   const [players, setPlayers] = useState([]);
   const [playerStats, setPlayerStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [achievements, setAchievements] = useState([]);
   
   // Image crop states
   const [selectedImage, setSelectedImage] = useState(null);
@@ -51,6 +52,55 @@ function ProfileContent() {
     };
     
     fetchPlayerStats();
+  }, [user, viewUserId]);
+
+  // Fetch achievements (interesting stats)
+  useEffect(() => {
+    const fetchAchievements = async () => {
+      if (!user && !viewUserId) return;
+      
+      const targetUserId = viewUserId || user?.id;
+      const userAchievements = [];
+
+      try {
+        // Check all three game types
+        for (const gameType of ['Rummy', 'Chess', 'Ace']) {
+          const response = await fetch(`/api/interesting-stats?gameType=${gameType}`);
+          if (response.ok) {
+            const data = await response.json();
+            
+            // Check each stat category
+            const categories = [
+              { key: 'patientGuy', title: 'Patient Guy', subtitle: 'Most Drops', icon: '🧘' },
+              { key: 'strategist', title: 'Strategist', subtitle: 'Most Finals Reached', icon: '♟️' },
+              { key: 'finalHero', title: 'Final Hero', subtitle: 'Most Final Wins', icon: '🎖️' },
+              { key: 'consecutiveWinner', title: 'On Fire!', subtitle: 'Most Consecutive Match Wins', icon: '🔥' },
+              { key: 'consecutiveRoundWinner', title: 'Round Dominator', subtitle: 'Most Consecutive Round Wins', icon: '⚡' },
+              { key: 'eightyClub', title: '80 Club', subtitle: 'Most 80s', icon: '💥' },
+              { key: 'roundWinChampion', title: 'Round Win Champion', subtitle: 'Most Round Wins', icon: '👑' },
+            ];
+
+            categories.forEach(category => {
+              const stat = data.stats[category.key];
+              if (stat && stat.player && stat.player.id === targetUserId) {
+                userAchievements.push({
+                  gameType,
+                  ...category,
+                  value: stat.value,
+                  gameId: stat.gameId || null // For match-wise stats like consecutiveRoundWinner
+                });
+              }
+            });
+          }
+        }
+        
+        setAchievements(userAchievements);
+      } catch (error) {
+        console.error('Failed to fetch achievements:', error);
+      }
+    };
+    
+    fetchAchievements();
   }, [user, viewUserId]);
 
   // Fetch players to get avatar
@@ -250,7 +300,9 @@ function ProfileContent() {
         {/* Player Stats Section */}
         {statsLoading ? (
           <div style={{ textAlign: 'center', padding: '40px' }}>
-            <div className="spinner"></div>
+            <span className="material-icons" style={{ fontSize: '48px', color: 'var(--primary)', animation: 'spin 1s linear infinite' }}>
+              refresh
+            </span>
             <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>Loading stats...</p>
           </div>
         ) : playerStats && (
@@ -301,6 +353,38 @@ function ProfileContent() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Achievements Section */}
+        {achievements.length > 0 && (
+          <div className={styles.achievementsSection}>
+            <h2 className={styles.subtitle}>🏆 Achievements</h2>
+            <div className={styles.achievementsGrid}>
+              {achievements.map((achievement, index) => (
+                <div 
+                  key={index} 
+                  className={`${styles.achievementBadge} ${achievement.gameId ? styles.clickableAchievement : ''}`}
+                  onClick={() => {
+                    if (achievement.gameId) {
+                      router.push(`/game/${achievement.gameId}`);
+                    }
+                  }}
+                  style={{ cursor: achievement.gameId ? 'pointer' : 'default' }}
+                >
+                  <div className={styles.achievementIcon}>{achievement.icon}</div>
+                  <div className={styles.achievementContent}>
+                    <div className={styles.achievementTitle}>{achievement.title}</div>
+                    <div className={styles.achievementSubtitle}>{achievement.subtitle}</div>
+                    <div className={styles.achievementGameType}>{achievement.gameType}</div>
+                    <div className={styles.achievementValue}>
+                      {achievement.value}
+                      {achievement.gameId && <span style={{ marginLeft: '8px', fontSize: '0.8em' }}>🔗</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -379,8 +463,10 @@ export default function ProfilePage() {
       <div className={styles.container}>
         <div className={styles.card}>
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <div className="spinner-large" style={{ margin: '0 auto 20px' }}></div>
-            <p style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>Loading profile...</p>
+            <span className="material-icons" style={{ fontSize: '60px', color: 'var(--primary)', animation: 'spin 1s linear infinite' }}>
+              refresh
+            </span>
+            <p style={{ fontSize: '18px', color: 'var(--text-secondary)', marginTop: '20px' }}>Loading profile...</p>
           </div>
         </div>
       </div>

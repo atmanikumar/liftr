@@ -18,6 +18,7 @@ export default function Home() {
   const [maxPoints, setMaxPoints] = useState(120);
   const [topPlayersCache, setTopPlayersCache] = useState({}); // Cache by game type
   const [recentMatchesCache, setRecentMatchesCache] = useState({}); // Cache by game type
+  const [interestingStatsCache, setInterestingStatsCache] = useState({}); // Cache by game type
   const [statsLoading, setStatsLoading] = useState(true);
   const [players, setPlayers] = useState([]);
   const [playersLoading, setPlayersLoading] = useState(false);
@@ -26,6 +27,7 @@ export default function Home() {
   // Derived state based on current filter
   const topPlayers = topPlayersCache[filterGameType] || [];
   const recentMatches = recentMatchesCache[filterGameType] || [];
+  const interestingStats = interestingStatsCache[filterGameType] || null;
   
   // State for in-progress games with profile photos
   const [inProgressGames, setInProgressGames] = useState([]);
@@ -46,7 +48,13 @@ export default function Home() {
       );
       
       const matchesPromises = gameTypes.map(type =>
-        fetch(`/api/recent-matches?gameType=${type}&limit=30&status=completed`)
+        fetch(`/api/recent-matches?gameType=${type}&limit=10&status=completed`)
+          .then(res => res.ok ? res.json() : null)
+          .then(data => ({ type, data }))
+      );
+      
+      const interestingStatsPromises = gameTypes.map(type =>
+        fetch(`/api/interesting-stats?gameType=${type}`)
           .then(res => res.ok ? res.json() : null)
           .then(data => ({ type, data }))
       );
@@ -55,15 +63,17 @@ export default function Home() {
         .then(res => res.ok ? res.json() : null);
       
       // Wait for all requests
-      const [statsResults, matchesResults, inProgressData] = await Promise.all([
+      const [statsResults, matchesResults, interestingStatsResults, inProgressData] = await Promise.all([
         Promise.all(statsPromises),
         Promise.all(matchesPromises),
+        Promise.all(interestingStatsPromises),
         inProgressPromise
       ]);
       
       // Build cache objects
       const statsCache = {};
       const matchesCache = {};
+      const interestingCache = {};
       
       statsResults.forEach(({ type, data }) => {
         if (data) {
@@ -77,8 +87,15 @@ export default function Home() {
         }
       });
       
+      interestingStatsResults.forEach(({ type, data }) => {
+        if (data) {
+          interestingCache[type] = data;
+        }
+      });
+      
       setTopPlayersCache(statsCache);
       setRecentMatchesCache(matchesCache);
+      setInterestingStatsCache(interestingCache);
       
       if (inProgressData) {
         setInProgressGames(inProgressData.matches);
@@ -153,8 +170,10 @@ export default function Home() {
       <div className={styles.home}>
         <div className="container">
           <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <div className="spinner-large" style={{ margin: '0 auto 20px' }}></div>
-            <p style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>Loading...</p>
+            <span className="material-icons" style={{ fontSize: '60px', color: 'var(--primary)', animation: 'spin 1s linear infinite' }}>
+              refresh
+            </span>
+            <p style={{ fontSize: '18px', color: 'var(--text-secondary)', marginTop: '20px' }}>Loading...</p>
           </div>
         </div>
       </div>
@@ -408,7 +427,9 @@ export default function Home() {
           </div>
           {statsLoading ? (
             <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-              <div className="spinner"></div>
+              <span className="material-icons" style={{ fontSize: '48px', color: 'var(--primary)', animation: 'spin 1s linear infinite' }}>
+                refresh
+              </span>
               <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>Loading {filterGameType} stats...</p>
             </div>
           ) : topPlayers.length === 0 ? (
@@ -439,7 +460,13 @@ export default function Home() {
                 </thead>
                 <tbody>
                   {topPlayers.map((player, index) => (
-                    <tr key={player.id}>
+                    <tr 
+                      key={player.id}
+                      onClick={() => router.push(`/profile?userId=${player.id}`)}
+                      style={{ cursor: 'pointer' }}
+                      className={styles.clickableRow}
+                      title="View profile"
+                    >
                       <td style={{ textAlign: 'center' }}>
                         <span className={styles.rank}>
                           {index === 0 && '🥇'}
@@ -455,12 +482,7 @@ export default function Home() {
                         </span>
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        <div 
-                          className={styles.playerCell}
-                          onClick={() => router.push(`/profile?userId=${player.id}`)}
-                          style={{ cursor: 'pointer' }}
-                          title="View profile"
-                        >
+                        <div className={styles.playerCell}>
                           {player.profilePhoto ? (
                             <img 
                               src={player.profilePhoto} 
@@ -493,12 +515,205 @@ export default function Home() {
           )}
         </div>
 
+        {/* Interesting Statistics Section */}
+        {interestingStats && interestingStats.stats && Object.keys(interestingStats.stats).length > 0 && (
+          <div className="card" style={{ marginTop: '24px' }}>
+            <h2 className={styles.sectionTitle}>🏆 Interesting Statistics - {filterGameType}</h2>
+            <div className={styles.interestingStatsGrid}>
+              {interestingStats.stats.patientGuy && (
+                <div 
+                  className={`${styles.statBadge} ${styles.clickableBadge}`}
+                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.patientGuy.player.id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className={styles.badgeIcon}>🧘</div>
+                  <div className={styles.badgeContent}>
+                    <div className={styles.badgeTitle}>Patient Guy</div>
+                    <div className={styles.badgeSubtitle}>Most Drops</div>
+                    <div className={styles.badgeName}>
+                      {interestingStats.stats.patientGuy.player.profilePhoto ? (
+                        <img 
+                          src={interestingStats.stats.patientGuy.player.profilePhoto} 
+                          alt={interestingStats.stats.patientGuy.player.name}
+                          className={styles.badgeAvatar}
+                        />
+                      ) : null}
+                      {interestingStats.stats.patientGuy.player.name}
+                    </div>
+                    <div className={styles.badgeValue}>{interestingStats.stats.patientGuy.value} drops</div>
+                  </div>
+                </div>
+              )}
+
+              {interestingStats.stats.strategist && (
+                <div 
+                  className={`${styles.statBadge} ${styles.clickableBadge}`}
+                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.strategist.player.id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className={styles.badgeIcon}>♟️</div>
+                  <div className={styles.badgeContent}>
+                    <div className={styles.badgeTitle}>Strategist</div>
+                    <div className={styles.badgeSubtitle}>Most Finals Reached</div>
+                    <div className={styles.badgeName}>
+                      {interestingStats.stats.strategist.player.profilePhoto ? (
+                        <img 
+                          src={interestingStats.stats.strategist.player.profilePhoto} 
+                          alt={interestingStats.stats.strategist.player.name}
+                          className={styles.badgeAvatar}
+                        />
+                      ) : null}
+                      {interestingStats.stats.strategist.player.name}
+                    </div>
+                    <div className={styles.badgeValue}>{interestingStats.stats.strategist.value} finals</div>
+                  </div>
+                </div>
+              )}
+
+              {interestingStats.stats.finalHero && (
+                <div 
+                  className={`${styles.statBadge} ${styles.clickableBadge}`}
+                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.finalHero.player.id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className={styles.badgeIcon}>🎖️</div>
+                  <div className={styles.badgeContent}>
+                    <div className={styles.badgeTitle}>Final Hero</div>
+                    <div className={styles.badgeSubtitle}>Most Final Wins</div>
+                    <div className={styles.badgeName}>
+                      {interestingStats.stats.finalHero.player.profilePhoto ? (
+                        <img 
+                          src={interestingStats.stats.finalHero.player.profilePhoto} 
+                          alt={interestingStats.stats.finalHero.player.name}
+                          className={styles.badgeAvatar}
+                        />
+                      ) : null}
+                      {interestingStats.stats.finalHero.player.name}
+                    </div>
+                    <div className={styles.badgeValue}>{interestingStats.stats.finalHero.value} final wins</div>
+                  </div>
+                </div>
+              )}
+
+              {interestingStats.stats.consecutiveWinner && (
+                <div 
+                  className={`${styles.statBadge} ${styles.clickableBadge}`}
+                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.consecutiveWinner.player.id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className={styles.badgeIcon}>🔥</div>
+                  <div className={styles.badgeContent}>
+                    <div className={styles.badgeTitle}>On Fire!</div>
+                    <div className={styles.badgeSubtitle}>Most Consecutive Match Wins</div>
+                    <div className={styles.badgeName}>
+                      {interestingStats.stats.consecutiveWinner.player.profilePhoto ? (
+                        <img 
+                          src={interestingStats.stats.consecutiveWinner.player.profilePhoto} 
+                          alt={interestingStats.stats.consecutiveWinner.player.name}
+                          className={styles.badgeAvatar}
+                        />
+                      ) : null}
+                      {interestingStats.stats.consecutiveWinner.player.name}
+                    </div>
+                    <div className={styles.badgeValue}>{interestingStats.stats.consecutiveWinner.value} match streak</div>
+                  </div>
+                </div>
+              )}
+
+              {interestingStats.stats.consecutiveRoundWinner && (
+                <div 
+                  className={`${styles.statBadge} ${styles.clickableBadge}`}
+                  onClick={() => {
+                    // Link to game if available, otherwise to profile
+                    const gameId = interestingStats.stats.consecutiveRoundWinner.gameId;
+                    if (gameId) {
+                      router.push(`/game/${gameId}`);
+                    } else {
+                      router.push(`/profile?userId=${interestingStats.stats.consecutiveRoundWinner.player.id}`);
+                    }
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className={styles.badgeIcon}>⚡</div>
+                  <div className={styles.badgeContent}>
+                    <div className={styles.badgeTitle}>Round Dominator</div>
+                    <div className={styles.badgeSubtitle}>Most Consecutive Round Wins</div>
+                    <div className={styles.badgeName}>
+                      {interestingStats.stats.consecutiveRoundWinner.player.profilePhoto ? (
+                        <img 
+                          src={interestingStats.stats.consecutiveRoundWinner.player.profilePhoto} 
+                          alt={interestingStats.stats.consecutiveRoundWinner.player.name}
+                          className={styles.badgeAvatar}
+                        />
+                      ) : null}
+                      {interestingStats.stats.consecutiveRoundWinner.player.name}
+                    </div>
+                    <div className={styles.badgeValue}>{interestingStats.stats.consecutiveRoundWinner.value} round streak</div>
+                  </div>
+                </div>
+              )}
+
+              {interestingStats.stats.eightyClub && (
+                <div 
+                  className={`${styles.statBadge} ${styles.clickableBadge}`}
+                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.eightyClub.player.id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className={styles.badgeIcon}>💥</div>
+                  <div className={styles.badgeContent}>
+                    <div className={styles.badgeTitle}>80 Club</div>
+                    <div className={styles.badgeSubtitle}>Most 80s</div>
+                    <div className={styles.badgeName}>
+                      {interestingStats.stats.eightyClub.player.profilePhoto ? (
+                        <img 
+                          src={interestingStats.stats.eightyClub.player.profilePhoto} 
+                          alt={interestingStats.stats.eightyClub.player.name}
+                          className={styles.badgeAvatar}
+                        />
+                      ) : null}
+                      {interestingStats.stats.eightyClub.player.name}
+                    </div>
+                    <div className={styles.badgeValue}>{interestingStats.stats.eightyClub.value} times</div>
+                  </div>
+                </div>
+              )}
+
+              {interestingStats.stats.roundWinChampion && (
+                <div 
+                  className={`${styles.statBadge} ${styles.clickableBadge}`}
+                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.roundWinChampion.player.id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className={styles.badgeIcon}>👑</div>
+                  <div className={styles.badgeContent}>
+                    <div className={styles.badgeTitle}>Round Win Champion</div>
+                    <div className={styles.badgeSubtitle}>Most Round Wins</div>
+                    <div className={styles.badgeName}>
+                      {interestingStats.stats.roundWinChampion.player.profilePhoto ? (
+                        <img 
+                          src={interestingStats.stats.roundWinChampion.player.profilePhoto} 
+                          alt={interestingStats.stats.roundWinChampion.player.name}
+                          className={styles.badgeAvatar}
+                        />
+                      ) : null}
+                      {interestingStats.stats.roundWinChampion.player.name}
+                    </div>
+                    <div className={styles.badgeValue}>{interestingStats.stats.roundWinChampion.value} round wins</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Recent Matches Section */}
         <div className="card" style={{ marginTop: '24px' }}>
-          <h2 className={styles.sectionTitle}>Last 30 Completed {filterGameType} Matches</h2>
+          <h2 className={styles.sectionTitle}>Last 10 Completed {filterGameType} Matches</h2>
           {statsLoading ? (
             <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-              <div className="spinner"></div>
+              <span className="material-icons" style={{ fontSize: '48px', color: 'var(--primary)', animation: 'spin 1s linear infinite' }}>
+                refresh
+              </span>
               <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>Loading matches...</p>
             </div>
           ) : recentMatches.length > 0 ? (
@@ -533,7 +748,21 @@ export default function Home() {
                       onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                     >
                       <td className={styles.hideOnMobile} style={{ textAlign: 'center' }}>
-                        <strong>{game.title}</strong>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                          <strong>{game.title}</strong>
+                          {game.players.length === 2 && (
+                            <span 
+                              title="Head-to-Head Match"
+                              style={{ 
+                                fontSize: '16px',
+                                display: 'inline-flex',
+                                alignItems: 'center'
+                              }}
+                            >
+                              🤺
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className={styles.hideOnMobile} style={{ textAlign: 'center' }}>
                         {new Date(game.createdAt).toLocaleDateString('en-US', {
@@ -546,21 +775,35 @@ export default function Home() {
                       {filterGameType === 'Chess' ? (
                         <>
                           <td style={{ textAlign: 'center' }}>
-                            {game.winner ? (() => {
-                              const winner = game.players.find(p => p.id === game.winner);
-                              return winner?.profilePhoto ? (
-                                <img 
-                                  src={winner.profilePhoto} 
-                                  alt={winner.name}
-                                  className={styles.playerAvatar}
-                                  title={winner.name}
-                                />
-                              ) : (
-                                <span>{winner?.name}</span>
-                              );
-                            })() : (
-                              <span style={{ color: 'var(--text-secondary)' }}>-</span>
-                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                              {game.winner ? (() => {
+                                const winner = game.players.find(p => p.id === game.winner);
+                                return winner?.profilePhoto ? (
+                                  <img 
+                                    src={winner.profilePhoto} 
+                                    alt={winner.name}
+                                    className={styles.playerAvatar}
+                                    title={winner.name}
+                                  />
+                                ) : (
+                                  <span>{winner?.name}</span>
+                                );
+                              })() : (
+                                <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                              )}
+                              {game.players.length === 2 && (
+                                <span 
+                                  title="Head-to-Head Match"
+                                  style={{ 
+                                    fontSize: '14px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center'
+                                  }}
+                                >
+                                  🤺
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             {(() => {
@@ -611,20 +854,34 @@ export default function Home() {
                         </div>
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        {game.winner ? (() => {
-                          const winner = game.players.find(p => p.id === game.winner);
-                          return winner?.profilePhoto ? (
-                            <img 
-                              src={winner.profilePhoto} 
-                              alt={winner.name}
-                              className={styles.playerAvatar}
-                            />
-                          ) : (
-                            <span>{winner?.name}</span>
-                          );
-                        })() : (
-                          <span style={{ color: 'var(--text-secondary)' }}>-</span>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                          {game.winner ? (() => {
+                            const winner = game.players.find(p => p.id === game.winner);
+                            return winner?.profilePhoto ? (
+                              <img 
+                                src={winner.profilePhoto} 
+                                alt={winner.name}
+                                className={styles.playerAvatar}
+                              />
+                            ) : (
+                              <span>{winner?.name}</span>
+                            );
+                          })() : (
+                            <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                          )}
+                          {game.players.length === 2 && (
+                            <span 
+                              title="Head-to-Head Match"
+                              className={styles.showOnMobile}
+                              style={{ 
+                                fontSize: '14px',
+                                alignItems: 'center'
+                              }}
+                            >
+                              🤺
+                            </span>
+                          )}
+                        </div>
                       </td>
                       {filterGameType === 'Rummy' && (
                             <td style={{ textAlign: 'center' }}>
@@ -726,7 +983,9 @@ export default function Home() {
               </label>
               {playersLoading ? (
                 <div style={{ textAlign: 'center', padding: '40px' }}>
-                  <div className="spinner"></div>
+                  <span className="material-icons" style={{ fontSize: '48px', color: 'var(--primary)', animation: 'spin 1s linear infinite' }}>
+                    refresh
+                  </span>
                   <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>Loading players...</p>
                 </div>
               ) : players.length === 0 ? (

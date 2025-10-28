@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getGameById } from '@/lib/storage';
+import { getGameById, getUsers } from '@/lib/storage';
 
 // GET single game by ID
 export async function GET(request, { params }) {
@@ -20,6 +20,20 @@ export async function GET(request, { params }) {
         { error: 'Game not found' },
         { status: 404 }
       );
+    }
+    
+    // Fetch all users to get profile photos
+    const users = await getUsers();
+    
+    // Merge profile photos into game players
+    if (game.players && users) {
+      game.players = game.players.map(player => {
+        const user = users.find(u => u.id === player.id);
+        return {
+          ...player,
+          profilePhoto: user?.profilePhoto || null
+        };
+      });
     }
     
     return NextResponse.json(game);

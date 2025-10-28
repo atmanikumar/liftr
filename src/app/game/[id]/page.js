@@ -29,7 +29,9 @@ export default function GamePage({ params }) {
   const [showEndAceGameModal, setShowEndAceGameModal] = useState(false);
   const [roundScores, setRoundScores] = useState({});
   const [droppedPlayers, setDroppedPlayers] = useState({});
+  const [doubleDropPlayers, setDoubleDropPlayers] = useState({});
   const [winnerPlayers, setWinnerPlayers] = useState({});
+  const [fullPlayers, setFullPlayers] = useState({});
   const [addPlayerError, setAddPlayerError] = useState('');
   const [updateMaxPointsError, setUpdateMaxPointsError] = useState('');
   const [newMaxPoints, setNewMaxPoints] = useState('');
@@ -124,9 +126,9 @@ export default function GamePage({ params }) {
   usePullToRefresh(fetchGame, { enabled: !loading && !authLoading && !!game });
 
   // Helper function to get profile photo for a player
-  // Players data already has profilePhoto merged from users table via API
+  // Now gets from game.players array which includes profilePhoto from API
   const getPlayerProfilePhoto = (playerId) => {
-    const player = players.find(p => p.id === playerId);
+    const player = game?.players.find(p => p.id === playerId);
     return player?.profilePhoto || null;
   };
 
@@ -139,11 +141,13 @@ export default function GamePage({ params }) {
       });
       setRoundScores(newScores);
       setDroppedPlayers({});
+      setDoubleDropPlayers({});
       setWinnerPlayers({});
+      setFullPlayers({});
     }
   };
 
-  // Helper function to count consecutive drops for a player
+  // Helper function to count consecutive drops for a player (includes both single and double drops)
   const getConsecutiveDrops = (playerId) => {
     if (!game || !game.rounds || game.rounds.length === 0) return 0;
     
@@ -151,7 +155,9 @@ export default function GamePage({ params }) {
     // Check rounds from most recent backwards
     for (let i = game.rounds.length - 1; i >= 0; i--) {
       const round = game.rounds[i];
-      if (round.drops && round.drops[playerId] === true) {
+      // Count both single drops and double drops
+      if ((round.drops && round.drops[playerId] === true) || 
+          (round.doubleDrops && round.doubleDrops[playerId] === true)) {
         consecutiveDrops++;
       } else {
         // If player didn't drop in this round, stop counting
@@ -177,6 +183,22 @@ export default function GamePage({ params }) {
       }));
     }
     
+    // If double drop is active, unmark it
+    if (doubleDropPlayers[playerId]) {
+      setDoubleDropPlayers(prev => ({
+        ...prev,
+        [playerId]: false
+      }));
+    }
+    
+    // If full is active, unmark it
+    if (fullPlayers[playerId]) {
+      setFullPlayers(prev => ({
+        ...prev,
+        [playerId]: false
+      }));
+    }
+    
     setDroppedPlayers(prev => ({
       ...prev,
       [playerId]: !prev[playerId]
@@ -197,10 +219,71 @@ export default function GamePage({ params }) {
     }
   };
 
+  const handleDoubleDropToggle = (playerId) => {
+    // If marking as winner, unmark winner first
+    if (winnerPlayers[playerId]) {
+      setWinnerPlayers(prev => ({
+        ...prev,
+        [playerId]: false
+      }));
+    }
+    
+    // If single drop is active, unmark it
+    if (droppedPlayers[playerId]) {
+      setDroppedPlayers(prev => ({
+        ...prev,
+        [playerId]: false
+      }));
+    }
+    
+    // If full is active, unmark it
+    if (fullPlayers[playerId]) {
+      setFullPlayers(prev => ({
+        ...prev,
+        [playerId]: false
+      }));
+    }
+    
+    setDoubleDropPlayers(prev => ({
+      ...prev,
+      [playerId]: !prev[playerId]
+    }));
+    
+    // If double dropping, automatically set score to 40
+    if (!doubleDropPlayers[playerId]) {
+      setRoundScores(prev => ({
+        ...prev,
+        [playerId]: '40'
+      }));
+    } else {
+      // If un-dropping, clear the score
+      setRoundScores(prev => ({
+        ...prev,
+        [playerId]: ''
+      }));
+    }
+  };
+
   const handleWinnerToggle = (playerId) => {
     // If marked as dropped, unmark drop first
     if (droppedPlayers[playerId]) {
       setDroppedPlayers(prev => ({
+        ...prev,
+        [playerId]: false
+      }));
+    }
+    
+    // If marked as double dropped, unmark it
+    if (doubleDropPlayers[playerId]) {
+      setDoubleDropPlayers(prev => ({
+        ...prev,
+        [playerId]: false
+      }));
+    }
+    
+    // If marked as full, unmark it
+    if (fullPlayers[playerId]) {
+      setFullPlayers(prev => ({
         ...prev,
         [playerId]: false
       }));
@@ -226,35 +309,94 @@ export default function GamePage({ params }) {
     }
   };
 
+  const handleFullToggle = (playerId) => {
+    // If marked as dropped, unmark drop first
+    if (droppedPlayers[playerId]) {
+      setDroppedPlayers(prev => ({
+        ...prev,
+        [playerId]: false
+      }));
+    }
+    
+    // If marked as double dropped, unmark it
+    if (doubleDropPlayers[playerId]) {
+      setDoubleDropPlayers(prev => ({
+        ...prev,
+        [playerId]: false
+      }));
+    }
+    
+    // If marked as winner, unmark it
+    if (winnerPlayers[playerId]) {
+      setWinnerPlayers(prev => ({
+        ...prev,
+        [playerId]: false
+      }));
+    }
+    
+    setFullPlayers(prev => ({
+      ...prev,
+      [playerId]: !prev[playerId]
+    }));
+    
+    // If marking as full, automatically set score to 80
+    if (!fullPlayers[playerId]) {
+      setRoundScores(prev => ({
+        ...prev,
+        [playerId]: '80'
+      }));
+    } else {
+      // If un-marking full, clear the score
+      setRoundScores(prev => ({
+        ...prev,
+        [playerId]: ''
+      }));
+    }
+  };
+
   const handleAddRound = () => {
-    // Convert empty strings to 0 before saving, but use 20 for dropped players and 0 for winners
+    // Convert empty strings to 0 before saving, but use 20 for dropped players, 40 for double drops, 80 for full, and 0 for winners
     const scoresWithDefaults = {};
     const dropInfo = {};
+    const doubleDropInfo = {};
     const winnerInfo = {};
     
     Object.keys(roundScores).forEach(playerId => {
       if (droppedPlayers[playerId]) {
         scoresWithDefaults[playerId] = 20; // Drop = 20 points
         dropInfo[playerId] = true;
+        doubleDropInfo[playerId] = false;
+        winnerInfo[playerId] = false;
+      } else if (doubleDropPlayers[playerId]) {
+        scoresWithDefaults[playerId] = 40; // Double Drop = 40 points
+        dropInfo[playerId] = false;
+        doubleDropInfo[playerId] = true;
+        winnerInfo[playerId] = false;
+      } else if (fullPlayers[playerId]) {
+        scoresWithDefaults[playerId] = 80; // Full = 80 points
+        dropInfo[playerId] = false;
+        doubleDropInfo[playerId] = false;
         winnerInfo[playerId] = false;
       } else if (winnerPlayers[playerId]) {
         scoresWithDefaults[playerId] = 0; // Winner = 0 points
         dropInfo[playerId] = false;
+        doubleDropInfo[playerId] = false;
         winnerInfo[playerId] = true;
       } else {
         scoresWithDefaults[playerId] = parseInt(roundScores[playerId]) || 0;
         dropInfo[playerId] = false;
+        doubleDropInfo[playerId] = false;
         winnerInfo[playerId] = false;
       }
     });
     
     if (editingRound) {
       // Update existing round
-      updateRound(params.id, editingRound.roundNumber, scoresWithDefaults, dropInfo, winnerInfo);
+      updateRound(params.id, editingRound.roundNumber, scoresWithDefaults, dropInfo, winnerInfo, doubleDropInfo);
       setEditingRound(null);
     } else {
       // Add new round
-      addRound(params.id, scoresWithDefaults, dropInfo, winnerInfo);
+      addRound(params.id, scoresWithDefaults, dropInfo, winnerInfo, doubleDropInfo);
     }
     
     // Reset scores for next round with empty strings
@@ -400,8 +542,10 @@ export default function GamePage({ params }) {
     return (
       <div className="container">
         <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
-          <div className="spinner-large" style={{ margin: '0 auto 20px' }}></div>
-          <p style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>Loading game...</p>
+          <span className="material-icons" style={{ fontSize: '60px', color: 'var(--primary)', animation: 'spin 1s linear infinite' }}>
+            refresh
+          </span>
+          <p style={{ fontSize: '18px', color: 'var(--text-secondary)', marginTop: '20px' }}>Loading game...</p>
         </div>
       </div>
     );
@@ -912,14 +1056,17 @@ export default function GamePage({ params }) {
                                 // Pre-fill the scores for editing
                                 const editScores = {};
                                 const editDropped = {};
+                                const editDoubleDropped = {};
                                 const editWinners = {};
                                 game.players.forEach(player => {
                                   editScores[player.id] = event.scores && event.scores[player.id] !== undefined ? event.scores[player.id].toString() : '';
                                   editDropped[player.id] = event.drops && event.drops[player.id] === true;
+                                  editDoubleDropped[player.id] = event.doubleDrops && event.doubleDrops[player.id] === true;
                                   editWinners[player.id] = event.winners && event.winners[player.id] === true;
                                 });
                                 setRoundScores(editScores);
                                 setDroppedPlayers(editDropped);
+                                setDoubleDropPlayers(editDoubleDropped);
                                 setWinnerPlayers(editWinners);
                                 setShowAddRoundModal(true);
                               }}
@@ -946,6 +1093,7 @@ export default function GamePage({ params }) {
                             const score = event.scores[player.id];
                             const isAceInRound = isAce && score === 0;
                             const hasDropped = event.drops && event.drops[player.id] === true;
+                            const hasDoubleDrop = event.doubleDrops && event.doubleDrops[player.id] === true;
                             const isWinner = event.winners && event.winners[player.id] === true;
                             
                             // Calculate previous total (total before this round) for Rummy
@@ -976,20 +1124,7 @@ export default function GamePage({ params }) {
                                   )}
                                   {player.name}
                                   {isAceInRound && <span style={{ marginLeft: '8px', color: 'var(--danger)' }}>🎯</span>}
-                                  {hasDropped && (
-                                    <span style={{ 
-                                      marginLeft: '8px', 
-                                      fontSize: '11px',
-                                      padding: '2px 6px',
-                                      background: 'var(--warning)',
-                                      color: 'white',
-                                      borderRadius: '4px',
-                                      fontWeight: '600'
-                                    }}>
-                                      DROP
-                                    </span>
-                                  )}
-                                  {isWinner && (
+                                  {(score === 0 && !isAceInRound) || isWinner ? (
                                     <span style={{ 
                                       marginLeft: '8px', 
                                       fontSize: '11px',
@@ -999,7 +1134,46 @@ export default function GamePage({ params }) {
                                       borderRadius: '4px',
                                       fontWeight: '600'
                                     }}>
-                                      ⚡ WINNER
+                                      W
+                                    </span>
+                                  ) : null}
+                                  {score === 80 && (
+                                    <span style={{ 
+                                      marginLeft: '8px', 
+                                      fontSize: '11px',
+                                      padding: '2px 6px',
+                                      background: 'var(--danger)',
+                                      color: 'white',
+                                      borderRadius: '4px',
+                                      fontWeight: '600'
+                                    }}>
+                                      F
+                                    </span>
+                                  )}
+                                  {hasDoubleDrop && (
+                                    <span style={{ 
+                                      marginLeft: '8px', 
+                                      fontSize: '11px',
+                                      padding: '2px 6px',
+                                      background: '#f59e0b',
+                                      color: 'white',
+                                      borderRadius: '4px',
+                                      fontWeight: '600'
+                                    }}>
+                                      DD
+                                    </span>
+                                  )}
+                                  {hasDropped && !hasDoubleDrop && (
+                                    <span style={{ 
+                                      marginLeft: '8px', 
+                                      fontSize: '11px',
+                                      padding: '2px 6px',
+                                      background: '#f59e0b',
+                                      color: 'white',
+                                      borderRadius: '4px',
+                                      fontWeight: '600'
+                                    }}>
+                                      D
                                     </span>
                                   )}
                                 </span>
@@ -1053,6 +1227,7 @@ export default function GamePage({ params }) {
               {game.players.filter(p => !p.isLost).map(player => {
                 const consecutiveDrops = getConsecutiveDrops(player.id);
                 const canAffordDrop = player.totalPoints + 20 < game.maxPoints;
+                const canAffordDoubleDrop = player.totalPoints + 40 < game.maxPoints;
                 const canDrop = consecutiveDrops < 3 && canAffordDrop;
                 
                 return (
@@ -1080,7 +1255,7 @@ export default function GamePage({ params }) {
                         onWheel={(e) => e.target.blur()}
                         min="0"
                         placeholder="0"
-                        disabled={droppedPlayers[player.id] || winnerPlayers[player.id]}
+                        disabled={droppedPlayers[player.id] || doubleDropPlayers[player.id] || winnerPlayers[player.id] || fullPlayers[player.id]}
                         style={{ flex: '1', minWidth: '60px', textAlign: 'center' }}
                         autoFocus={player.id === game.players.filter(p => !p.isLost)[0]?.id}
                       />
@@ -1113,32 +1288,62 @@ export default function GamePage({ params }) {
                             W
                           </label>
                           {canDrop ? (
-                            <label style={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              justifyContent: 'center',
-                              gap: '6px',
-                              cursor: 'pointer',
-                              padding: '8px 12px',
-                              background: droppedPlayers[player.id] ? 'var(--danger)' : 'transparent',
-                              border: '2px solid var(--danger)',
-                              borderRadius: '6px',
-                              color: droppedPlayers[player.id] ? 'white' : 'var(--danger)',
-                              fontWeight: '600',
-                              fontSize: '14px',
-                              whiteSpace: 'nowrap',
-                              transition: 'all 0.2s',
-                              flexShrink: '0',
-                              marginBottom: '0'
-                            }}>
-                              <input 
-                                type="checkbox"
-                                checked={droppedPlayers[player.id] || false}
-                                onChange={() => handleDropToggle(player.id)}
-                                style={{ display: 'none' }}
-                              />
-                              D
-                            </label>
+                            <>
+                              <label style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center',
+                                gap: '6px',
+                                cursor: 'pointer',
+                                padding: '8px 12px',
+                                background: droppedPlayers[player.id] ? '#f59e0b' : 'transparent',
+                                border: '2px solid #f59e0b',
+                                borderRadius: '6px',
+                                color: droppedPlayers[player.id] ? 'white' : '#f59e0b',
+                                fontWeight: '600',
+                                fontSize: '14px',
+                                whiteSpace: 'nowrap',
+                                transition: 'all 0.2s',
+                                flexShrink: '0',
+                                marginBottom: '0'
+                              }}>
+                                <input 
+                                  type="checkbox"
+                                  checked={droppedPlayers[player.id] || false}
+                                  onChange={() => handleDropToggle(player.id)}
+                                  style={{ display: 'none' }}
+                                />
+                                D
+                              </label>
+                              {canAffordDoubleDrop ? (
+                                <label style={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center',
+                                  gap: '6px',
+                                  cursor: 'pointer',
+                                  padding: '8px 12px',
+                                  background: doubleDropPlayers[player.id] ? '#f59e0b' : 'transparent',
+                                  border: '2px solid #f59e0b',
+                                  borderRadius: '6px',
+                                  color: doubleDropPlayers[player.id] ? 'white' : '#f59e0b',
+                                  fontWeight: '600',
+                                  fontSize: '14px',
+                                  whiteSpace: 'nowrap',
+                                  transition: 'all 0.2s',
+                                  flexShrink: '0',
+                                  marginBottom: '0'
+                                }}>
+                                  <input 
+                                    type="checkbox"
+                                    checked={doubleDropPlayers[player.id] || false}
+                                    onChange={() => handleDoubleDropToggle(player.id)}
+                                    style={{ display: 'none' }}
+                                  />
+                                  DD
+                                </label>
+                              ) : null}
+                            </>
                           ) : (
                             <div style={{ 
                               display: 'flex', 
@@ -1159,6 +1364,32 @@ export default function GamePage({ params }) {
                               ⚠️ Must Play
                             </div>
                           )}
+                          <label style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            gap: '6px',
+                            cursor: 'pointer',
+                            padding: '8px 12px',
+                            background: fullPlayers[player.id] ? 'var(--danger)' : 'transparent',
+                            border: '2px solid var(--danger)',
+                            borderRadius: '6px',
+                            color: fullPlayers[player.id] ? 'white' : 'var(--danger)',
+                            fontWeight: '600',
+                            fontSize: '14px',
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.2s',
+                            flexShrink: '0',
+                            marginBottom: '0'
+                          }}>
+                            <input 
+                              type="checkbox"
+                              checked={fullPlayers[player.id] || false}
+                              onChange={() => handleFullToggle(player.id)}
+                              style={{ display: 'none' }}
+                            />
+                            F
+                          </label>
                         </>
                       )}
                     </div>
