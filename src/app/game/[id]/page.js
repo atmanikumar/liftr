@@ -1221,7 +1221,41 @@ export default function GamePage({ params }) {
           setShowAddRoundModal(false);
           setEditingRound(null);
         }}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ position: 'relative' }}>
+            {/* Loading Overlay */}
+            {addingRound && (
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'rgba(0, 0, 0, 0.7)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                borderRadius: '12px'
+              }}>
+                <span className="material-icons" style={{ 
+                  fontSize: '60px', 
+                  color: 'var(--primary)', 
+                  animation: 'spin 1s linear infinite' 
+                }}>
+                  refresh
+                </span>
+                <p style={{ 
+                  color: 'white', 
+                  fontSize: '18px', 
+                  fontWeight: '600',
+                  marginTop: '16px' 
+                }}>
+                  Saving round...
+                </p>
+              </div>
+            )}
+
             <h2>
               {editingRound 
                 ? `✏️ Edit Round ${editingRound.roundNumber} Points` 
