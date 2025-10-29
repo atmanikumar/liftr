@@ -64,7 +64,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const isAdmin = () => user?.role === 'admin';
+  const isAdmin = () => user?.role === 'admin' || user?.role === 'superAdmin';
   const isSuperAdmin = () => user?.role === 'superAdmin';
   const isPlayer = () => user?.role === 'player';
 

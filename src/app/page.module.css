@@ -107,17 +107,22 @@
 }
 
 .playerAvatar {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   object-fit: cover;
 }
 
 .playerAvatarSmall {
-  width: 24px;
-  height: 24px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   object-fit: cover;
+  transition: transform 0.2s ease;
+}
+
+.playerAvatarSmall:hover {
+  transform: scale(1.1);
 }
 
 .playerList {
@@ -201,6 +206,16 @@
   width: 100%;
 }
 
+.recentMatchesTable tbody tr {
+  height: 80px;
+}
+
+.recentMatchesTable td,
+.recentMatchesTable th {
+  padding: 16px 12px;
+  vertical-align: middle;
+}
+
 .hideOnMobile {
   /* Will be hidden on mobile */
 }
@@ -277,9 +292,14 @@
   }
 
   /* Make table more compact on mobile */
+  .recentMatchesTable tbody tr {
+    height: auto;
+    min-height: 70px;
+  }
+
   .recentMatchesTable td,
   .recentMatchesTable th {
-    padding: 8px 4px;
+    padding: 14px 8px;
     font-size: 13px;
   }
 
@@ -291,6 +311,17 @@
   .recentMatchesTable .badge {
     font-size: 11px;
     padding: 3px 8px;
+  }
+
+  /* Larger avatars on mobile for better visibility */
+  .playerAvatarSmall {
+    width: 44px;
+    height: 44px;
+  }
+
+  .playerAvatar {
+    width: 50px;
+    height: 50px;
   }
 }
 

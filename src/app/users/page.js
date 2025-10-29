@@ -143,7 +143,9 @@ export default function UsersPage() {
                     <td>{u.username}</td>
                     <td>
                       <span className={`badge ${
-                        u.role === 'admin' ? 'badge-warning' : 'badge-success'
+                        u.role === 'superAdmin' ? 'badge-danger' : 
+                        u.role === 'admin' ? 'badge-warning' : 
+                        'badge-success'
                       }`}>
                         {u.role}
                       </span>

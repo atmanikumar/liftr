@@ -85,7 +85,7 @@ export async function POST(request) {
     const token = cookies().get('auth-token')?.value;
     const user = verifyToken(token);
 
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && user.role !== 'superAdmin')) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 403 }

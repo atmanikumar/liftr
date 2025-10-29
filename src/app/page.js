@@ -525,7 +525,15 @@ export default function Home() {
 
         {/* Recent Matches Section */}
         <div className="card" style={{ marginTop: '24px' }}>
-          <h2 className={styles.sectionTitle}>📋 Last 10 Completed {filterGameType} Matches</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '16px' }}>
+            <h2 className={styles.sectionTitle} style={{ marginBottom: '0' }}>📋 Last 10 Completed {filterGameType} Matches</h2>
+            {filterGameType === 'Rummy' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#22c55e', fontWeight: '600' }}>
+                <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '3px solid #22c55e', boxShadow: '0 0 8px rgba(34, 197, 94, 0.6)' }}></div>
+                <span>Runner-up highlighted</span>
+              </div>
+            )}
+          </div>
           {statsLoading ? (
             <div style={{ textAlign: 'center', padding: '60px 20px' }}>
               <span className="material-icons" style={{ fontSize: '48px', color: 'var(--primary)', animation: 'spin 1s linear infinite' }}>
@@ -547,10 +555,10 @@ export default function Home() {
                       </>
                     ) : (
                       <>
-                    <th className={styles.hideOnMobile} style={{ textAlign: 'center' }}>Players</th>
-                    <th style={{ textAlign: 'center' }}>Winner</th>
-                        {filterGameType === 'Rummy' && <th style={{ textAlign: 'center' }}>Runner</th>}
-                        <th style={{ textAlign: 'center' }}>Rounds</th>
+                        <th style={{ textAlign: 'center' }}>Winner</th>
+                        <th style={{ textAlign: 'center' }}>
+                          Players
+                        </th>
                       </>
                     )}
                   </tr>
@@ -647,103 +655,86 @@ export default function Home() {
                         </>
                       ) : (
                         <>
-                          <td className={styles.hideOnMobile} style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                          {game.players.slice(0, 3).map(p => (
-                            p.profilePhoto ? (
-                              <img 
-                                key={p.id}
-                                src={p.profilePhoto} 
-                                alt={p.name}
-                                className={styles.playerAvatarSmall}
-                              />
-                            ) : (
-                              <span key={p.id} className="avatar" style={{ fontSize: '16px' }}>
-                                {p.avatar}
-                              </span>
-                            )
-                          ))}
-                          {game.players.length > 3 && (
-                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                              +{game.players.length - 3}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                          {game.winner ? (() => {
-                            const winner = game.players.find(p => p.id === game.winner);
-                            return winner?.profilePhoto ? (
-                              <img 
-                                src={winner.profilePhoto} 
-                                alt={winner.name}
-                                className={styles.playerAvatar}
-                              />
-                            ) : (
-                              <span>{winner?.name}</span>
-                            );
-                          })() : (
-                            <span style={{ color: 'var(--text-secondary)' }}>-</span>
-                          )}
-                          {game.players.length === 2 && (
-                            <span 
-                              title="Head-to-Head Match"
-                              className={styles.showOnMobile}
-                              style={{ 
-                                fontSize: '14px',
-                                alignItems: 'center'
-                              }}
-                            >
-                              🤺
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      {filterGameType === 'Rummy' && (
-                            <td style={{ textAlign: 'center' }}>
-                          {(() => {
-                            const runners = game.runners || [];
-                            if (runners.length === 0) {
-                              return <span style={{ color: 'var(--text-secondary)' }}>-</span>;
-                            }
-                            
-                            return (
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    {runners.map((runner, index) => (
-                                  runner.profilePhoto ? (
+                          {/* Winner Column */}
+                          <td style={{ textAlign: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                              {game.winner ? (() => {
+                                const winner = game.players.find(p => p.id === game.winner);
+                                return winner?.profilePhoto ? (
+                                  <img 
+                                    src={winner.profilePhoto} 
+                                    alt={winner.name}
+                                    className={styles.playerAvatar}
+                                    title={winner.name}
+                                  />
+                                ) : (
+                                  <span>{winner?.name}</span>
+                                );
+                              })() : (
+                                <span style={{ color: 'var(--text-secondary)' }}>Draw</span>
+                              )}
+                              {game.players.length === 2 && (
+                                <span 
+                                  title="Head-to-Head Match"
+                                  className={styles.showOnMobile}
+                                  style={{ 
+                                    fontSize: '14px',
+                                    alignItems: 'center'
+                                  }}
+                                >
+                                  🤺
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          {/* Players Column - Non-winners with runners highlighted and sorted first */}
+                          <td style={{ textAlign: 'center' }}>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
+                              {game.players
+                                .filter(p => p.id !== game.winner) // Exclude winner from this column
+                                .sort((a, b) => {
+                                  // Sort runners first
+                                  const aIsRunner = filterGameType === 'Rummy' && game.runners?.some(r => r.id === a.id);
+                                  const bIsRunner = filterGameType === 'Rummy' && game.runners?.some(r => r.id === b.id);
+                                  if (aIsRunner && !bIsRunner) return -1;
+                                  if (!aIsRunner && bIsRunner) return 1;
+                                  return 0;
+                                })
+                                .map((p, index) => {
+                                  const isRunner = filterGameType === 'Rummy' && game.runners?.some(r => r.id === p.id);
+                                  
+                                  return p.profilePhoto ? (
                                     <img 
-                                      key={runner.id}
-                                      src={runner.profilePhoto} 
-                                      alt={runner.name}
-                                          className={styles.playerAvatar}
-                                          style={{
-                                            marginLeft: index > 0 ? '-10px' : '0',
-                                            zIndex: runners.length - index,
-                                            border: '2px solid var(--bg-color)',
-                                            borderRadius: '50%'
-                                          }}
+                                      key={p.id}
+                                      src={p.profilePhoto} 
+                                      alt={p.name}
+                                      title={`${p.name}${isRunner ? ' (Runner-up)' : ''}`}
+                                      className={styles.playerAvatarSmall}
+                                      style={{
+                                        border: isRunner ? '3px solid #22c55e' : '2px solid var(--border)',
+                                        borderRadius: '50%',
+                                        boxShadow: isRunner ? '0 0 8px rgba(34, 197, 94, 0.6)' : 'none'
+                                      }}
                                     />
                                   ) : (
-                                        <span 
-                                          key={runner.id} 
-                                          style={{ 
-                                            fontSize: '14px',
-                                            marginLeft: index > 0 ? '4px' : '0'
-                                          }}
-                                        >
-                                      {runner.name}
+                                    <span 
+                                      key={p.id} 
+                                      className="avatar" 
+                                      title={`${p.name}${isRunner ? ' (Runner-up)' : ''}`}
+                                      style={{ 
+                                        fontSize: '18px',
+                                        border: isRunner ? '3px solid #22c55e' : 'none',
+                                        borderRadius: '50%',
+                                        padding: isRunner ? '4px' : '0',
+                                        boxShadow: isRunner ? '0 0 8px rgba(34, 197, 94, 0.6)' : 'none'
+                                      }}
+                                    >
+                                      {p.avatar}
                                     </span>
-                                  )
-                                ))}
-                              </div>
-                            );
-                          })()}
-                        </td>
-                      )}
-                      <td style={{ textAlign: 'center' }}>
-                        {game.roundsCount || 0}
-                      </td>
+                                  );
+                                })}
+                            </div>
+                          </td>
                         </>
                       )}
                     </tr>
@@ -774,11 +765,29 @@ export default function Home() {
             
             <div className="form-group">
               <label>Game Type</label>
-              <select value={gameType} onChange={(e) => setGameType(e.target.value)}>
-                <option value="rummy">Rummy</option>
-                <option value="ace">Ace</option>
-                <option value="chess">Chess</option>
-              </select>
+              <div className={styles.tabsContainer}>
+                <button 
+                  className={`${styles.tab} ${gameType === 'rummy' ? styles.tabActive : ''}`}
+                  onClick={() => setGameType('rummy')}
+                  type="button"
+                >
+                  🃏 Rummy
+                </button>
+                <button 
+                  className={`${styles.tab} ${gameType === 'ace' ? styles.tabActive : ''}`}
+                  onClick={() => setGameType('ace')}
+                  type="button"
+                >
+                  🎯 Ace
+                </button>
+                <button 
+                  className={`${styles.tab} ${gameType === 'chess' ? styles.tabActive : ''}`}
+                  onClick={() => setGameType('chess')}
+                  type="button"
+                >
+                  ♟️ Chess
+                </button>
+              </div>
             </div>
 
             {gameType !== 'chess' && gameType !== 'ace' && (

@@ -41,8 +41,9 @@ export default function GamePage({ params }) {
   const [selectedAceWinners, setSelectedAceWinners] = useState([]);
   const [editingRound, setEditingRound] = useState(null); // Track which round is being edited
   
-  // Track if players are loaded
+  // Track if players are loaded and round scores initialized
   const playersLoadedRef = useRef(false);
+  const roundScoresInitializedRef = useRef(false);
 
   // Optimized fetch game function - can be reused for refresh
   const fetchGame = useCallback(async () => {
@@ -53,13 +54,14 @@ export default function GamePage({ params }) {
         setGame(gameData);
         setNotFound(false);
         
-        // Initialize round scores only if empty
-        if (Object.keys(roundScores).length === 0) {
+        // Initialize round scores only once
+        if (!roundScoresInitializedRef.current) {
           const initialScores = {};
           gameData.players.forEach(player => {
             initialScores[player.id] = '';
           });
           setRoundScores(initialScores);
+          roundScoresInitializedRef.current = true;
         }
         
         return gameData;
@@ -72,7 +74,7 @@ export default function GamePage({ params }) {
       setNotFound(true);
       return null;
     }
-  }, [params.id, roundScores]);
+  }, [params.id]);
 
   // Initial load - fetch game and load players once
   useEffect(() => {
@@ -104,8 +106,13 @@ export default function GamePage({ params }) {
     if (games.length > 0) {
       const gameData = getGame(params.id);
       if (gameData) {
-        // Always update if there's a difference to ensure SSE updates are reflected
-        const hasChanged = !game || JSON.stringify(gameData) !== JSON.stringify(game);
+        // Optimized comparison: compare key properties instead of full JSON
+        const hasChanged = !game || 
+                          game.status !== gameData.status ||
+                          game.rounds?.length !== gameData.rounds?.length ||
+                          game.players?.length !== gameData.players?.length ||
+                          game.winner !== gameData.winner ||
+                          game.maxPoints !== gameData.maxPoints;
         if (hasChanged) {
           console.log('[Game Page] Updating game from context (SSE or local action)');
           setGame(gameData);
@@ -355,9 +362,25 @@ export default function GamePage({ params }) {
   };
 
   const handleAddRound = async () => {
+    // Prevent duplicate submissions (race condition guard)
+    if (addingRound) return;
+    
     setAddingRound(true);
     
     try {
+      // Validate: At least one player must have a score/status
+      const hasAnyScore = Object.values(roundScores).some(score => score !== '');
+      const hasAnyStatus = Object.values(droppedPlayers).some(v => v) || 
+                          Object.values(doubleDropPlayers).some(v => v) || 
+                          Object.values(winnerPlayers).some(v => v) ||
+                          Object.values(fullPlayers).some(v => v);
+      
+      if (!hasAnyScore && !hasAnyStatus) {
+        alert('Please enter scores or select a status (Winner/Drop/Full) for at least one player');
+        setAddingRound(false);
+        return;
+      }
+      
       // Convert empty strings to 0 before saving, but use 20 for dropped players, 40 for double drops, 80 for full, and 0 for winners
       const scoresWithDefaults = {};
       const dropInfo = {};
@@ -386,7 +409,14 @@ export default function GamePage({ params }) {
           doubleDropInfo[playerId] = false;
           winnerInfo[playerId] = true;
         } else {
-          scoresWithDefaults[playerId] = parseInt(roundScores[playerId]) || 0;
+          // Better validation: use Number() and check for NaN
+          const scoreValue = Number(roundScores[playerId]);
+          if (isNaN(scoreValue) || scoreValue < 0) {
+            alert(`Invalid score for ${game.players.find(p => p.id === playerId)?.name}. Please enter a valid number.`);
+            setAddingRound(false);
+            throw new Error('Invalid score');
+          }
+          scoresWithDefaults[playerId] = scoreValue || 0;
           dropInfo[playerId] = false;
           doubleDropInfo[playerId] = false;
           winnerInfo[playerId] = false;
@@ -452,9 +482,9 @@ export default function GamePage({ params }) {
   };
 
   const handleUpdateMaxPoints = () => {
-    const maxPointsValue = parseInt(newMaxPoints);
+    const maxPointsValue = Number(newMaxPoints);
     
-    if (!maxPointsValue || maxPointsValue < 1) {
+    if (isNaN(maxPointsValue) || maxPointsValue < 1) {
       setUpdateMaxPointsError('Please enter a valid number greater than 0');
       return;
     }
@@ -851,12 +881,14 @@ export default function GamePage({ params }) {
                 // Build elimination tracking for Rummy games
                 const eliminatedPlayersMap = {}; // roundNumber -> Set of eliminated player IDs
                 const eliminationEvents = []; // Track when players got eliminated
+                // OPTIMIZATION: Pre-calculate cumulative totals for all rounds to avoid recalculation in render
+                const cumulativeTotalsByRound = {}; // { roundNumber: { playerId: cumulativeTotal } }
                 
                 if (!isAce && game.maxPoints && game.rounds) {
                   let cumulativePoints = {};
                   let previouslyEliminated = new Set();
                   
-                  // Process rounds in order to track when players got eliminated
+                  // Process rounds in order to track when players got eliminated AND store cumulative totals
                   game.rounds.forEach((round, index) => {
                     // Initialize cumulative points for players
                     Object.keys(round.scores).forEach(playerId => {
@@ -867,6 +899,14 @@ export default function GamePage({ params }) {
                         );
                         cumulativePoints[playerId] = playerAddEvent?.startingPoints || 0;
                       }
+                    });
+                    
+                    // Store cumulative total BEFORE adding this round (for display purposes)
+                    if (!cumulativeTotalsByRound[round.roundNumber]) {
+                      cumulativeTotalsByRound[round.roundNumber] = {};
+                    }
+                    Object.keys(round.scores).forEach(playerId => {
+                      cumulativeTotalsByRound[round.roundNumber][playerId] = cumulativePoints[playerId] || 0;
                     });
                     
                     // Add this round's scores
@@ -1113,16 +1153,10 @@ export default function GamePage({ params }) {
                             const hasDoubleDrop = event.doubleDrops && event.doubleDrops[player.id] === true;
                             const isWinner = event.winners && event.winners[player.id] === true;
                             
-                            // Calculate previous total (total before this round) for Rummy
-                            let previousTotal = 0;
-                            if (!isChess && !isAce) {
-                              // Sum all rounds before this one
-                              game.rounds.forEach(round => {
-                                if (round.roundNumber < event.roundNumber) {
-                                  previousTotal += round.scores[player.id] || 0;
-                                }
-                              });
-                            }
+                            // OPTIMIZED: Get previous total from pre-calculated lookup instead of recalculating
+                            const previousTotal = (!isChess && !isAce && cumulativeTotalsByRound[event.roundNumber]) 
+                              ? (cumulativeTotalsByRound[event.roundNumber][player.id] || 0)
+                              : 0;
                             const currentTotal = previousTotal + score;
                             
                             return (
@@ -1235,6 +1269,7 @@ export default function GamePage({ params }) {
               e.stopPropagation();
               setShowAddRoundModal(false);
               setEditingRound(null);
+              resetRoundScores();
             }
           }}
           onClick={(e) => {
@@ -1242,6 +1277,7 @@ export default function GamePage({ params }) {
               e.stopPropagation();
               setShowAddRoundModal(false);
               setEditingRound(null);
+              resetRoundScores();
             }
           }}
         >
@@ -1287,8 +1323,28 @@ export default function GamePage({ params }) {
               }
             </h2>
             
+            {editingRound && (
+              <div style={{
+                padding: '12px',
+                marginBottom: '16px',
+                background: 'rgba(251, 191, 36, 0.15)',
+                border: '2px solid var(--warning)',
+                borderRadius: '8px',
+                color: 'var(--warning)',
+                fontSize: '14px',
+                fontWeight: '600',
+                textAlign: 'center'
+              }}>
+                ⚠️ Editing Mode: Changes will recalculate all subsequent totals
+              </div>
+            )}
+            
             <div className={styles.scoreInputs}>
-              {game.players.filter(p => !p.isLost).map(player => {
+              {/* When editing, show all players who participated in that round. When adding new, only show active players */}
+              {(editingRound 
+                ? game.players.filter(p => editingRound.scores && editingRound.scores[p.id] !== undefined)
+                : game.players.filter(p => !p.isLost)
+              ).map(player => {
                 const consecutiveDrops = getConsecutiveDrops(player.id);
                 const canAffordDrop = player.totalPoints + 20 < game.maxPoints;
                 const canAffordDoubleDrop = player.totalPoints + 40 < game.maxPoints;
@@ -1467,6 +1523,7 @@ export default function GamePage({ params }) {
                 onClick={() => {
                   setShowAddRoundModal(false);
                   setEditingRound(null);
+                  resetRoundScores();
                 }}
                 type="button"
               >
@@ -1477,7 +1534,7 @@ export default function GamePage({ params }) {
                 onClick={handleAddRound}
                 type="button"
               >
-                Add Round Points
+                {editingRound ? '✏️ Update Round' : '📝 Add Round Points'}
               </button>
             </div>
           </div>
