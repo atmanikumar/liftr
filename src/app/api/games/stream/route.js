@@ -5,9 +5,6 @@
 
 import { NextResponse } from 'next/server';
 
-export const runtime = 'edge'; 
-export const dynamic = 'force-dynamic';
-
 // Global store for connected SSE clients with metadata
 global.sseClients = global.sseClients || new Map();
 global.sseClientMeta = global.sseClientMeta || new Map(); // Track last successful write time
@@ -29,6 +26,7 @@ export async function GET(request) {
     // Reuse existing client ID - close old connection and replace with new one
     clientId = existingClientId;
     isReconnect = true;
+    console.log(`[SSE Stream] Client ${clientId} reconnecting (replacing old connection)`);
     
     // Close the old writer if it exists
     const oldWriter = global.sseClients.get(clientId);
@@ -42,9 +40,11 @@ export async function GET(request) {
   } else if (existingClientId) {
     // Client has ID but not in our map - reuse it
     clientId = existingClientId;
+    console.log(`[SSE Stream] Client ${clientId} connecting (client has ID, not in map)`);
   } else {
     // Generate new unique client ID
     clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`[SSE Stream] New client ${clientId} connecting`);
   }
   
   // Store/replace the writer for this client
@@ -54,6 +54,8 @@ export async function GET(request) {
     lastSuccessfulWrite: Date.now(),
     isReconnect
   });
+  
+  console.log(`[SSE Stream] Total connected clients: ${global.sseClients.size}`);
   
   // IMPORTANT: Return the response FIRST, then send messages
   // This starts the stream flowing before we try to write
@@ -72,12 +74,13 @@ export async function GET(request) {
       await new Promise(resolve => setTimeout(resolve, 10));
       const message = { type: 'connected', clientId };
       await writer.write(encoder.encode(`data: ${JSON.stringify(message)}\n\n`));
+      console.log(`[SSE Stream] Sent 'connected' message to client ${clientId}`);
       
       if (global.sseClientMeta && global.sseClientMeta.has(clientId)) {
         global.sseClientMeta.get(clientId).lastSuccessfulWrite = Date.now();
       }
     } catch (error) {
-      console.error(`[SSE] Error sending initial message:`, error.message);
+      console.error(`[SSE Stream] Error sending initial message to ${clientId}:`, error.message);
     }
   })();
   
@@ -132,9 +135,11 @@ export async function GET(request) {
   
   // Clean up on connection close
   request.signal.addEventListener('abort', () => {
+    console.log(`[SSE Stream] Client ${clientId} disconnected`);
     clearInterval(keepaliveInterval);
     global.sseClients.delete(clientId);
     global.sseClientMeta.delete(clientId);
+    console.log(`[SSE Stream] Total connected clients after disconnect: ${global.sseClients.size}`);
     try {
       writer.close();
     } catch (error) {

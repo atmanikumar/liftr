@@ -1453,33 +1453,20 @@ export default function GamePage({ params }) {
             <div className={styles.modalActions}>
               <button 
                 className="btn btn-secondary" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
+                onClick={() => {
                   setShowAddRoundModal(false);
+                  setEditingRound(null);
                 }}
-                disabled={addingRound}
                 type="button"
               >
                 Cancel
               </button>
               <button 
                 className="btn btn-success" 
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!addingRound) {
-                    handleAddRound();
-                  }
-                }}
-                disabled={addingRound}
+                onClick={handleAddRound}
                 type="button"
               >
-                {addingRound ? 'Adding...' : 'Add Round Points'}
+                Add Round Points
               </button>
             </div>
           </div>
