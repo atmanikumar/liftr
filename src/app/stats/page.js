@@ -33,6 +33,7 @@ export default function StatsPage() {
             {Math.round(stat.value)}%
             {stat.matchWins !== undefined && ` (${stat.matchWins}/${stat.gamesPlayed})`}
             {stat.finals !== undefined && ` (${stat.finals}/${stat.gamesPlayed})`}
+            {stat.finalLosses !== undefined && ` (${stat.finalLosses}/${stat.gamesPlayed})`}
             {stat.roundWins !== undefined && ` (${stat.roundWins}/${stat.totalRounds})`}
             {stat.totalDrops !== undefined && ` (${stat.totalDrops}/${stat.totalRounds})`}
             {stat.playedRounds !== undefined && ` (${stat.playedRounds}/${stat.totalRounds})`}
@@ -242,15 +243,11 @@ export default function StatsPage() {
               )}
 
               {interestingStats.stats.warrior && (
-                <div 
-                  className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/stats/details?stat=warrior&gameType=${filterGameType}`)}
-                  style={{ cursor: 'pointer' }}
-                >
+                <div className={styles.statBadge}>
                   <div className={styles.badgeIcon}>⚔️</div>
                   <div className={styles.badgeContent}>
                     <div className={styles.badgeTitle}>Warrior</div>
-                    <div className={styles.badgeSubtitle}>Most Final Losses</div>
+                    <div className={styles.badgeSubtitle}>Final Loss Percentage</div>
                     <div className={styles.badgeName}>
                       {interestingStats.stats.warrior.player.profilePhoto ? (
                         <img 
@@ -261,8 +258,11 @@ export default function StatsPage() {
                       ) : null}
                       {interestingStats.stats.warrior.player.name}
                     </div>
-                    <div className={styles.badgeValue}>{interestingStats.stats.warrior.value} final losses</div>
-                    {renderCurrentUserStat('warrior', ' final losses')}
+                    <div className={styles.badgeValue}>
+                      {Math.round(interestingStats.stats.warrior.value)}% 
+                      ({interestingStats.stats.warrior.finalLosses}/{interestingStats.stats.warrior.gamesPlayed} games)
+                    </div>
+                    {renderCurrentUserStat('warrior')}
                   </div>
                 </div>
               )}

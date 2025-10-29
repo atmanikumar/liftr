@@ -365,7 +365,7 @@ function ProfileContent() {
                 { key: 'patientGuy', title: 'Drop Specialist', subtitle: 'Drop Percentage', icon: '🧘', isPercentage: true },
                 { key: 'strategist', title: 'Strategist', subtitle: 'Final Reached %', icon: '♟️', isPercentage: true },
                 { key: 'finalHero', title: 'Final Hero', subtitle: 'Win Percentage', icon: '🎖️', isPercentage: true },
-                { key: 'warrior', title: 'Warrior', subtitle: 'Most Final Losses', icon: '⚔️', suffix: ' final losses' },
+                { key: 'warrior', title: 'Warrior', subtitle: 'Final Loss Percentage', icon: '⚔️', isPercentage: true },
                 { key: 'consistent', title: 'Consistent', subtitle: 'Most Consecutive Finals', icon: '🎯', suffix: ' consecutive finals' },
                 { key: 'consecutiveWinner', title: 'On Fire!', subtitle: 'Most Consecutive Match Wins', icon: '🔥', suffix: ' match streak' },
                 { key: 'consecutiveRoundWinner', title: 'Round Dominator', subtitle: 'Most Consecutive Round Wins', icon: '⚡', suffix: ' round streak' },
@@ -418,6 +418,7 @@ function ProfileContent() {
                                       {Math.round(topStat.value)}%
                                       {topStat.matchWins !== undefined && ` (${topStat.matchWins}/${topStat.gamesPlayed})`}
                                       {topStat.finals !== undefined && ` (${topStat.finals}/${topStat.gamesPlayed})`}
+                                      {topStat.finalLosses !== undefined && ` (${topStat.finalLosses}/${topStat.gamesPlayed})`}
                                       {topStat.roundWins !== undefined && ` (${topStat.roundWins}/${topStat.totalRounds})`}
                                       {topStat.totalDrops !== undefined && ` (${topStat.totalDrops}/${topStat.totalRounds})`}
                                       {topStat.playedRounds !== undefined && ` (${topStat.playedRounds}/${topStat.totalRounds})`}
@@ -437,6 +438,7 @@ function ProfileContent() {
                                         {Math.round(userValue.value)}%
                                         {userValue.matchWins !== undefined && ` (${userValue.matchWins}/${userValue.gamesPlayed})`}
                                         {userValue.finals !== undefined && ` (${userValue.finals}/${userValue.gamesPlayed})`}
+                                        {userValue.finalLosses !== undefined && ` (${userValue.finalLosses}/${userValue.gamesPlayed})`}
                                         {userValue.roundWins !== undefined && ` (${userValue.roundWins}/${userValue.totalRounds})`}
                                         {userValue.totalDrops !== undefined && ` (${userValue.totalDrops}/${userValue.totalRounds})`}
                                         {userValue.playedRounds !== undefined && ` (${userValue.playedRounds}/${userValue.totalRounds})`}

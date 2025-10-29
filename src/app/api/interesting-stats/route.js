@@ -403,6 +403,7 @@ export async function GET(request) {
       // Calculate percentages
       player.winPercentage = player.gamesPlayed > 0 ? (player.matchWins / player.gamesPlayed) * 100 : 0;
       player.finalPercentage = player.gamesPlayed > 0 ? (player.finals / player.gamesPlayed) * 100 : 0;
+      player.finalLossPercentage = player.gamesPlayed > 0 ? (player.finalLosses / player.gamesPlayed) * 100 : 0;
       player.roundWinPercentage = player.totalRounds > 0 ? (player.roundWins / player.totalRounds) * 100 : 0;
       player.dropPercentage = player.totalRounds > 0 ? (player.totalDrops / player.totalRounds) * 100 : 0;
       player.bravePlayerPercentage = player.totalRounds > 0 ? (player.playedRounds / player.totalRounds) * 100 : 0;
@@ -588,11 +589,30 @@ export async function GET(request) {
       };
     })();
     
+    const finalLossPercentageStat = (() => {
+      const filtered = playerList.filter(p => p.gamesPlayed >= 3 && p.finalLossPercentage > 0);
+      if (filtered.length === 0) return null;
+      
+      const sorted = filtered.sort((a, b) => b.finalLossPercentage - a.finalLossPercentage);
+      const topPlayer = sorted[0];
+      
+      return {
+        player: {
+          id: topPlayer.id,
+          name: topPlayer.name,
+          profilePhoto: topPlayer.profilePhoto
+        },
+        value: topPlayer.finalLossPercentage,
+        finalLosses: topPlayer.finalLosses,
+        gamesPlayed: topPlayer.gamesPlayed
+      };
+    })();
+    
     const stats = {
       patientGuy: dropPercentageStat, // Drop Specialist - Drop percentage
       strategist: finalPercentageStat, // Final reached percentage
       finalHero: winPercentageStat, // Win percentage
-      warrior: findTop('finalLosses'), // Most final losses
+      warrior: finalLossPercentageStat, // Final loss percentage
       consistent: findTop('maxConsecutiveFinals'), // Most consecutive finals
       consecutiveWinner: findTop('consecutiveMatchWins'), // Most consecutive match wins
       consecutiveRoundWinner: consecutiveRoundWinnerStat, // Most consecutive round wins (with game link)
@@ -625,7 +645,11 @@ export async function GET(request) {
           matchWins: userStats.matchWins,
           gamesPlayed: userStats.gamesPlayed
         },
-        warrior: userStats.finalLosses,
+        warrior: {
+          value: userStats.finalLossPercentage,
+          finalLosses: userStats.finalLosses,
+          gamesPlayed: userStats.gamesPlayed
+        },
         consistent: userStats.maxConsecutiveFinals,
         consecutiveWinner: userStats.consecutiveMatchWins,
         consecutiveRoundWinner: userStats.maxRoundWinStreak,
