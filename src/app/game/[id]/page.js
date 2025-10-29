@@ -9,7 +9,7 @@ import styles from './page.module.css';
 export default function GamePage({ params }) {
   const router = useRouter();
   const { loadData, refreshPlayers, getGame, addRound, updateRound, addPlayerToGame, declareWinner, declareDraw, updateMaxPoints, declareAceWinners, players, games, sseConnected } = useGame();
-  const { user, loading: authLoading, isAdmin } = useAuth();
+  const { user, loading: authLoading, isSuperAdmin } = useAuth();
   
   const [game, setGame] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,7 +17,7 @@ export default function GamePage({ params }) {
   
   // Check if current user is the game creator or superAdmin
   const isGameCreator = () => {
-    return game && user && (game.createdBy === user.id || isAdmin());
+    return game && user && (game.createdBy === user.id || isSuperAdmin());
   };
   const [showAddRoundModal, setShowAddRoundModal] = useState(false);
   const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
