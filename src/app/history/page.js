@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './page.module.css';
 
@@ -10,6 +10,8 @@ export default function HistoryPage() {
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterGameType, setFilterGameType] = useState('Rummy');
+  const [filterPlayer, setFilterPlayer] = useState('all'); // 'all' or player ID
+  const [filterResult, setFilterResult] = useState('all'); // 'all', 'win', 'runner', 'loss'
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
   
@@ -85,11 +87,85 @@ export default function HistoryPage() {
     return player?.profilePhoto || null;
   };
 
-  // Memoize sorted games (already filtered by API)
+  // Calculate all runners-up: all players who reached finals but didn't win
+  // Uses same logic as stats page: (lastRound.scores[player.id] !== 0 || !player.isLost)
+  const getAllRunners = (game) => {
+    if (!game || game.status !== 'completed' || !game.rounds || game.rounds.length === 0) {
+      return [];
+    }
+    
+    // For Chess, there's no runner-up concept
+    if (game.type.toLowerCase() === 'chess') {
+      return [];
+    }
+    
+    const lastRound = game.rounds[game.rounds.length - 1];
+    if (!lastRound || !lastRound.scores) {
+      return [];
+    }
+    
+    // Get players who reached finals using same logic as stats page
+    // Finals logic: (lastRound.scores[player.id] !== 0 || !player.isLost)
+    const playersInFinals = game.players.filter(player => {
+      const lastRoundScore = lastRound.scores[player.id];
+      const isLost = player.isLost || false;
+      return (lastRoundScore !== 0 || !isLost);
+    });
+    
+    if (playersInFinals.length < 2) {
+      return [];
+    }
+    
+    // For Rummy/Ace: sort by totalPoints (ascending for Rummy, descending for Ace)
+    const isAce = game.type.toLowerCase() === 'ace';
+    const sortedPlayers = [...playersInFinals].sort((a, b) => {
+      if (isAce) {
+        return b.totalPoints - a.totalPoints; // Descending for Ace (highest wins)
+      } else {
+        return a.totalPoints - b.totalPoints; // Ascending for Rummy (lowest wins)
+      }
+    });
+    
+    // Filter out winner(s) to get all runners-up
+    const winners = game.winners || (game.winner ? [game.winner] : []);
+    return sortedPlayers.filter(player => !winners.includes(player.id));
+  };
+  
+  // Helper function to determine player's result in a game
+  const getPlayerResult = useCallback((game, playerId) => {
+    if (!game || !playerId) return null;
+    
+    const winners = game.winners || (game.winner ? [game.winner] : []);
+    if (winners.includes(playerId)) return 'win';
+    
+    const runners = getAllRunners(game);
+    if (runners.some(r => r.id === playerId)) return 'runner';
+    
+    return 'loss';
+  }, []);
+
+  // Memoize sorted and filtered games
   const sortedGames = useMemo(() => {
+    let filtered = [...games];
+    
+    // Filter by player if not "all"
+    if (filterPlayer !== 'all') {
+      filtered = filtered.filter(game => 
+        game.players && game.players.some(p => p.id === filterPlayer)
+      );
+      
+      // Further filter by result if not "all"
+      if (filterResult !== 'all') {
+        filtered = filtered.filter(game => {
+          const result = getPlayerResult(game, filterPlayer);
+          return result === filterResult;
+        });
+      }
+    }
+    
     // Sort by date (newest first)
-    return [...games].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [games]);
+    return filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [games, filterPlayer, filterResult, getPlayerResult]);
 
   // Calculate pagination
   const totalPages = Math.ceil(sortedGames.length / itemsPerPage);
@@ -97,10 +173,17 @@ export default function HistoryPage() {
   const endIndex = startIndex + itemsPerPage;
   const paginatedGames = sortedGames.slice(startIndex, endIndex);
 
-  // Reset to page 1 when game type changes
+  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterGameType]);
+  }, [filterGameType, filterPlayer, filterResult]);
+  
+  // Reset result filter when player changes to "all"
+  useEffect(() => {
+    if (filterPlayer === 'all') {
+      setFilterResult('all');
+    }
+  }, [filterPlayer]);
 
   return (
     <div className={styles.historyPage}>
@@ -122,8 +205,9 @@ export default function HistoryPage() {
           </div>
         ) : (
           <>
-        {/* Game Type Filter */}
+        {/* Filters */}
         <div className="card" style={{ marginBottom: '24px' }}>
+          {/* Game Type Filter */}
           <div className={styles.tabsContainer}>
             <button 
               className={`${styles.tab} ${filterGameType === 'Rummy' ? styles.tabActive : ''}`}
@@ -143,6 +227,48 @@ export default function HistoryPage() {
             >
               Ace
             </button>
+          </div>
+          
+          {/* Player Filter */}
+          <div className={styles.playerFilterContainer}>
+            <div className={styles.filterGroup}>
+              <label htmlFor="playerFilter" className={styles.filterLabel}>
+                Filter by Player:
+              </label>
+              <select
+                id="playerFilter"
+                value={filterPlayer}
+                onChange={(e) => setFilterPlayer(e.target.value)}
+                className={styles.playerSelect}
+              >
+                <option value="all">All Players</option>
+                {players.map(player => (
+                  <option key={player.id} value={player.id}>
+                    {player.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {/* Result Filter - only show when a player is selected */}
+            {filterPlayer !== 'all' && (
+              <div className={styles.filterGroup}>
+                <label htmlFor="resultFilter" className={styles.filterLabel}>
+                  Result:
+                </label>
+                <select
+                  id="resultFilter"
+                  value={filterResult}
+                  onChange={(e) => setFilterResult(e.target.value)}
+                  className={styles.playerSelect}
+                >
+                  <option value="all">All Results</option>
+                  <option value="win">🏆 Wins</option>
+                  <option value="runner">🥈 Runner-ups</option>
+                  <option value="loss">❌ Losses</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
@@ -212,60 +338,110 @@ export default function HistoryPage() {
                 </div>
 
                 {game.status === 'completed' && (game.winner || (game.winners && game.winners.length > 0)) && (
-                  <div className={styles.winner}>
-                    <span className={styles.winnerLabel}>
-                      🏆 {game.winners && game.winners.length > 1 ? 'Winners:' : 'Winner:'}
-                    </span>
-                    {game.winners && game.winners.length > 1 ? (
-                      <div className={styles.winnerInfo} style={{ flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
-                        {game.winners.map(winnerId => (
-                          <div 
-                            key={winnerId} 
-                            style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
-                            onClick={() => router.push(`/profile?userId=${winnerId}`)}
-                            title="View profile"
-                          >
-                            {getPlayerProfilePhoto(winnerId, game) ? (
-                              <img 
-                                src={getPlayerProfilePhoto(winnerId, game)} 
-                                alt={getPlayerName(winnerId)}
-                                className={styles.winnerAvatar}
-                              />
-                            ) : (
-                              <span className="avatar" style={{ fontSize: '18px' }}>
-                                {getPlayerAvatar(winnerId)}
+                  <>
+                    <div className={styles.winner}>
+                      <span className={styles.winnerLabel}>
+                        🏆 {game.winners && game.winners.length > 1 ? 'Winners:' : 'Winner:'}
+                      </span>
+                      {game.winners && game.winners.length > 1 ? (
+                        <div className={styles.winnerInfo} style={{ flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
+                          {game.winners.map(winnerId => (
+                            <div 
+                              key={winnerId} 
+                              style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/profile?userId=${winnerId}`);
+                              }}
+                              title="View profile"
+                            >
+                              {getPlayerProfilePhoto(winnerId, game) ? (
+                                <img 
+                                  src={getPlayerProfilePhoto(winnerId, game)} 
+                                  alt={getPlayerName(winnerId)}
+                                  className={styles.winnerAvatar}
+                                />
+                              ) : (
+                                <span className="avatar" style={{ fontSize: '18px' }}>
+                                  {getPlayerAvatar(winnerId)}
+                                </span>
+                              )}
+                              <span className={styles.winnerName}>
+                                {getPlayerName(winnerId)}
                               </span>
-                            )}
-                            <span className={styles.winnerName}>
-                              {getPlayerName(winnerId)}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div 
+                          className={styles.winnerInfo}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/profile?userId=${game.winner}`);
+                          }}
+                          style={{ cursor: 'pointer' }}
+                          title="View profile"
+                        >
+                          {getPlayerProfilePhoto(game.winner, game) ? (
+                            <img 
+                              src={getPlayerProfilePhoto(game.winner, game)} 
+                              alt={getPlayerName(game.winner)}
+                              className={styles.winnerAvatar}
+                            />
+                          ) : (
+                            <span className="avatar" style={{ fontSize: '20px' }}>
+                              {getPlayerAvatar(game.winner)}
                             </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div 
-                        className={styles.winnerInfo}
-                        onClick={() => router.push(`/profile?userId=${game.winner}`)}
-                        style={{ cursor: 'pointer' }}
-                        title="View profile"
-                      >
-                        {getPlayerProfilePhoto(game.winner, game) ? (
-                          <img 
-                            src={getPlayerProfilePhoto(game.winner, game)} 
-                            alt={getPlayerName(game.winner)}
-                            className={styles.winnerAvatar}
-                          />
-                        ) : (
-                          <span className="avatar" style={{ fontSize: '20px' }}>
-                            {getPlayerAvatar(game.winner)}
+                          )}
+                          <span className={styles.winnerName}>
+                            {getPlayerName(game.winner)}
                           </span>
-                        )}
-                        <span className={styles.winnerName}>
-                          {getPlayerName(game.winner)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Runners-up display (all finalists who didn't win) */}
+                    {(() => {
+                      const runners = getAllRunners(game);
+                      if (runners.length === 0) return null;
+                      
+                      return (
+                        <div className={styles.runnerUp}>
+                          <span className={styles.runnerUpLabel}>
+                            🥈 Runner{runners.length > 1 ? 's' : ''}-up:
+                          </span>
+                          <div className={styles.runnersContainer}>
+                            {runners.map((runner, index) => (
+                              <div 
+                                key={runner.id}
+                                className={styles.runnerUpInfo}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/profile?userId=${runner.id}`);
+                                }}
+                                style={{ cursor: 'pointer' }}
+                                title="View profile"
+                              >
+                                {getPlayerProfilePhoto(runner.id, game) ? (
+                                  <img 
+                                    src={getPlayerProfilePhoto(runner.id, game)} 
+                                    alt={runner.name}
+                                    className={styles.runnerUpAvatar}
+                                  />
+                                ) : (
+                                  <span className="avatar" style={{ fontSize: '18px' }}>
+                                    {runner.avatar}
+                                  </span>
+                                )}
+                                <span className={styles.runnerUpName}>{runner.name}</span>
+                                <span className={styles.runnerUpPoints}>({runner.totalPoints} pts)</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </>
                 )}
 
                 <div className={styles.playersList}>

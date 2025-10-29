@@ -18,7 +18,7 @@ function ProfileContent() {
   const [players, setPlayers] = useState([]);
   const [playerStats, setPlayerStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
-  const [achievements, setAchievements] = useState([]);
+  const [allStats, setAllStats] = useState({}); // Store all stats for all game types
   
   // Image crop states
   const [selectedImage, setSelectedImage] = useState(null);
@@ -54,65 +54,31 @@ function ProfileContent() {
     fetchPlayerStats();
   }, [user, viewUserId]);
 
-  // Fetch achievements (interesting stats)
+  // Fetch all stats for all game types
   useEffect(() => {
-    const fetchAchievements = async () => {
+    const fetchAllStats = async () => {
       if (!user && !viewUserId) return;
       
       const targetUserId = viewUserId || user?.id;
-      const userAchievements = [];
+      const statsData = {};
 
       try {
-        // Check all three game types
+        // Fetch stats for all three game types
         for (const gameType of ['Rummy', 'Chess', 'Ace']) {
-          const response = await fetch(`/api/interesting-stats?gameType=${gameType}`);
+          const response = await fetch(`/api/interesting-stats?gameType=${gameType}&userId=${targetUserId}`);
           if (response.ok) {
             const data = await response.json();
-            
-            // Check each stat category
-            const allCategories = [
-              { key: 'patientGuy', title: 'Patient Guy', subtitle: 'Most Drops', icon: '🧘' },
-              { key: 'strategist', title: 'Strategist', subtitle: 'Most Finals Reached', icon: '♟️' },
-              { key: 'finalHero', title: 'Final Hero', subtitle: 'Most Final Wins', icon: '🎖️' },
-              { key: 'warrior', title: 'Warrior', subtitle: 'Most Final Losses', icon: '⚔️' },
-              { key: 'consistent', title: 'Consistent', subtitle: 'Most Consecutive Finals', icon: '🎯' },
-              { key: 'consecutiveWinner', title: 'On Fire!', subtitle: 'Most Consecutive Match Wins', icon: '🔥' },
-              { key: 'consecutiveRoundWinner', title: 'Round Dominator', subtitle: 'Most Consecutive Round Wins', icon: '⚡' },
-              { key: 'eightyClub', title: '80 Club', subtitle: 'Most 80s', icon: '💥' },
-              { key: 'roundWinChampion', title: 'Round Win Champion', subtitle: 'Most Round Wins', icon: '👑' },
-              { key: 'bravePlayer', title: 'Brave Player', subtitle: 'Most Played Rounds (Not Dropped)', icon: '🦁', rummyOnly: true },
-              { key: 'earliestElimination', title: 'Early Exit', subtitle: 'Earliest Elimination', icon: '⏰', excludeRummy: true },
-              { key: 'maxRoundsInSingleGame', title: 'Marathon Player', subtitle: 'Most Rounds in Single Game', icon: '🏃', rummyOnly: true },
-            ];
-            
-            // Filter categories based on game type
-            const categories = allCategories.filter(cat => {
-              if (cat.rummyOnly && gameType !== 'Rummy') return false;
-              if (cat.excludeRummy && gameType === 'Rummy') return false;
-              return true;
-            });
-
-            categories.forEach(category => {
-              const stat = data.stats[category.key];
-              if (stat && stat.player && stat.player.id === targetUserId) {
-                userAchievements.push({
-                  gameType,
-                  ...category,
-                  value: stat.value,
-                  gameId: stat.gameId || null // For match-wise stats like consecutiveRoundWinner
-                });
-              }
-            });
+            statsData[gameType] = data;
           }
         }
         
-        setAchievements(userAchievements);
+        setAllStats(statsData);
       } catch (error) {
-        console.error('Failed to fetch achievements:', error);
+        console.error('Failed to fetch stats:', error);
       }
     };
     
-    fetchAchievements();
+    fetchAllStats();
   }, [user, viewUserId]);
 
   // Fetch players to get avatar
@@ -368,37 +334,94 @@ function ProfileContent() {
           </div>
         )}
 
-        {/* Achievements Section */}
-        {achievements.length > 0 && (
-          <div className={styles.achievementsSection}>
-            <h2 className={styles.subtitle}>🏆 Achievements</h2>
-            <div className={styles.achievementsGrid}>
-              {achievements.map((achievement, index) => (
-                <div 
-                  key={index} 
-                  className={`${styles.achievementBadge} ${achievement.gameId ? styles.clickableAchievement : ''}`}
-                  onClick={() => {
-                    if (achievement.gameId) {
-                      router.push(`/game/${achievement.gameId}`);
-                    }
-                  }}
-                  style={{ cursor: achievement.gameId ? 'pointer' : 'default' }}
-                >
-                  <div className={styles.achievementIcon}>{achievement.icon}</div>
-                  <div className={styles.achievementContent}>
-                    <div className={styles.achievementTitle}>{achievement.title}</div>
-                    <div className={styles.achievementSubtitle}>{achievement.subtitle}</div>
-                    <div className={styles.achievementGameType}>{achievement.gameType}</div>
-                    <div className={styles.achievementValue}>
-                      {achievement.value}
-                      {achievement.gameId && <span style={{ marginLeft: '8px', fontSize: '0.8em' }}>🔗</span>}
-                    </div>
+        {/* All Stats Section - Show rankings across all game types */}
+        {Object.keys(allStats).length > 0 && (
+          <div className={styles.allStatsSection}>
+            <h2 className={styles.subtitle}>📈 All Statistics</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '20px', fontSize: '14px' }}>
+              Your performance across all stat categories. 🏆 = You&apos;re the champion!
+            </p>
+            
+            {['Rummy', 'Chess', 'Ace'].map(gameType => {
+              if (!allStats[gameType] || !allStats[gameType].stats) return null;
+              
+              const data = allStats[gameType];
+              const allCategories = [
+                { key: 'roundWinChampion', title: 'Round Win Champion', subtitle: 'Most Round Wins', icon: '👑', suffix: ' round wins' },
+                { key: 'patientGuy', title: 'Patient Guy', subtitle: 'Most Drops', icon: '🧘', suffix: ' drops' },
+                { key: 'strategist', title: 'Strategist', subtitle: 'Most Finals Reached', icon: '♟️', suffix: ' finals' },
+                { key: 'finalHero', title: 'Final Hero', subtitle: 'Most Final Wins', icon: '🎖️', suffix: ' final wins' },
+                { key: 'warrior', title: 'Warrior', subtitle: 'Most Final Losses', icon: '⚔️', suffix: ' final losses' },
+                { key: 'consistent', title: 'Consistent', subtitle: 'Most Consecutive Finals', icon: '🎯', suffix: ' consecutive finals' },
+                { key: 'consecutiveWinner', title: 'On Fire!', subtitle: 'Most Consecutive Match Wins', icon: '🔥', suffix: ' match streak' },
+                { key: 'consecutiveRoundWinner', title: 'Round Dominator', subtitle: 'Most Consecutive Round Wins', icon: '⚡', suffix: ' round streak' },
+                { key: 'eightyClub', title: '80 Club', subtitle: 'Most 80s', icon: '💥', suffix: ' times' },
+                { key: 'bravePlayer', title: 'Brave Player', subtitle: 'Most Played Rounds', icon: '🦁', rummyOnly: true, suffix: ' rounds played' },
+                { key: 'earliestElimination', title: 'Early Exit', subtitle: 'Earliest Elimination', icon: '⏰', excludeRummy: true, prefix: 'Round ' },
+                { key: 'maxRoundsInSingleGame', title: 'Marathon Player', subtitle: 'Most Rounds in Single Game (Excluding Drops)', icon: '🏃', rummyOnly: true, suffix: ' rounds', hasGameLink: true },
+              ];
+              
+              const categories = allCategories.filter(cat => {
+                if (cat.rummyOnly && gameType !== 'Rummy') return false;
+                if (cat.excludeRummy && gameType === 'Rummy') return false;
+                return data.stats[cat.key] && data.stats[cat.key].value > 0;
+              });
+              
+              if (categories.length === 0) return null;
+              
+              return (
+                <div key={gameType} className={styles.gameStatsSection}>
+                  <h3 className={styles.gameTypeTitle}>{gameType}</h3>
+                  <div className={styles.allStatsGrid}>
+                    {categories.map(category => {
+                      const topStat = data.stats[category.key];
+                      const userValue = data.currentUserStats ? data.currentUserStats[category.key] : null;
+                      const isWinner = topStat && topStat.player && topStat.player.id === (viewUserId || user?.id);
+                      
+                      const hasGameLink = category.hasGameLink && topStat.gameId;
+                      
+                      return (
+                        <div 
+                          key={category.key} 
+                          className={`${styles.statRankCard} ${isWinner ? styles.statRankCardWinner : ''} ${hasGameLink ? styles.clickableStatCard : ''}`}
+                          onClick={() => hasGameLink && router.push(`/game/${topStat.gameId}`)}
+                          style={{ cursor: hasGameLink ? 'pointer' : 'default' }}
+                        >
+                          <div className={styles.statRankIcon}>{category.icon}</div>
+                          <div className={styles.statRankContent}>
+                            <div className={styles.statRankTitle}>
+                              {category.title}
+                              {isWinner && <span className={styles.winnerBadge}>🏆</span>}
+                              {hasGameLink && <span style={{ marginLeft: '8px', fontSize: '0.8em' }}>🔗</span>}
+                            </div>
+                            <div className={styles.statRankSubtitle}>{category.subtitle}</div>
+                            <div className={styles.statRankValues}>
+                              <div className={styles.statRankTop}>
+                                <span className={styles.statRankLabel}>Top:</span>
+                                <span className={styles.statRankValue}>
+                                  {category.prefix || ''}{topStat.value}{category.suffix || ''}
+                                </span>
+                              </div>
+                              {userValue !== null && userValue !== undefined && userValue > 0 && (
+                                <div className={styles.statRankYours}>
+                                  <span className={styles.statRankLabel}>Yours:</span>
+                                  <span className={styles.statRankValue}>
+                                    {category.prefix || ''}{userValue}{category.suffix || ''}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         )}
+
 
         {/* Only show photo upload section for own profile */}
         {isOwnProfile && (

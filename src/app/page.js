@@ -525,7 +525,7 @@ export default function Home() {
 
         {/* Recent Matches Section */}
         <div className="card" style={{ marginTop: '24px' }}>
-          <h2 className={styles.sectionTitle}>Last 10 Completed {filterGameType} Matches</h2>
+          <h2 className={styles.sectionTitle}>📋 Last 10 Completed {filterGameType} Matches</h2>
           {statsLoading ? (
             <div style={{ textAlign: 'center', padding: '60px 20px' }}>
               <span className="material-icons" style={{ fontSize: '48px', color: 'var(--primary)', animation: 'spin 1s linear infinite' }}>

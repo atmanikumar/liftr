@@ -59,6 +59,46 @@
   color: var(--text);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  margin-right: 12px;
+}
+
+.playerFilterContainer {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.playerSelect {
+  padding: 10px 16px;
+  background: var(--background);
+  border: 2px solid var(--border);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 200px;
+  outline: none;
+}
+
+.playerSelect:hover {
+  border-color: var(--primary);
+}
+
+.playerSelect:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .tabsContainer {
@@ -227,6 +267,61 @@
   object-fit: cover;
   border: 3px solid var(--success);
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+}
+
+.runnerUp {
+  background: rgba(192, 192, 192, 0.1);
+  border: 1px solid rgba(192, 192, 192, 0.5);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.runnerUpLabel {
+  font-weight: 600;
+  color: rgba(192, 192, 192, 0.9);
+}
+
+.runnersContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.runnerUpInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--background);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.runnerUpInfo:hover {
+  background: rgba(192, 192, 192, 0.1);
+  transform: translateY(-2px);
+}
+
+.runnerUpName {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.runnerUpPoints {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.runnerUpAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(192, 192, 192, 0.6);
 }
 
 .playersList {

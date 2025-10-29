@@ -241,6 +241,7 @@ export async function getGameById(gameId) {
         type: 'Chess',
         title: row.title,
         createdAt: row.createdAt,
+        createdBy: row.createdBy,
         status: row.status,
         winner: row.winner,
         isDraw: row.isDraw === 1 || row.isDraw === true,

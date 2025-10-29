@@ -12,6 +12,25 @@ export default function StatsPage() {
   const [interestingStats, setInterestingStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
+  // Helper to get current user's stat value
+  const getCurrentUserStat = (statKey) => {
+    if (!interestingStats?.currentUserStats) return null;
+    return interestingStats.currentUserStats[statKey];
+  };
+
+  // Helper to render current user stat
+  const renderCurrentUserStat = (statKey, suffix = '') => {
+    const value = getCurrentUserStat(statKey);
+    if (value === null || value === undefined || value === 0) return null;
+    
+    return (
+      <div className={styles.currentUserStat}>
+        <span className={styles.currentUserLabel}>Your Score:</span>
+        <span className={styles.currentUserValue}>{value}{suffix}</span>
+      </div>
+    );
+  };
+
   // Fetch interesting stats for selected game type (lazy load)
   useEffect(() => {
     const fetchInterestingStats = async () => {
@@ -19,7 +38,7 @@ export default function StatsPage() {
       
       setStatsLoading(true);
       try {
-        const response = await fetch(`/api/interesting-stats?gameType=${filterGameType}`);
+        const response = await fetch(`/api/interesting-stats?gameType=${filterGameType}&userId=${user.id}`);
         if (response.ok) {
           const data = await response.json();
           setInterestingStats(data);
@@ -104,7 +123,7 @@ export default function StatsPage() {
               {interestingStats.stats.roundWinChampion && (
                 <div 
                   className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.roundWinChampion.player.id}`)}
+                  onClick={() => router.push(`/stats/details?stat=roundWinChampion&gameType=${filterGameType}`)}
                   style={{ cursor: 'pointer' }}
                 >
                   <div className={styles.badgeIcon}>👑</div>
@@ -122,6 +141,7 @@ export default function StatsPage() {
                       {interestingStats.stats.roundWinChampion.player.name}
                     </div>
                     <div className={styles.badgeValue}>{interestingStats.stats.roundWinChampion.value} round wins</div>
+                    {renderCurrentUserStat('roundWinChampion', ' round wins')}
                   </div>
                 </div>
               )}
@@ -129,7 +149,7 @@ export default function StatsPage() {
               {interestingStats.stats.patientGuy && (
                 <div 
                   className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.patientGuy.player.id}`)}
+                  onClick={() => router.push(`/stats/details?stat=patientGuy&gameType=${filterGameType}`)}
                   style={{ cursor: 'pointer' }}
                 >
                   <div className={styles.badgeIcon}>🧘</div>
@@ -147,6 +167,7 @@ export default function StatsPage() {
                       {interestingStats.stats.patientGuy.player.name}
                     </div>
                     <div className={styles.badgeValue}>{interestingStats.stats.patientGuy.value} drops</div>
+                    {renderCurrentUserStat('patientGuy', ' drops')}
                   </div>
                 </div>
               )}
@@ -154,7 +175,7 @@ export default function StatsPage() {
               {interestingStats.stats.strategist && (
                 <div 
                   className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.strategist.player.id}`)}
+                  onClick={() => router.push(`/stats/details?stat=strategist&gameType=${filterGameType}`)}
                   style={{ cursor: 'pointer' }}
                 >
                   <div className={styles.badgeIcon}>♟️</div>
@@ -172,6 +193,7 @@ export default function StatsPage() {
                       {interestingStats.stats.strategist.player.name}
                     </div>
                     <div className={styles.badgeValue}>{interestingStats.stats.strategist.value} finals</div>
+                    {renderCurrentUserStat('strategist', ' finals')}
                   </div>
                 </div>
               )}
@@ -179,7 +201,7 @@ export default function StatsPage() {
               {interestingStats.stats.finalHero && (
                 <div 
                   className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.finalHero.player.id}`)}
+                  onClick={() => router.push(`/stats/details?stat=finalHero&gameType=${filterGameType}`)}
                   style={{ cursor: 'pointer' }}
                 >
                   <div className={styles.badgeIcon}>🎖️</div>
@@ -197,6 +219,7 @@ export default function StatsPage() {
                       {interestingStats.stats.finalHero.player.name}
                     </div>
                     <div className={styles.badgeValue}>{interestingStats.stats.finalHero.value} final wins</div>
+                    {renderCurrentUserStat('finalHero', ' final wins')}
                   </div>
                 </div>
               )}
@@ -204,7 +227,7 @@ export default function StatsPage() {
               {interestingStats.stats.warrior && (
                 <div 
                   className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.warrior.player.id}`)}
+                  onClick={() => router.push(`/stats/details?stat=warrior&gameType=${filterGameType}`)}
                   style={{ cursor: 'pointer' }}
                 >
                   <div className={styles.badgeIcon}>⚔️</div>
@@ -222,6 +245,7 @@ export default function StatsPage() {
                       {interestingStats.stats.warrior.player.name}
                     </div>
                     <div className={styles.badgeValue}>{interestingStats.stats.warrior.value} final losses</div>
+                    {renderCurrentUserStat('warrior', ' final losses')}
                   </div>
                 </div>
               )}
@@ -229,7 +253,7 @@ export default function StatsPage() {
               {interestingStats.stats.consistent && (
                 <div 
                   className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.consistent.player.id}`)}
+                  onClick={() => router.push(`/stats/details?stat=consistent&gameType=${filterGameType}`)}
                   style={{ cursor: 'pointer' }}
                 >
                   <div className={styles.badgeIcon}>🎯</div>
@@ -247,6 +271,7 @@ export default function StatsPage() {
                       {interestingStats.stats.consistent.player.name}
                     </div>
                     <div className={styles.badgeValue}>{interestingStats.stats.consistent.value} consecutive finals</div>
+                    {renderCurrentUserStat('consistent', ' consecutive finals')}
                   </div>
                 </div>
               )}
@@ -254,7 +279,7 @@ export default function StatsPage() {
               {interestingStats.stats.consecutiveWinner && (
                 <div 
                   className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.consecutiveWinner.player.id}`)}
+                  onClick={() => router.push(`/stats/details?stat=consecutiveWinner&gameType=${filterGameType}`)}
                   style={{ cursor: 'pointer' }}
                 >
                   <div className={styles.badgeIcon}>🔥</div>
@@ -272,6 +297,7 @@ export default function StatsPage() {
                       {interestingStats.stats.consecutiveWinner.player.name}
                     </div>
                     <div className={styles.badgeValue}>{interestingStats.stats.consecutiveWinner.value} match streak</div>
+                    {renderCurrentUserStat('consecutiveWinner', ' match streak')}
                   </div>
                 </div>
               )}
@@ -279,14 +305,7 @@ export default function StatsPage() {
               {interestingStats.stats.consecutiveRoundWinner && (
                 <div 
                   className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => {
-                    const gameId = interestingStats.stats.consecutiveRoundWinner.gameId;
-                    if (gameId) {
-                      router.push(`/game/${gameId}`);
-                    } else {
-                      router.push(`/profile?userId=${interestingStats.stats.consecutiveRoundWinner.player.id}`);
-                    }
-                  }}
+                  onClick={() => router.push(`/stats/details?stat=consecutiveRoundWinner&gameType=${filterGameType}`)}
                   style={{ cursor: 'pointer' }}
                 >
                   <div className={styles.badgeIcon}>⚡</div>
@@ -304,6 +323,7 @@ export default function StatsPage() {
                       {interestingStats.stats.consecutiveRoundWinner.player.name}
                     </div>
                     <div className={styles.badgeValue}>{interestingStats.stats.consecutiveRoundWinner.value} round streak</div>
+                    {renderCurrentUserStat('consecutiveRoundWinner', ' round streak')}
                   </div>
                 </div>
               )}
@@ -311,7 +331,7 @@ export default function StatsPage() {
               {interestingStats.stats.eightyClub && (
                 <div 
                   className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.eightyClub.player.id}`)}
+                  onClick={() => router.push(`/stats/details?stat=eightyClub&gameType=${filterGameType}`)}
                   style={{ cursor: 'pointer' }}
                 >
                   <div className={styles.badgeIcon}>💥</div>
@@ -329,6 +349,7 @@ export default function StatsPage() {
                       {interestingStats.stats.eightyClub.player.name}
                     </div>
                     <div className={styles.badgeValue}>{interestingStats.stats.eightyClub.value} times</div>
+                    {renderCurrentUserStat('eightyClub', ' times')}
                   </div>
                 </div>
               )}
@@ -336,7 +357,7 @@ export default function StatsPage() {
               {interestingStats.stats.bravePlayer && filterGameType === 'Rummy' && (
                 <div 
                   className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/profile?userId=${interestingStats.stats.bravePlayer.player.id}`)}
+                  onClick={() => router.push(`/stats/details?stat=bravePlayer&gameType=${filterGameType}`)}
                   style={{ cursor: 'pointer' }}
                 >
                   <div className={styles.badgeIcon}>🦁</div>
@@ -354,6 +375,7 @@ export default function StatsPage() {
                       {interestingStats.stats.bravePlayer.player.name}
                     </div>
                     <div className={styles.badgeValue}>{interestingStats.stats.bravePlayer.value} rounds played</div>
+                    {renderCurrentUserStat('bravePlayer', ' rounds played')}
                   </div>
                 </div>
               )}
@@ -361,14 +383,7 @@ export default function StatsPage() {
               {interestingStats.stats.earliestElimination && filterGameType !== 'Rummy' && (
                 <div 
                   className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => {
-                    const gameId = interestingStats.stats.earliestElimination.gameId;
-                    if (gameId) {
-                      router.push(`/game/${gameId}`);
-                    } else {
-                      router.push(`/profile?userId=${interestingStats.stats.earliestElimination.player.id}`);
-                    }
-                  }}
+                  onClick={() => router.push(`/stats/details?stat=earliestElimination&gameType=${filterGameType}`)}
                   style={{ cursor: 'pointer' }}
                 >
                   <div className={styles.badgeIcon}>⏰</div>
@@ -386,6 +401,12 @@ export default function StatsPage() {
                       {interestingStats.stats.earliestElimination.player.name}
                     </div>
                     <div className={styles.badgeValue}>Round {interestingStats.stats.earliestElimination.value}</div>
+                    {getCurrentUserStat('earliestElimination') !== null && (
+                      <div className={styles.currentUserStat}>
+                        <span className={styles.currentUserLabel}>Your Score:</span>
+                        <span className={styles.currentUserValue}>Round {getCurrentUserStat('earliestElimination')}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -406,7 +427,7 @@ export default function StatsPage() {
                   <div className={styles.badgeIcon}>🏃</div>
                   <div className={styles.badgeContent}>
                     <div className={styles.badgeTitle}>Marathon Player</div>
-                    <div className={styles.badgeSubtitle}>Most Rounds in Single Game</div>
+                    <div className={styles.badgeSubtitle}>Most Rounds in Single Game (Excluding Drops)</div>
                     <div className={styles.badgeName}>
                       {interestingStats.stats.maxRoundsInSingleGame.player.profilePhoto ? (
                         <img 
@@ -418,6 +439,40 @@ export default function StatsPage() {
                       {interestingStats.stats.maxRoundsInSingleGame.player.name}
                     </div>
                     <div className={styles.badgeValue}>{interestingStats.stats.maxRoundsInSingleGame.value} rounds</div>
+                    {renderCurrentUserStat('maxRoundsInSingleGame', ' rounds')}
+                  </div>
+                </div>
+              )}
+
+              {interestingStats.stats.minRoundsToWin && filterGameType === 'Rummy' && (
+                <div 
+                  className={`${styles.statBadge} ${styles.clickableBadge}`}
+                  onClick={() => {
+                    const gameId = interestingStats.stats.minRoundsToWin.gameId;
+                    if (gameId) {
+                      router.push(`/game/${gameId}`);
+                    } else {
+                      router.push(`/profile?userId=${interestingStats.stats.minRoundsToWin.player.id}`);
+                    }
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className={styles.badgeIcon}>⚡</div>
+                  <div className={styles.badgeContent}>
+                    <div className={styles.badgeTitle}>Speed Winner</div>
+                    <div className={styles.badgeSubtitle}>Least Rounds to Win</div>
+                    <div className={styles.badgeName}>
+                      {interestingStats.stats.minRoundsToWin.player.profilePhoto ? (
+                        <img 
+                          src={interestingStats.stats.minRoundsToWin.player.profilePhoto} 
+                          alt={interestingStats.stats.minRoundsToWin.player.name}
+                          className={styles.badgeAvatar}
+                        />
+                      ) : null}
+                      {interestingStats.stats.minRoundsToWin.player.name}
+                    </div>
+                    <div className={styles.badgeValue}>{interestingStats.stats.minRoundsToWin.value} rounds</div>
+                    {renderCurrentUserStat('minRoundsToWin', ' rounds')}
                   </div>
                 </div>
               )}

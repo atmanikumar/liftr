@@ -1,0 +1,223 @@
+.statDetailsPage {
+  min-height: calc(100vh - 80px);
+  padding: 40px 0;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.backBtn {
+  padding: 10px 20px;
+  background: var(--background);
+  border: 2px solid var(--border);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  margin-bottom: 20px;
+}
+
+.backBtn:hover {
+  border-color: var(--primary);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.titleSection {
+  text-align: center;
+}
+
+.title {
+  font-size: 36px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--primary);
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+
+.sectionTitle {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 24px;
+  color: var(--text);
+}
+
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+}
+
+.gamesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.gameCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.gameCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  border-color: var(--primary);
+}
+
+.gameHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.gameTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  flex: 1;
+}
+
+.gameDate {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.statDetails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+  padding: 12px;
+  background: var(--background);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.statDetailBadge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(26, 115, 232, 0.1);
+  border: 1px solid rgba(26, 115, 232, 0.3);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+.statDetailIcon {
+  font-size: 14px;
+}
+
+.statDetailText {
+  color: var(--text);
+}
+
+.gameWinner {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid var(--success);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.winnerLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--success);
+}
+
+.winnerName {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.gamePlayers {
+  margin-bottom: 16px;
+}
+
+.playersLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.playersList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.playerChip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 20px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.playerAvatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.morePlayerstext {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.viewDetails {
+  text-align: center;
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 14px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 768px) {
+  .statDetailsPage {
+    padding: 20px 0;
+  }
+
+  .title {
+    font-size: 28px;
+  }
+
+  .gamesGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
