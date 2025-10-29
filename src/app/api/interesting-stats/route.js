@@ -53,6 +53,7 @@ export async function GET(request) {
         maxRoundWinStreakGameId: null, // Track which game had the max streak
         currentRoundStreak: 0,
         playedRounds: 0, // Rounds played (not dropped)
+        totalRounds: 0, // Total rounds (including drops)
         earliestElimination: null, // Minimum round number at elimination
         earliestEliminationGameId: null, // Track which game
         maxRoundsInSingleGame: 0,
@@ -183,6 +184,9 @@ export async function GET(request) {
           
           Object.keys(round.scores).forEach(playerId => {
             const stats = initPlayer(playerId);
+            
+            // Count ALL rounds (including drops)
+            stats.totalRounds++;
             
             // Count drops and double drops (Rummy only)
             const isDropped = round.drops && round.drops[playerId];
@@ -392,9 +396,17 @@ export async function GET(request) {
       };
     };
     
-    // Calculate total drops (single + double drops)
+    // Calculate total drops (single + double drops) and percentages
     playerList.forEach(player => {
       player.totalDrops = player.drops + player.doubleDrops;
+      
+      // Calculate percentages
+      player.winPercentage = player.gamesPlayed > 0 ? (player.matchWins / player.gamesPlayed) * 100 : 0;
+      player.finalPercentage = player.gamesPlayed > 0 ? (player.finals / player.gamesPlayed) * 100 : 0;
+      player.roundWinPercentage = player.totalRounds > 0 ? (player.roundWins / player.totalRounds) * 100 : 0;
+      player.dropPercentage = player.totalRounds > 0 ? (player.totalDrops / player.totalRounds) * 100 : 0;
+      player.bravePlayerPercentage = player.totalRounds > 0 ? (player.playedRounds / player.totalRounds) * 100 : 0;
+      player.scores80Percentage = player.gamesPlayed > 0 ? (player.scores80 / player.gamesPlayed) * 100 : 0;
     });
     
     // Special handling for consecutiveRoundWinner to include gameId
@@ -461,17 +473,132 @@ export async function GET(request) {
       };
     })();
     
+    // Percentage-based stats
+    const winPercentageStat = (() => {
+      const filtered = playerList.filter(p => p.gamesPlayed >= 3 && p.winPercentage > 0);
+      if (filtered.length === 0) return null;
+      
+      const sorted = filtered.sort((a, b) => b.winPercentage - a.winPercentage);
+      const topPlayer = sorted[0];
+      
+      return {
+        player: {
+          id: topPlayer.id,
+          name: topPlayer.name,
+          profilePhoto: topPlayer.profilePhoto
+        },
+        value: topPlayer.winPercentage,
+        matchWins: topPlayer.matchWins,
+        gamesPlayed: topPlayer.gamesPlayed
+      };
+    })();
+    
+    const finalPercentageStat = (() => {
+      const filtered = playerList.filter(p => p.gamesPlayed >= 3 && p.finalPercentage > 0);
+      if (filtered.length === 0) return null;
+      
+      const sorted = filtered.sort((a, b) => b.finalPercentage - a.finalPercentage);
+      const topPlayer = sorted[0];
+      
+      return {
+        player: {
+          id: topPlayer.id,
+          name: topPlayer.name,
+          profilePhoto: topPlayer.profilePhoto
+        },
+        value: topPlayer.finalPercentage,
+        finals: topPlayer.finals,
+        gamesPlayed: topPlayer.gamesPlayed
+      };
+    })();
+    
+    const roundWinPercentageStat = (() => {
+      const filtered = playerList.filter(p => p.totalRounds >= 10 && p.roundWinPercentage > 0);
+      if (filtered.length === 0) return null;
+      
+      const sorted = filtered.sort((a, b) => b.roundWinPercentage - a.roundWinPercentage);
+      const topPlayer = sorted[0];
+      
+      return {
+        player: {
+          id: topPlayer.id,
+          name: topPlayer.name,
+          profilePhoto: topPlayer.profilePhoto
+        },
+        value: topPlayer.roundWinPercentage,
+        roundWins: topPlayer.roundWins,
+        totalRounds: topPlayer.totalRounds
+      };
+    })();
+    
+    const dropPercentageStat = (() => {
+      const filtered = playerList.filter(p => p.totalRounds >= 10 && p.dropPercentage > 0);
+      if (filtered.length === 0) return null;
+      
+      const sorted = filtered.sort((a, b) => b.dropPercentage - a.dropPercentage);
+      const topPlayer = sorted[0];
+      
+      return {
+        player: {
+          id: topPlayer.id,
+          name: topPlayer.name,
+          profilePhoto: topPlayer.profilePhoto
+        },
+        value: topPlayer.dropPercentage,
+        totalDrops: topPlayer.totalDrops,
+        totalRounds: topPlayer.totalRounds
+      };
+    })();
+    
+    const bravePlayerPercentageStat = (() => {
+      const filtered = playerList.filter(p => p.totalRounds >= 10 && p.bravePlayerPercentage > 0);
+      if (filtered.length === 0) return null;
+      
+      const sorted = filtered.sort((a, b) => b.bravePlayerPercentage - a.bravePlayerPercentage);
+      const topPlayer = sorted[0];
+      
+      return {
+        player: {
+          id: topPlayer.id,
+          name: topPlayer.name,
+          profilePhoto: topPlayer.profilePhoto
+        },
+        value: topPlayer.bravePlayerPercentage,
+        playedRounds: topPlayer.playedRounds,
+        totalRounds: topPlayer.totalRounds
+      };
+    })();
+    
+    const scores80PercentageStat = (() => {
+      const filtered = playerList.filter(p => p.gamesPlayed >= 3 && p.scores80Percentage > 0);
+      if (filtered.length === 0) return null;
+      
+      const sorted = filtered.sort((a, b) => b.scores80Percentage - a.scores80Percentage);
+      const topPlayer = sorted[0];
+      
+      return {
+        player: {
+          id: topPlayer.id,
+          name: topPlayer.name,
+          profilePhoto: topPlayer.profilePhoto
+        },
+        value: topPlayer.scores80Percentage,
+        scores80: topPlayer.scores80,
+        gamesPlayed: topPlayer.gamesPlayed
+      };
+    })();
+    
     const stats = {
-      patientGuy: findTop('totalDrops'), // Most drops (single + double)
-      strategist: findTop('finals'), // Most finals reached
-      finalHero: findTop('finalWins'), // Most final wins
+      patientGuy: dropPercentageStat, // Drop Specialist - Drop percentage
+      strategist: finalPercentageStat, // Final reached percentage
+      finalHero: winPercentageStat, // Win percentage
       warrior: findTop('finalLosses'), // Most final losses
       consistent: findTop('maxConsecutiveFinals'), // Most consecutive finals
       consecutiveWinner: findTop('consecutiveMatchWins'), // Most consecutive match wins
       consecutiveRoundWinner: consecutiveRoundWinnerStat, // Most consecutive round wins (with game link)
-      eightyClub: findTop('scores80'), // Most 80s (avoidable only)
-      roundWinChampion: findTop('roundWins'), // Most round wins
-      bravePlayer: findTop('playedRounds'), // Most played rounds (not dropped)
+      eightyClub: scores80PercentageStat, // 80s percentage (avoidable only, excludes must-play situations)
+      roundWinChampion: roundWinPercentageStat, // Round win percentage
+      bravePlayer: bravePlayerPercentageStat, // Percentage of rounds played without dropping
       earliestElimination: earliestEliminationStat, // Earliest elimination
       maxRoundsInSingleGame: maxRoundsInSingleGameStat, // Most rounds played in a single game (with game link)
       minRoundsToWin: minRoundsToWinStat // Least rounds to win a game (Rummy only, with game link)
@@ -483,16 +610,40 @@ export async function GET(request) {
     if (currentUserId && playerStats[currentUserId]) {
       const userStats = playerStats[currentUserId];
       currentUserStats = {
-        patientGuy: userStats.totalDrops,
-        strategist: userStats.finals,
-        finalHero: userStats.finalWins,
+        patientGuy: {
+          value: userStats.dropPercentage,
+          totalDrops: userStats.totalDrops,
+          totalRounds: userStats.totalRounds
+        },
+        strategist: {
+          value: userStats.finalPercentage,
+          finals: userStats.finals,
+          gamesPlayed: userStats.gamesPlayed
+        },
+        finalHero: {
+          value: userStats.winPercentage,
+          matchWins: userStats.matchWins,
+          gamesPlayed: userStats.gamesPlayed
+        },
         warrior: userStats.finalLosses,
         consistent: userStats.maxConsecutiveFinals,
         consecutiveWinner: userStats.consecutiveMatchWins,
         consecutiveRoundWinner: userStats.maxRoundWinStreak,
-        eightyClub: userStats.scores80,
-        roundWinChampion: userStats.roundWins,
-        bravePlayer: userStats.playedRounds,
+        eightyClub: {
+          value: userStats.scores80Percentage,
+          scores80: userStats.scores80,
+          gamesPlayed: userStats.gamesPlayed
+        },
+        roundWinChampion: {
+          value: userStats.roundWinPercentage,
+          roundWins: userStats.roundWins,
+          totalRounds: userStats.totalRounds
+        },
+        bravePlayer: {
+          value: userStats.bravePlayerPercentage,
+          playedRounds: userStats.playedRounds,
+          totalRounds: userStats.totalRounds
+        },
         earliestElimination: userStats.earliestElimination,
         maxRoundsInSingleGame: userStats.maxRoundsInSingleGame,
         minRoundsToWin: userStats.minRoundsToWin

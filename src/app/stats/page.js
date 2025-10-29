@@ -20,13 +20,34 @@ export default function StatsPage() {
 
   // Helper to render current user stat
   const renderCurrentUserStat = (statKey, suffix = '') => {
-    const value = getCurrentUserStat(statKey);
-    if (value === null || value === undefined || value === 0) return null;
+    const stat = getCurrentUserStat(statKey);
+    if (stat === null || stat === undefined) return null;
     
+    // Handle percentage stats (objects with value and counts)
+    if (typeof stat === 'object' && stat.value !== undefined) {
+      if (stat.value === 0) return null;
+      return (
+        <div className={styles.currentUserStat}>
+          <span className={styles.currentUserLabel}>Your Score:</span>
+          <span className={styles.currentUserValue}>
+            {Math.round(stat.value)}%
+            {stat.matchWins !== undefined && ` (${stat.matchWins}/${stat.gamesPlayed})`}
+            {stat.finals !== undefined && ` (${stat.finals}/${stat.gamesPlayed})`}
+            {stat.roundWins !== undefined && ` (${stat.roundWins}/${stat.totalRounds})`}
+            {stat.totalDrops !== undefined && ` (${stat.totalDrops}/${stat.totalRounds})`}
+            {stat.playedRounds !== undefined && ` (${stat.playedRounds}/${stat.totalRounds})`}
+            {stat.scores80 !== undefined && ` (${stat.scores80}/${stat.gamesPlayed})`}
+          </span>
+        </div>
+      );
+    }
+    
+    // Handle regular numeric stats
+    if (stat === 0) return null;
     return (
       <div className={styles.currentUserStat}>
         <span className={styles.currentUserLabel}>Your Score:</span>
-        <span className={styles.currentUserValue}>{value}{suffix}</span>
+        <span className={styles.currentUserValue}>{stat}{suffix}</span>
       </div>
     );
   };
@@ -121,15 +142,11 @@ export default function StatsPage() {
           ) : interestingStats && interestingStats.stats && Object.keys(interestingStats.stats).length > 0 ? (
             <div className={styles.interestingStatsGrid}>
               {interestingStats.stats.roundWinChampion && (
-                <div 
-                  className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/stats/details?stat=roundWinChampion&gameType=${filterGameType}`)}
-                  style={{ cursor: 'pointer' }}
-                >
+                <div className={styles.statBadge}>
                   <div className={styles.badgeIcon}>👑</div>
                   <div className={styles.badgeContent}>
                     <div className={styles.badgeTitle}>Round Win Champion</div>
-                    <div className={styles.badgeSubtitle}>Most Round Wins</div>
+                    <div className={styles.badgeSubtitle}>Round Win %</div>
                     <div className={styles.badgeName}>
                       {interestingStats.stats.roundWinChampion.player.profilePhoto ? (
                         <img 
@@ -140,22 +157,21 @@ export default function StatsPage() {
                       ) : null}
                       {interestingStats.stats.roundWinChampion.player.name}
                     </div>
-                    <div className={styles.badgeValue}>{interestingStats.stats.roundWinChampion.value} round wins</div>
-                    {renderCurrentUserStat('roundWinChampion', ' round wins')}
+                    <div className={styles.badgeValue}>
+                      {Math.round(interestingStats.stats.roundWinChampion.value)}% 
+                      ({interestingStats.stats.roundWinChampion.roundWins}/{interestingStats.stats.roundWinChampion.totalRounds} rounds)
+                    </div>
+                    {renderCurrentUserStat('roundWinChampion')}
                   </div>
                 </div>
               )}
 
               {interestingStats.stats.patientGuy && (
-                <div 
-                  className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/stats/details?stat=patientGuy&gameType=${filterGameType}`)}
-                  style={{ cursor: 'pointer' }}
-                >
+                <div className={styles.statBadge}>
                   <div className={styles.badgeIcon}>🧘</div>
                   <div className={styles.badgeContent}>
-                    <div className={styles.badgeTitle}>Patient Guy</div>
-                    <div className={styles.badgeSubtitle}>Most Drops</div>
+                    <div className={styles.badgeTitle}>Drop Specialist</div>
+                    <div className={styles.badgeSubtitle}>Drop Percentage</div>
                     <div className={styles.badgeName}>
                       {interestingStats.stats.patientGuy.player.profilePhoto ? (
                         <img 
@@ -166,22 +182,21 @@ export default function StatsPage() {
                       ) : null}
                       {interestingStats.stats.patientGuy.player.name}
                     </div>
-                    <div className={styles.badgeValue}>{interestingStats.stats.patientGuy.value} drops</div>
-                    {renderCurrentUserStat('patientGuy', ' drops')}
+                    <div className={styles.badgeValue}>
+                      {Math.round(interestingStats.stats.patientGuy.value)}% 
+                      ({interestingStats.stats.patientGuy.totalDrops}/{interestingStats.stats.patientGuy.totalRounds} rounds)
+                    </div>
+                    {renderCurrentUserStat('patientGuy')}
                   </div>
                 </div>
               )}
 
               {interestingStats.stats.strategist && (
-                <div 
-                  className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/stats/details?stat=strategist&gameType=${filterGameType}`)}
-                  style={{ cursor: 'pointer' }}
-                >
+                <div className={styles.statBadge}>
                   <div className={styles.badgeIcon}>♟️</div>
                   <div className={styles.badgeContent}>
                     <div className={styles.badgeTitle}>Strategist</div>
-                    <div className={styles.badgeSubtitle}>Most Finals Reached</div>
+                    <div className={styles.badgeSubtitle}>Final Reached %</div>
                     <div className={styles.badgeName}>
                       {interestingStats.stats.strategist.player.profilePhoto ? (
                         <img 
@@ -192,22 +207,21 @@ export default function StatsPage() {
                       ) : null}
                       {interestingStats.stats.strategist.player.name}
                     </div>
-                    <div className={styles.badgeValue}>{interestingStats.stats.strategist.value} finals</div>
-                    {renderCurrentUserStat('strategist', ' finals')}
+                    <div className={styles.badgeValue}>
+                      {Math.round(interestingStats.stats.strategist.value)}% 
+                      ({interestingStats.stats.strategist.finals}/{interestingStats.stats.strategist.gamesPlayed} games)
+                    </div>
+                    {renderCurrentUserStat('strategist')}
                   </div>
                 </div>
               )}
 
               {interestingStats.stats.finalHero && (
-                <div 
-                  className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/stats/details?stat=finalHero&gameType=${filterGameType}`)}
-                  style={{ cursor: 'pointer' }}
-                >
+                <div className={styles.statBadge}>
                   <div className={styles.badgeIcon}>🎖️</div>
                   <div className={styles.badgeContent}>
                     <div className={styles.badgeTitle}>Final Hero</div>
-                    <div className={styles.badgeSubtitle}>Most Final Wins</div>
+                    <div className={styles.badgeSubtitle}>Win Percentage</div>
                     <div className={styles.badgeName}>
                       {interestingStats.stats.finalHero.player.profilePhoto ? (
                         <img 
@@ -218,8 +232,11 @@ export default function StatsPage() {
                       ) : null}
                       {interestingStats.stats.finalHero.player.name}
                     </div>
-                    <div className={styles.badgeValue}>{interestingStats.stats.finalHero.value} final wins</div>
-                    {renderCurrentUserStat('finalHero', ' final wins')}
+                    <div className={styles.badgeValue}>
+                      {Math.round(interestingStats.stats.finalHero.value)}% 
+                      ({interestingStats.stats.finalHero.matchWins}/{interestingStats.stats.finalHero.gamesPlayed} games)
+                    </div>
+                    {renderCurrentUserStat('finalHero')}
                   </div>
                 </div>
               )}
@@ -329,15 +346,11 @@ export default function StatsPage() {
               )}
 
               {interestingStats.stats.eightyClub && (
-                <div 
-                  className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/stats/details?stat=eightyClub&gameType=${filterGameType}`)}
-                  style={{ cursor: 'pointer' }}
-                >
+                <div className={styles.statBadge}>
                   <div className={styles.badgeIcon}>💥</div>
                   <div className={styles.badgeContent}>
                     <div className={styles.badgeTitle}>80 Club</div>
-                    <div className={styles.badgeSubtitle}>Most 80s</div>
+                    <div className={styles.badgeSubtitle}>80s Percentage</div>
                     <div className={styles.badgeName}>
                       {interestingStats.stats.eightyClub.player.profilePhoto ? (
                         <img 
@@ -348,22 +361,21 @@ export default function StatsPage() {
                       ) : null}
                       {interestingStats.stats.eightyClub.player.name}
                     </div>
-                    <div className={styles.badgeValue}>{interestingStats.stats.eightyClub.value} times</div>
-                    {renderCurrentUserStat('eightyClub', ' times')}
+                    <div className={styles.badgeValue}>
+                      {Math.round(interestingStats.stats.eightyClub.value)}% 
+                      ({interestingStats.stats.eightyClub.scores80}/{interestingStats.stats.eightyClub.gamesPlayed} games)
+                    </div>
+                    {renderCurrentUserStat('eightyClub')}
                   </div>
                 </div>
               )}
 
               {interestingStats.stats.bravePlayer && filterGameType === 'Rummy' && (
-                <div 
-                  className={`${styles.statBadge} ${styles.clickableBadge}`}
-                  onClick={() => router.push(`/stats/details?stat=bravePlayer&gameType=${filterGameType}`)}
-                  style={{ cursor: 'pointer' }}
-                >
+                <div className={styles.statBadge}>
                   <div className={styles.badgeIcon}>🦁</div>
                   <div className={styles.badgeContent}>
                     <div className={styles.badgeTitle}>Brave Player</div>
-                    <div className={styles.badgeSubtitle}>Most Played Rounds (Not Dropped)</div>
+                    <div className={styles.badgeSubtitle}>Rounds Played Without Drop %</div>
                     <div className={styles.badgeName}>
                       {interestingStats.stats.bravePlayer.player.profilePhoto ? (
                         <img 
@@ -374,8 +386,11 @@ export default function StatsPage() {
                       ) : null}
                       {interestingStats.stats.bravePlayer.player.name}
                     </div>
-                    <div className={styles.badgeValue}>{interestingStats.stats.bravePlayer.value} rounds played</div>
-                    {renderCurrentUserStat('bravePlayer', ' rounds played')}
+                    <div className={styles.badgeValue}>
+                      {Math.round(interestingStats.stats.bravePlayer.value)}% 
+                      ({interestingStats.stats.bravePlayer.playedRounds}/{interestingStats.stats.bravePlayer.totalRounds} rounds)
+                    </div>
+                    {renderCurrentUserStat('bravePlayer')}
                   </div>
                 </div>
               )}

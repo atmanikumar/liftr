@@ -8,16 +8,16 @@ import styles from './page.module.css';
 
 export default function GamePage({ params }) {
   const router = useRouter();
-  const { loadData, getGame, addRound, updateRound, addPlayerToGame, declareWinner, declareDraw, updateMaxPoints, declareAceWinners, players, games, sseConnected } = useGame();
-  const { user, loading: authLoading } = useAuth();
+  const { loadData, refreshPlayers, getGame, addRound, updateRound, addPlayerToGame, declareWinner, declareDraw, updateMaxPoints, declareAceWinners, players, games, sseConnected } = useGame();
+  const { user, loading: authLoading, isAdmin } = useAuth();
   
   const [game, setGame] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   
-  // Check if current user is the game creator
+  // Check if current user is the game creator or superAdmin
   const isGameCreator = () => {
-    return game && user && game.createdBy === user.id;
+    return game && user && (game.createdBy === user.id || isAdmin());
   };
   const [showAddRoundModal, setShowAddRoundModal] = useState(false);
   const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
@@ -82,10 +82,13 @@ export default function GamePage({ params }) {
       // Fetch game
       await fetchGame();
       
-      // Load players only once
+      // Load or refresh players
       if (!playersLoadedRef.current) {
-        loadData();
+        loadData(); // Initial load with SSE setup
         playersLoadedRef.current = true;
+      } else if (players.length === 0) {
+        // If players array is empty but we've "loaded" before, refresh it
+        await refreshPlayers();
       }
       
       setLoading(false);
@@ -655,7 +658,11 @@ export default function GamePage({ params }) {
                       <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                         <button 
                           className="btn btn-secondary"
-                          onClick={() => {
+                          onClick={async () => {
+                            // Refresh players if list is empty
+                            if (players.length === 0) {
+                              await refreshPlayers();
+                            }
                             setShowAddPlayerModal(true);
                             setAddPlayerError('');
                             setSelectedPlayerToAdd(null);
@@ -818,7 +825,11 @@ export default function GamePage({ params }) {
                 </button>
                 <button 
                   className="btn btn-secondary"
-                  onClick={() => {
+                  onClick={async () => {
+                    // Refresh players if list is empty
+                    if (players.length === 0) {
+                      await refreshPlayers();
+                    }
                     setShowAddPlayerModal(true);
                     setAddPlayerError('');
                     setSelectedPlayerToAdd(null);
@@ -1498,7 +1509,11 @@ export default function GamePage({ params }) {
               </div>
             )}
             
-            {availablePlayers.length === 0 ? (
+            {players.length === 0 ? (
+              <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px' }}>
+                Loading players...
+              </p>
+            ) : availablePlayers.length === 0 ? (
               <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px' }}>
                 All players are already in this game
               </p>

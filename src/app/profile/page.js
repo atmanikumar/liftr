@@ -19,6 +19,7 @@ function ProfileContent() {
   const [playerStats, setPlayerStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [allStats, setAllStats] = useState({}); // Store all stats for all game types
+  const [allStatsLoading, setAllStatsLoading] = useState(true);
   
   // Image crop states
   const [selectedImage, setSelectedImage] = useState(null);
@@ -59,6 +60,7 @@ function ProfileContent() {
     const fetchAllStats = async () => {
       if (!user && !viewUserId) return;
       
+      setAllStatsLoading(true);
       const targetUserId = viewUserId || user?.id;
       const statsData = {};
 
@@ -75,6 +77,8 @@ function ProfileContent() {
         setAllStats(statsData);
       } catch (error) {
         console.error('Failed to fetch stats:', error);
+      } finally {
+        setAllStatsLoading(false);
       }
     };
     
@@ -335,7 +339,17 @@ function ProfileContent() {
         )}
 
         {/* All Stats Section - Show rankings across all game types */}
-        {Object.keys(allStats).length > 0 && (
+        {allStatsLoading ? (
+          <div className={styles.allStatsSection}>
+            <h2 className={styles.subtitle}>📈 All Statistics</h2>
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <span className="material-icons" style={{ fontSize: '48px', color: 'var(--primary)', animation: 'spin 1s linear infinite' }}>
+                refresh
+              </span>
+              <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>Loading statistics...</p>
+            </div>
+          </div>
+        ) : Object.keys(allStats).length > 0 && (
           <div className={styles.allStatsSection}>
             <h2 className={styles.subtitle}>📈 All Statistics</h2>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '20px', fontSize: '14px' }}>
@@ -347,16 +361,16 @@ function ProfileContent() {
               
               const data = allStats[gameType];
               const allCategories = [
-                { key: 'roundWinChampion', title: 'Round Win Champion', subtitle: 'Most Round Wins', icon: '👑', suffix: ' round wins' },
-                { key: 'patientGuy', title: 'Patient Guy', subtitle: 'Most Drops', icon: '🧘', suffix: ' drops' },
-                { key: 'strategist', title: 'Strategist', subtitle: 'Most Finals Reached', icon: '♟️', suffix: ' finals' },
-                { key: 'finalHero', title: 'Final Hero', subtitle: 'Most Final Wins', icon: '🎖️', suffix: ' final wins' },
+                { key: 'roundWinChampion', title: 'Round Win Champion', subtitle: 'Round Win %', icon: '👑', isPercentage: true },
+                { key: 'patientGuy', title: 'Drop Specialist', subtitle: 'Drop Percentage', icon: '🧘', isPercentage: true },
+                { key: 'strategist', title: 'Strategist', subtitle: 'Final Reached %', icon: '♟️', isPercentage: true },
+                { key: 'finalHero', title: 'Final Hero', subtitle: 'Win Percentage', icon: '🎖️', isPercentage: true },
                 { key: 'warrior', title: 'Warrior', subtitle: 'Most Final Losses', icon: '⚔️', suffix: ' final losses' },
                 { key: 'consistent', title: 'Consistent', subtitle: 'Most Consecutive Finals', icon: '🎯', suffix: ' consecutive finals' },
                 { key: 'consecutiveWinner', title: 'On Fire!', subtitle: 'Most Consecutive Match Wins', icon: '🔥', suffix: ' match streak' },
                 { key: 'consecutiveRoundWinner', title: 'Round Dominator', subtitle: 'Most Consecutive Round Wins', icon: '⚡', suffix: ' round streak' },
-                { key: 'eightyClub', title: '80 Club', subtitle: 'Most 80s', icon: '💥', suffix: ' times' },
-                { key: 'bravePlayer', title: 'Brave Player', subtitle: 'Most Played Rounds', icon: '🦁', rummyOnly: true, suffix: ' rounds played' },
+                { key: 'eightyClub', title: '80 Club', subtitle: '80s Percentage', icon: '💥', isPercentage: true },
+                { key: 'bravePlayer', title: 'Brave Player', subtitle: 'Rounds Played Without Drop %', icon: '🦁', rummyOnly: true, isPercentage: true },
                 { key: 'earliestElimination', title: 'Early Exit', subtitle: 'Earliest Elimination', icon: '⏰', excludeRummy: true, prefix: 'Round ' },
                 { key: 'maxRoundsInSingleGame', title: 'Marathon Player', subtitle: 'Most Rounds in Single Game (Excluding Drops)', icon: '🏃', rummyOnly: true, suffix: ' rounds', hasGameLink: true },
               ];
@@ -399,20 +413,51 @@ function ProfileContent() {
                               <div className={styles.statRankTop}>
                                 <span className={styles.statRankLabel}>Top:</span>
                                 <span className={styles.statRankValue}>
-                                  {category.prefix || ''}{topStat.value}{category.suffix || ''}
+                                  {category.isPercentage ? (
+                                    <>
+                                      {Math.round(topStat.value)}%
+                                      {topStat.matchWins !== undefined && ` (${topStat.matchWins}/${topStat.gamesPlayed})`}
+                                      {topStat.finals !== undefined && ` (${topStat.finals}/${topStat.gamesPlayed})`}
+                                      {topStat.roundWins !== undefined && ` (${topStat.roundWins}/${topStat.totalRounds})`}
+                                      {topStat.totalDrops !== undefined && ` (${topStat.totalDrops}/${topStat.totalRounds})`}
+                                      {topStat.playedRounds !== undefined && ` (${topStat.playedRounds}/${topStat.totalRounds})`}
+                                      {topStat.scores80 !== undefined && ` (${topStat.scores80}/${topStat.gamesPlayed})`}
+                                    </>
+                                  ) : (
+                                    `${category.prefix || ''}${topStat.value}${category.suffix || ''}`
+                                  )}
                                 </span>
                               </div>
-                              {userValue !== null && userValue !== undefined && userValue > 0 && (
-                                <div className={styles.statRankYours}>
-                                  <span className={styles.statRankLabel}>Yours:</span>
-                                  <span className={styles.statRankValue}>
-                                    {category.prefix || ''}{userValue}{category.suffix || ''}
-                                  </span>
-                                </div>
+                              {userValue !== null && userValue !== undefined && (
+                                category.isPercentage ? (
+                                  typeof userValue === 'object' && userValue.value > 0 && (
+                                    <div className={styles.statRankYours}>
+                                      <span className={styles.statRankLabel}>Yours:</span>
+                                      <span className={styles.statRankValue}>
+                                        {Math.round(userValue.value)}%
+                                        {userValue.matchWins !== undefined && ` (${userValue.matchWins}/${userValue.gamesPlayed})`}
+                                        {userValue.finals !== undefined && ` (${userValue.finals}/${userValue.gamesPlayed})`}
+                                        {userValue.roundWins !== undefined && ` (${userValue.roundWins}/${userValue.totalRounds})`}
+                                        {userValue.totalDrops !== undefined && ` (${userValue.totalDrops}/${userValue.totalRounds})`}
+                                        {userValue.playedRounds !== undefined && ` (${userValue.playedRounds}/${userValue.totalRounds})`}
+                                        {userValue.scores80 !== undefined && ` (${userValue.scores80}/${userValue.gamesPlayed})`}
+                                      </span>
+                                    </div>
+                                  )
+                                ) : (
+                                  userValue > 0 && (
+                                    <div className={styles.statRankYours}>
+                                      <span className={styles.statRankLabel}>Yours:</span>
+                                      <span className={styles.statRankValue}>
+                                        {category.prefix || ''}{userValue}{category.suffix || ''}
+                                      </span>
+                                    </div>
+                                  )
+                                )
                               )}
                             </div>
                           </div>
-                        </div>
+                    </div>
                       );
                     })}
                   </div>
