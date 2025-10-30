@@ -22,6 +22,8 @@ export default function Home() {
   const [playersLoading, setPlayersLoading] = useState(false);
   const [creatingGame, setCreatingGame] = useState(false);
   const [showWprInfo, setShowWprInfo] = useState(false);
+  const [momentumPlayer, setMomentumPlayer] = useState(null);
+  const [momentumLoading, setMomentumLoading] = useState(false);
   
   // State for in-progress games with profile photos
   const [inProgressGames, setInProgressGames] = useState([]);
@@ -46,11 +48,13 @@ export default function Home() {
     if (!user) return;
     
     setStatsLoading(true);
+    setMomentumLoading(true);
     try {
-      // Fetch stats and matches for the selected game type only
-      const [statsResponse, matchesResponse] = await Promise.all([
+      // Fetch stats, matches, and momentum player for the selected game type
+      const [statsResponse, matchesResponse, momentumResponse] = await Promise.all([
         fetch(`/api/stats?gameType=${filterGameType}`),
-        fetch(`/api/recent-matches?gameType=${filterGameType}&limit=10&status=completed`)
+        fetch(`/api/recent-matches?gameType=${filterGameType}&limit=10&status=completed`),
+        fetch(`/api/momentum-player?gameType=${filterGameType}`)
       ]);
       
       if (statsResponse.ok) {
@@ -62,10 +66,16 @@ export default function Home() {
         const matchesData = await matchesResponse.json();
         setRecentMatches(matchesData.matches || []);
       }
+      
+      if (momentumResponse.ok) {
+        const momentumData = await momentumResponse.json();
+        setMomentumPlayer(momentumData.momentumPlayer);
+      }
     } catch (error) {
-      console.error('[Home] Failed to fetch game type data:', error);
+      // Silent fail
     } finally {
       setStatsLoading(false);
+      setMomentumLoading(false);
     }
   }, [user, filterGameType]);
 
@@ -204,9 +214,6 @@ export default function Home() {
   };
 
   const handleCreateGame = async () => {
-    console.log('[Home handleCreateGame] Starting game creation...');
-    console.log('[Home handleCreateGame] User:', { id: user?.id, username: user?.username, role: user?.role });
-    
     // Chess requires exactly 2 players
     if (gameType === 'chess') {
       if (selectedPlayers.length !== 2) {
@@ -222,12 +229,9 @@ export default function Home() {
 
     // Validate user is logged in
     if (!user || !user.id) {
-      console.error('[Home handleCreateGame] No user logged in');
       alert('You must be logged in to create a game');
       return;
     }
-
-    console.log('[Home handleCreateGame] Calling createGame with userId:', user.id);
 
     setCreatingGame(true);
     
@@ -238,21 +242,11 @@ export default function Home() {
       // Chess and Ace games don't have max points
       const points = (gameType === 'chess' || gameType === 'ace') ? null : parseInt(maxPoints);
       
-      console.log('[Home handleCreateGame] Creating game with:', {
-        gameType,
-        selectedPlayers,
-        points,
-        playerCount: players.length,
-        title: gameTitle
-      });
-      
       const game = await createGame(gameType, selectedPlayers, points, players, user.id, gameTitle);
       
       if (!game || !game.id) {
         throw new Error('Game creation failed - no game object returned');
       }
-      
-      console.log('[Home handleCreateGame] Game created successfully:', game.id);
       
       // Reset form state
       setSelectedPlayers([]);
@@ -267,7 +261,7 @@ export default function Home() {
         router.push(`/game/${game.id}`);
       }, 100);
     } catch (error) {
-      console.error('[Home handleCreateGame] Failed to create game:', error);
+      console.error('Failed to create game:', error);
       alert('Failed to create game: ' + error.message);
     } finally {
       setCreatingGame(false);
@@ -406,6 +400,142 @@ export default function Home() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Momentum Player Section - Compact */}
+        {!momentumLoading && momentumPlayer && (
+          <div className="card" style={{ 
+            background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.08) 0%, rgba(239, 68, 68, 0.08) 100%)', 
+            border: '1px solid #fb923c',
+            padding: '1.5rem',
+            marginTop: '2rem',
+            marginBottom: '2rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+              {/* Player Photo/Avatar - Smaller */}
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                {momentumPlayer.profilePhoto ? (
+                  <img 
+                    src={momentumPlayer.profilePhoto} 
+                    alt={momentumPlayer.name}
+                    style={{
+                      width: '60px',
+                      height: '60px',
+                      borderRadius: '50%',
+                      border: '2px solid #fb923c',
+                      objectFit: 'cover',
+                      boxShadow: '0 2px 8px rgba(251, 146, 60, 0.3)'
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    width: '60px',
+                    height: '60px',
+                    borderRadius: '50%',
+                    border: '2px solid #fb923c',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '30px',
+                    background: 'var(--card-bg)',
+                    boxShadow: '0 2px 8px rgba(251, 146, 60, 0.3)'
+                  }}>
+                    👤
+                  </div>
+                )}
+                <div style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  right: '-4px',
+                  background: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)',
+                  borderRadius: '50%',
+                  padding: '4px',
+                  fontSize: '14px',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.3)',
+                  lineHeight: 1
+                }}>
+                  🔥
+                </div>
+              </div>
+              
+              {/* Player Info - Compact */}
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                  <h3 style={{ 
+                    fontSize: '1.25rem', 
+                    fontWeight: 'bold', 
+                    color: '#fb923c',
+                    margin: 0
+                  }}>
+                    {momentumPlayer.name}
+                  </h3>
+                  <span style={{ 
+                    fontSize: '0.7rem', 
+                    color: 'var(--text-secondary)',
+                    fontStyle: 'italic'
+                  }}>
+                    Player with Winning Momentum
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                  Based on last 10 {filterGameType} games
+                </div>
+              </div>
+              
+              {/* Compact Stats */}
+              <div style={{ 
+                display: 'flex', 
+                gap: '1.5rem',
+                alignItems: 'center',
+                flexWrap: 'wrap'
+              }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#22c55e' }}>
+                    {momentumPlayer.wins}/{momentumPlayer.gamesPlayed}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                    Wins
+                  </div>
+                </div>
+                
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                    {momentumPlayer.winRate}%
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                    Win Rate
+                  </div>
+                </div>
+                
+                {filterGameType === 'Rummy' && momentumPlayer.finals !== undefined && (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#a855f7' }}>
+                      {momentumPlayer.finals}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                      Finals
+                    </div>
+                  </div>
+                )}
+                
+                {/* Momentum Score Badge - Very Subtle */}
+                <div style={{ 
+                  padding: '0.6rem 1.2rem',
+                  background: 'rgba(251, 146, 60, 0.08)',
+                  border: '1px solid rgba(251, 146, 60, 0.2)',
+                  borderRadius: '10px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginBottom: '0.15rem' }}>
+                    Score
+                  </div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: '600', lineHeight: 1, color: '#fb923c' }}>
+                    {momentumPlayer.momentumScore}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

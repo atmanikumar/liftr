@@ -363,16 +363,6 @@ export async function GET(request) {
       player.maxConsecutiveFinals = maxStreak;
       player.maxConsecutiveFinalsGameIds = maxStreakGames;
       
-      // Debug logging for players with significant streaks
-      if (maxStreak >= 5 && gameType.toLowerCase() === 'rummy') {
-        console.log(`[Consecutive Finals] ${player.name}: ${maxStreak} consecutive finals`);
-        console.log(`  Game IDs in streak:`, maxStreakGames);
-        console.log(`  Total games played:`, player.gamesPlayed);
-        console.log(`  Total finals reached:`, player.finals);
-        console.log(`  Full game history:`, sortedHistory.map((g, i) => 
-          `${i + 1}. Game ${g.gameId.substring(0, 8)} - ${g.inFinal ? '✓ Final' : '✗ No Final'} - ${new Date(g.date).toLocaleDateString()}`
-        ).join('\n    '));
-      }
     });
     
     // Find top players for each category

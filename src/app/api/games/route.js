@@ -86,13 +86,6 @@ export async function POST(request) {
   try {
     const game = await request.json();
     
-    console.log('[API /games POST] Received game:', {
-      id: game.id,
-      type: game.type,
-      createdBy: game.createdBy,
-      status: game.status
-    });
-    
     if (!game.id || !game.type) {
       console.error('[API /games POST] Missing game ID or type');
       return NextResponse.json({ success: false, error: 'Game ID and type required' }, { status: 400 });
@@ -100,8 +93,7 @@ export async function POST(request) {
     
     // Verify user is authenticated and is the game creator
     const cookieStore = cookies();
-    const token = cookieStore.get('auth-token'); // Changed from 'token' to 'auth-token'
-    console.log('[API /games POST] Auth token:', token ? 'Found' : 'Not found');
+    const token = cookieStore.get('auth-token');
     
     if (!token) {
       console.error('[API /games POST] No auth-token found in cookies');

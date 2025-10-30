@@ -114,7 +114,6 @@ export default function GamePage({ params }) {
                           game.winner !== gameData.winner ||
                           game.maxPoints !== gameData.maxPoints;
         if (hasChanged) {
-          console.log('[Game Page] Updating game from context (SSE or local action)');
           setGame(gameData);
         }
       }

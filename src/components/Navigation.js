@@ -114,6 +114,12 @@ export default function Navigation() {
               Home
             </Link>
             <Link 
+              href="/profile" 
+              className={pathname === '/profile' ? styles.active : ''}
+            >
+              Profile
+            </Link>
+            <Link 
               href="/stats" 
               className={pathname === '/stats' ? styles.active : ''}
             >
@@ -133,12 +139,6 @@ export default function Navigation() {
                 Users
               </Link>
             )}
-            <Link 
-              href="/profile" 
-              className={pathname === '/profile' ? styles.active : ''}
-            >
-              Profile
-            </Link>
             {showInstallButton && (
               <button 
                 onClick={handleInstallClick}
@@ -219,6 +219,14 @@ export default function Navigation() {
             Home
           </Link>
           <Link 
+            href="/profile" 
+            className={pathname === '/profile' ? styles.active : ''}
+            onClick={handleLinkClick}
+          >
+            <span className="material-icons">person</span>
+            Profile
+          </Link>
+          <Link 
             href="/stats" 
             className={pathname === '/stats' ? styles.active : ''}
             onClick={handleLinkClick}
@@ -244,14 +252,6 @@ export default function Navigation() {
               Users
             </Link>
           )}
-          <Link 
-            href="/profile" 
-            className={pathname === '/profile' ? styles.active : ''}
-            onClick={handleLinkClick}
-          >
-            <span className="material-icons">person</span>
-            Profile
-          </Link>
           {showInstallButton && (
             <button 
               onClick={() => {

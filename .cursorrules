@@ -11,10 +11,18 @@ This is a Next.js card game tracking application with Turso SQLite database for 
 - CONTRIBUTING.md
 - LICENSE.md
 - Any .md documentation files
+- Any instruction/guide MD files (e.g., SETUP.md, GUIDE.md, INSTRUCTIONS.md, HOW_TO.md, etc.)
 - .txt summary files
+- .sh test script files
 
 ### Exception:
 Only create documentation files if the user explicitly says "create a README" or similar.
+
+### Important:
+- ❌ NEVER create instruction MD files after implementing features
+- ❌ NEVER create guide files to document changes
+- ❌ NEVER create setup guide files
+- ✅ Only update code and existing configuration files
 
 ## 🔐 Security Guidelines (Auto-Check Every Response)
 
