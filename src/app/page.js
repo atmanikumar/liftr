@@ -21,6 +21,7 @@ export default function Home() {
   const [players, setPlayers] = useState([]);
   const [playersLoading, setPlayersLoading] = useState(false);
   const [creatingGame, setCreatingGame] = useState(false);
+  const [showWprInfo, setShowWprInfo] = useState(false);
   
   // State for in-progress games with profile photos
   const [inProgressGames, setInProgressGames] = useState([]);
@@ -410,7 +411,7 @@ export default function Home() {
         )}
 
         <div className="card">
-          <h2 className={styles.sectionTitle}>Top 10 Players</h2>
+          <h2 className={styles.sectionTitle}>Top 10 Players by Rating</h2>
           
           {/* Game Type Tabs */}
           <div className={styles.tabsContainer}>
@@ -463,7 +464,27 @@ export default function Home() {
                     {filterGameType === 'Rummy' && <th style={{ textAlign: 'center' }}>Finals</th>}
                     {filterGameType === 'Chess' && <th style={{ textAlign: 'center' }}>Draws</th>}
                     <th style={{ textAlign: 'center' }}>Wins</th>
-                    <th style={{ textAlign: 'center' }}>Win %</th>
+                    <th style={{ textAlign: 'center', position: 'relative' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        <span>Rating</span>
+                        <button
+                          onClick={() => setShowWprInfo(!showWprInfo)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            color: 'var(--primary)',
+                            fontSize: '16px'
+                          }}
+                          title="How is rating calculated?"
+                        >
+                          ℹ️
+                        </button>
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -508,11 +529,21 @@ export default function Home() {
                       <td style={{ textAlign: 'center' }}><strong>{player.wins}</strong></td>
                       <td style={{ textAlign: 'center' }}>
                         <span className={`badge ${
-                          player.winPercentage > 30 ? 'badge-success' : 
-                          player.winPercentage >= 15 ? 'badge-warning' : 
+                          player.wpr >= 60 ? 'badge-success' : 
+                          player.wpr >= 50 ? 'badge-success' : 
+                          player.wpr >= 30 ? 'badge-warning' : 
                           'badge-danger'
-                        }`}>
-                          {player.winPercentage}%
+                        }`} style={{
+                          background: player.wpr >= 60 ? '#22c55e' : 
+                                     player.wpr >= 50 ? '#86efac' : 
+                                     player.wpr >= 30 ? '#fb923c' :
+                                     undefined,
+                          color: player.wpr >= 60 ? '#ffffff' : 
+                                 player.wpr >= 50 ? '#065f46' :
+                                 player.wpr >= 30 ? '#7c2d12' :
+                                 undefined
+                        }}>
+                          {player.wpr || 0}
                         </span>
                       </td>
                     </tr>
@@ -757,6 +788,181 @@ export default function Home() {
           )}
         </div>
       </div>
+
+      {/* WPR Info Modal */}
+      {showWprInfo && (
+        <div className="modal-overlay" onClick={() => setShowWprInfo(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0 }}>🎯 Player Rating System</h2>
+              <button
+                onClick={() => setShowWprInfo(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: 'var(--text-secondary)',
+                  padding: '0',
+                  lineHeight: '1'
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                Player ratings are calculated differently based on game type:
+              </p>
+              
+              {/* Rummy Rating */}
+              <div style={{ 
+                background: 'var(--bg-secondary)', 
+                padding: '16px', 
+                borderRadius: '8px',
+                marginBottom: '16px'
+              }}>
+                <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
+                  <strong style={{ fontSize: '16px' }}>🃏 Rummy - Weighted Performance Rating (WPR)</strong><br/>
+                  <div style={{ fontFamily: 'monospace', fontSize: '13px', marginTop: '8px' }}>
+                    Rating = (Wins × 100 + Finals × 25 + Brave Bonus + Round Wins × 2) / Total Games
+                  </div>
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'flex-start', 
+                  gap: '12px',
+                  padding: '12px',
+                  background: 'var(--bg-secondary)',
+                  borderRadius: '6px'
+                }}>
+                  <span style={{ fontSize: '20px' }}>🏆</span>
+                  <div style={{ flex: 1 }}>
+                    <strong>Wins × 100</strong>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                      Winning a game is the most valuable achievement
+                    </p>
+                  </div>
+                </div>
+                
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'flex-start', 
+                  gap: '12px',
+                  padding: '12px',
+                  background: 'var(--bg-secondary)',
+                  borderRadius: '6px'
+                }}>
+                  <span style={{ fontSize: '20px' }}>🎖️</span>
+                  <div style={{ flex: 1 }}>
+                    <strong>Finals × 25</strong>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                      Reaching the final round shows consistency
+                    </p>
+                  </div>
+                </div>
+                
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'flex-start', 
+                  gap: '12px',
+                  padding: '12px',
+                  background: 'var(--bg-secondary)',
+                  borderRadius: '6px'
+                }}>
+                  <span style={{ fontSize: '20px' }}>🦁</span>
+                  <div style={{ flex: 1 }}>
+                    <strong>Brave Bonus: (1 - Drop%) × 50</strong>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                      Rewards players who play more hands instead of dropping
+                    </p>
+                  </div>
+                </div>
+                
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'flex-start', 
+                  gap: '12px',
+                  padding: '12px',
+                  background: 'var(--bg-secondary)',
+                  borderRadius: '6px'
+                }}>
+                  <span style={{ fontSize: '20px' }}>⚡</span>
+                  <div style={{ flex: 1 }}>
+                    <strong>Round Wins × 2</strong>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                      Winning individual rounds (0 points) shows skill
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div style={{ 
+                marginTop: '20px', 
+                padding: '16px', 
+                background: 'rgba(99, 102, 241, 0.1)', 
+                borderRadius: '8px',
+                borderLeft: '4px solid var(--primary)'
+              }}>
+                <strong style={{ color: 'var(--primary)' }}>Rating Scale:</strong>
+                <div style={{ marginTop: '8px', fontSize: '14px', lineHeight: '1.6' }}>
+                  <div>🔥 <strong>60+</strong> - Strong Green (Elite)</div>
+                  <div>🌟 <strong>50-59</strong> - Light Green (Very Good)</div>
+                  <div>🟠 <strong>30-49</strong> - Orange (Good)</div>
+                  <div>🔴 <strong>&lt;30</strong> - Red (Developing)</div>
+                </div>
+              </div>
+              
+              {/* Chess and Ace Ratings */}
+              <div style={{ 
+                background: 'var(--bg-secondary)', 
+                padding: '16px', 
+                borderRadius: '8px',
+                marginBottom: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
+                  <strong style={{ fontSize: '16px' }}>♟️ Chess - Win-Based Rating</strong><br/>
+                  <div style={{ fontFamily: 'monospace', fontSize: '13px', marginTop: '8px' }}>
+                    Rating = (Wins × 100 + Draws × 50) / Total Games
+                  </div>
+                </div>
+                
+                <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
+                  <strong style={{ fontSize: '16px' }}>🎯 Ace - Simple Win Rate</strong><br/>
+                  <div style={{ fontFamily: 'monospace', fontSize: '13px', marginTop: '8px' }}>
+                    Rating = (Wins × 100) / Total Games
+                  </div>
+                </div>
+              </div>
+              
+              <p style={{ 
+                marginTop: '16px', 
+                fontSize: '13px', 
+                color: 'var(--text-secondary)',
+                fontStyle: 'italic'
+              }}>
+                * Higher rating means better performance. Rummy uses a comprehensive formula that rewards wins, consistency, bravery, and skill. Chess and Ace use simpler win-based calculations.
+              </p>
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+              <button 
+                className="btn btn-primary" 
+                onClick={() => setShowWprInfo(false)}
+              >
+                Got it!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showNewGameModal && (
         <div className="modal-overlay" onClick={() => setShowNewGameModal(false)}>
