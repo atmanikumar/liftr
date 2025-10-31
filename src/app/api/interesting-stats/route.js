@@ -60,6 +60,9 @@ export async function GET(request) {
         maxRoundsInSingleGameId: null, // Track which game
         minRoundsToWin: null, // Minimum rounds to win a game
         minRoundsToWinGameId: null, // Game with least rounds to win
+        mustPlayRounds: 0, // Rounds where forced to play (after 3 drops)
+        mustPlayWins: 0, // Rounds won when forced to play
+        mustPlayGameIds: [], // Games where they had must-play situations
         consecutiveFinals: 0, // Consecutive finals streak
         currentFinalsStreak: 0, // Current finals streak
         maxConsecutiveFinals: 0, // Max consecutive finals
@@ -210,6 +213,44 @@ export async function GET(request) {
               if (!isDropped && !isDoubleDropped) {
                 stats.playedRounds++;
                 playerRoundsInThisGame[playerId]++;
+                
+                // Check if this is a must-play/pressure situation
+                // Condition 1: 3 consecutive drops before this round
+                const getConsecutiveDropsBeforeRound = () => {
+                  let consecutiveDrops = 0;
+                  for (let i = roundIndex - 1; i >= 0; i--) {
+                    const prevRound = game.rounds[i];
+                    if ((prevRound.drops && prevRound.drops[playerId]) || 
+                        (prevRound.doubleDrops && prevRound.doubleDrops[playerId])) {
+                      consecutiveDrops++;
+                    } else {
+                      break;
+                    }
+                  }
+                  return consecutiveDrops;
+                };
+                
+                const consecutiveDrops = getConsecutiveDropsBeforeRound();
+                const mustPlayAfterDrops = consecutiveDrops >= 3;
+                
+                // Condition 2: Player has less than 20 points difference from max points
+                const currentPoints = playerPointsAtRound[playerId] || 0;
+                const maxPoints = game.maxPoints || 120;
+                const pointsDiff = maxPoints - currentPoints;
+                const underPressure = pointsDiff < 20;
+                
+                // Must-play situation = either condition met
+                if (mustPlayAfterDrops || underPressure) {
+                  stats.mustPlayRounds++;
+                  if (!stats.mustPlayGameIds.includes(game.id)) {
+                    stats.mustPlayGameIds.push(game.id);
+                  }
+                  
+                  // Check if they won this round (clutch win = 0 points!)
+                  if (round.winners && round.winners[playerId]) {
+                    stats.mustPlayWins++;
+                  }
+                }
               }
             }
             
@@ -398,6 +439,7 @@ export async function GET(request) {
       player.dropPercentage = player.totalRounds > 0 ? (player.totalDrops / player.totalRounds) * 100 : 0;
       player.bravePlayerPercentage = player.totalRounds > 0 ? (player.playedRounds / player.totalRounds) * 100 : 0;
       player.scores80Percentage = player.gamesPlayed > 0 ? (player.scores80 / player.gamesPlayed) * 100 : 0;
+      player.clutchPercentage = player.mustPlayRounds > 0 ? (player.mustPlayWins / player.mustPlayRounds) * 100 : 0;
     });
     
     // Special handling for consecutiveRoundWinner to include gameId
@@ -426,12 +468,12 @@ export async function GET(request) {
       return result;
     })();
     
-    // Special handling for minRoundsToWin (find minimum, Rummy only)
-    const minRoundsToWinStat = (() => {
-      const filtered = playerList.filter(p => p.gamesPlayed >= 1 && p.minRoundsToWin !== null);
+    // Clutch Player stat - must-play win percentage (Rummy only)
+    const clutchPlayerStat = (() => {
+      const filtered = playerList.filter(p => p.mustPlayRounds >= 3 && p.clutchPercentage > 0);
       if (filtered.length === 0) return null;
       
-      const sorted = filtered.sort((a, b) => a.minRoundsToWin - b.minRoundsToWin);
+      const sorted = filtered.sort((a, b) => b.clutchPercentage - a.clutchPercentage);
       const topPlayer = sorted[0];
       
       return {
@@ -440,8 +482,9 @@ export async function GET(request) {
           name: topPlayer.name,
           profilePhoto: topPlayer.profilePhoto
         },
-        value: topPlayer.minRoundsToWin,
-        gameId: topPlayer.minRoundsToWinGameId || null
+        value: topPlayer.clutchPercentage,
+        mustPlayWins: topPlayer.mustPlayWins,
+        mustPlayRounds: topPlayer.mustPlayRounds
       };
     })();
     
@@ -611,7 +654,7 @@ export async function GET(request) {
       bravePlayer: bravePlayerPercentageStat, // Percentage of rounds played without dropping
       earliestElimination: earliestEliminationStat, // Earliest elimination
       maxRoundsInSingleGame: maxRoundsInSingleGameStat, // Most rounds played in a single game (with game link)
-      minRoundsToWin: minRoundsToWinStat // Least rounds to win a game (Rummy only, with game link)
+      clutchPlayer: clutchPlayerStat // Must-play win percentage (Rummy only - wins when forced to play after 3 drops)
     };
     
     // Get current user's stats if userId is provided
@@ -660,7 +703,11 @@ export async function GET(request) {
         },
         earliestElimination: userStats.earliestElimination,
         maxRoundsInSingleGame: userStats.maxRoundsInSingleGame,
-        minRoundsToWin: userStats.minRoundsToWin
+        clutchPlayer: {
+          value: userStats.clutchPercentage,
+          mustPlayWins: userStats.mustPlayWins,
+          mustPlayRounds: userStats.mustPlayRounds
+        }
       };
       currentUserGameIds = {
         patientGuy: userStats.dropGameIds,
@@ -675,7 +722,7 @@ export async function GET(request) {
         bravePlayer: userStats.matchWinGameIds, // Games where they played rounds
         earliestElimination: userStats.earliestEliminationGameId ? [userStats.earliestEliminationGameId] : [],
         maxRoundsInSingleGame: userStats.maxRoundsInSingleGameId ? [userStats.maxRoundsInSingleGameId] : [],
-        minRoundsToWin: userStats.minRoundsToWinGameId ? [userStats.minRoundsToWinGameId] : [] // Single game with least rounds to win
+        clutchPlayer: userStats.mustPlayGameIds // Games where they had must-play situations
       };
     }
     
