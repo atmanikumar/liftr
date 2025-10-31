@@ -35,71 +35,21 @@ function ProfileContent() {
   const imgRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Helper function to get cookie
-  const getCookie = (name) => {
-    if (typeof document === 'undefined') return null;
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
-  };
-
-  // Helper function to set cookie
-  const setCookie = (name, value, hours = 24) => {
-    if (typeof document === 'undefined') return;
-    const date = new Date();
-    date.setTime(date.getTime() + (hours * 60 * 60 * 1000));
-    const expires = `expires=${date.toUTCString()}`;
-    document.cookie = `${name}=${value};${expires};path=/;SameSite=Strict`;
-  };
-
-  // Fetch player insights with 24-hour cache
+  // Fetch player insights (no cache - always fresh)
   useEffect(() => {
     const fetchInsights = async () => {
       if (!user && !viewUserId) return;
       
       const targetUserId = viewUserId || user?.id;
-      const cacheKey = `insights_${targetUserId}_${selectedGameType}`;
       
-      // Check cookie cache
-      const cachedData = getCookie(cacheKey);
-      if (cachedData) {
-        try {
-          const parsed = JSON.parse(decodeURIComponent(cachedData));
-          const cachedTime = new Date(parsed.cachedAt).getTime();
-          const now = new Date().getTime();
-          const hoursSinceCached = (now - cachedTime) / (1000 * 60 * 60);
-          
-          // If cache is less than 24 hours old, use it
-          if (hoursSinceCached < 24) {
-            console.log(`[Insights Cache] Using cached data (${Math.round(hoursSinceCached)}h old)`);
-            setInsights(parsed.data);
-            setInsightsLoading(false);
-            return;
-          } else {
-            console.log('[Insights Cache] Cache expired, fetching fresh data');
-          }
-        } catch (e) {
-          console.log('[Insights Cache] Invalid cache, fetching fresh data');
-        }
-      }
-      
-      // No valid cache, fetch from API
       setInsightsLoading(true);
       try {
-        console.log('[Insights API] Fetching fresh insights from Gemini AI...');
+        console.log('[Insights API] Fetching fresh Tamil insights...');
         const response = await fetch(`/api/player-insights/${targetUserId}?gameType=${selectedGameType}`);
         if (response.ok) {
           const data = await response.json();
           setInsights(data);
-          
-          // Cache the result for 24 hours
-          const cacheData = {
-            data: data,
-            cachedAt: new Date().toISOString()
-          };
-          setCookie(cacheKey, encodeURIComponent(JSON.stringify(cacheData)), 24);
-          console.log('[Insights Cache] Stored fresh data in cache (24h expiry)');
+          console.log('[Insights API] ✓ Fresh insights loaded');
         }
       } catch (error) {
         console.error('[Insights API] Error:', error);
@@ -404,10 +354,10 @@ function ProfileContent() {
                 📊 Gameplay Summary - {selectedGameType}
               </h3>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                {insights.generatedBy === 'gemini' && (
+                {insights.generatedBy === 'tamil-rule-based' && (
                   <span style={{
                     padding: '0.35rem 0.85rem',
-                    background: 'linear-gradient(135deg, #4285f4 0%, #34a853 100%)',
+                    background: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 100%)',
                     color: 'white',
                     borderRadius: '6px',
                     fontSize: '0.7rem',
@@ -416,33 +366,12 @@ function ProfileContent() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '0.35rem',
-                    boxShadow: '0 2px 4px rgba(66, 133, 244, 0.3)'
+                    boxShadow: '0 2px 4px rgba(255, 107, 53, 0.3)'
                   }}>
-                    <span style={{ fontSize: '0.9rem' }}>✨</span>
-                    GEMINI AI
+                    <span style={{ fontSize: '0.9rem' }}>🔥</span>
+                    TAMIL INSIGHTS
                   </span>
                 )}
-                {insights.cachedAt && (() => {
-                  const cachedTime = new Date(insights.cachedAt);
-                  const now = new Date();
-                  const hoursSince = Math.round((now - cachedTime) / (1000 * 60 * 60));
-                  return (
-                    <span style={{
-                      padding: '0.35rem 0.75rem',
-                      background: 'rgba(156, 163, 175, 0.1)',
-                      color: 'var(--text-secondary)',
-                      borderRadius: '6px',
-                      fontSize: '0.65rem',
-                      fontWeight: 500,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.35rem'
-                    }}>
-                      <span style={{ fontSize: '0.8rem' }}>💾</span>
-                      Cached {hoursSince}h ago
-                    </span>
-                  );
-                })()}
               </div>
             </div>
             

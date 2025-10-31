@@ -7,12 +7,14 @@ function calculateWPR(stats, gameType) {
   
   if (gameType.toLowerCase() === 'rummy') {
     // Rummy: WPR = (Wins × 100 + Finals × 25 + Brave Bonus + RoundWins × 2) / TotalGames
+    // Cap at 100 to keep it on a 0-100 scale
     const winsScore = stats.wins * 100;
     const finalsScore = stats.finals * 25;
     const braveBonus = (1 - (stats.dropRate / 100)) * 50;
     const roundWinsScore = stats.roundWins * 2;
     
-    return Math.round((winsScore + finalsScore + braveBonus + roundWinsScore) / stats.totalGames);
+    const rating = (winsScore + finalsScore + braveBonus + roundWinsScore) / stats.totalGames;
+    return Math.min(100, Math.round(rating));
   } else if (gameType.toLowerCase() === 'chess') {
     // Chess: Rating = (Wins × 100 + Draws × 50) / TotalGames
     const winsScore = stats.wins * 100;

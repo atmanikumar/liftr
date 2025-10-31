@@ -137,12 +137,14 @@ export async function GET(request) {
         if (gameType.toLowerCase() === 'rummy') {
           // Rummy: Weighted Performance Rating (WPR)
           // WPR = (Wins × 100 + Finals × 25 + (1 - Drop%) × 50 + RoundWins × 2) / TotalGames
+          // Cap at 100 to keep it on a 0-100 scale
           const winsScore = player.wins * 100;
           const finalsScore = player.finals * 25;
           const braveBonus = (1 - (dropPercentage / 100)) * 50;
           const roundWinsScore = roundWins * 2;
           
-          wpr = Math.round((winsScore + finalsScore + braveBonus + roundWinsScore) / player.totalGames);
+          const rating = (winsScore + finalsScore + braveBonus + roundWinsScore) / player.totalGames;
+          wpr = Math.min(100, Math.round(rating));
         } else if (gameType.toLowerCase() === 'chess') {
           // Chess: Win-based with draw bonus
           // Rating = (Wins × 100 + Draws × 50) / TotalGames
