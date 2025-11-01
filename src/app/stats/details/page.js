@@ -359,11 +359,16 @@ function StatDetailsContent() {
                       </div>
                     )}
                     
-                    {game.status === 'completed' && game.winner && (
+                    {game.status === 'completed' && (game.winner || (game.winners && game.winners.length > 0)) && (
                       <div className={styles.gameWinner}>
-                        <span className={styles.winnerLabel}>🏆 Winner:</span>
+                        <span className={styles.winnerLabel}>
+                          🏆 {game.winners && game.winners.length > 1 ? 'Winners:' : 'Winner:'}
+                        </span>
                         <span className={styles.winnerName}>
-                          {game.players.find(p => p.id === game.winner)?.name}
+                          {game.winners && game.winners.length > 1 
+                            ? game.winners.map(id => game.players.find(p => p.id === id)?.name).join(', ')
+                            : game.players.find(p => p.id === (game.winners?.[0] || game.winner))?.name
+                          }
                         </span>
                       </div>
                     )}

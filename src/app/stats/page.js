@@ -46,7 +46,7 @@ export default function StatsPage() {
             {stat.totalDrops !== undefined && ` (${stat.totalDrops}/${stat.totalRounds})`}
             {stat.playedRounds !== undefined && ` (${stat.playedRounds}/${stat.totalRounds})`}
             {stat.scores80 !== undefined && ` (${stat.scores80}/${stat.gamesPlayed})`}
-            {stat.mustPlayWins !== undefined && ` (${stat.mustPlayWins} wins / ${stat.mustPlayRounds} must-play)`}
+            {stat.mustPlayWins !== undefined && ` (${stat.mustPlayWins} survived / ${stat.mustPlayRounds} must-play)`}
           </span>
         </div>
       );
@@ -823,7 +823,7 @@ export default function StatsPage() {
                   <div className={styles.badgeIcon}>💪</div>
                   <div className={styles.badgeContent}>
                     <div className={styles.badgeTitle}>Clutch Player</div>
-                    <div className={styles.badgeSubtitle}>Must-Play Round Win %</div>
+                    <div className={styles.badgeSubtitle}>Must-Play Survival %</div>
                     <div className={styles.badgeName}>
                       {interestingStats.stats.clutchPlayer.player.profilePhoto ? (
                         <img 
@@ -836,7 +836,7 @@ export default function StatsPage() {
                     </div>
                     <div className={styles.badgeValue}>
                       {Math.round(interestingStats.stats.clutchPlayer.value)}% 
-                      ({interestingStats.stats.clutchPlayer.mustPlayWins} wins / {interestingStats.stats.clutchPlayer.mustPlayRounds} must-play)
+                      ({interestingStats.stats.clutchPlayer.mustPlayWins} survived / {interestingStats.stats.clutchPlayer.mustPlayRounds} must-play)
                     </div>
                     {renderCurrentUserStat('clutchPlayer')}
                   </div>

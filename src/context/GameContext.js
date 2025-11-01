@@ -515,9 +515,9 @@ export function GameProvider({ children }) {
     return { success: true };
   };
 
-  const addRound = (gameId, roundScores, dropInfo = {}, winnerInfo = {}, doubleDropInfo = {}) => {
+  const addRound = async (gameId, roundScores, dropInfo = {}, winnerInfo = {}, doubleDropInfo = {}, fullInfo = {}, mustPlayInfo = {}) => {
     const game = games.find(g => g.id === gameId);
-    if (!game) return;
+    if (!game) return Promise.reject(new Error('Game not found'));
     
     const isAce = game.type.toLowerCase() === 'ace';
     
@@ -529,6 +529,8 @@ export function GameProvider({ children }) {
       drops: dropInfo, // Track which players dropped in this round (20 points)
       doubleDrops: doubleDropInfo, // Track which players double dropped (40 points)
       winners: winnerInfo, // Track which players won (got 0 points) in this round
+      full: fullInfo, // Track which players were marked as Full/Final
+      mustPlay: mustPlayInfo, // Track which players were in must-play status (for analytics)
       timestamp: new Date().toISOString()
     };
 
@@ -633,18 +635,24 @@ export function GameProvider({ children }) {
     const updatedGames = games.map(g => g.id === gameId ? updatedGame : g);
     setGames(updatedGames);
     
-    // Update only this game on server
-    updateGameOnServer(updatedGame);
+    // Update only this game on server and await the promise
+    try {
+      await updateGameOnServer(updatedGame);
+      return Promise.resolve();
+    } catch (error) {
+      console.error('Error updating game on server:', error);
+      return Promise.reject(error);
+    }
   };
 
-  const updateRound = (gameId, roundNumber, roundScores, dropInfo = {}, winnerInfo = {}, doubleDropInfo = {}) => {
+  const updateRound = async (gameId, roundNumber, roundScores, dropInfo = {}, winnerInfo = {}, doubleDropInfo = {}, fullInfo = {}, mustPlayInfo = {}) => {
     const game = games.find(g => g.id === gameId);
-    if (!game) return;
+    if (!game) return Promise.reject(new Error('Game not found'));
     
     // Update the specific round
     const updatedRounds = game.rounds.map(round => 
       round.roundNumber === roundNumber 
-        ? { ...round, scores: roundScores, drops: dropInfo, doubleDrops: doubleDropInfo, winners: winnerInfo }
+        ? { ...round, scores: roundScores, drops: dropInfo, doubleDrops: doubleDropInfo, winners: winnerInfo, full: fullInfo, mustPlay: mustPlayInfo }
         : round
     );
     
@@ -701,7 +709,15 @@ export function GameProvider({ children }) {
     
     const updatedGames = games.map(g => g.id === gameId ? updatedGame : g);
     setGames(updatedGames);
-    updateGameOnServer(updatedGame);
+    
+    // Update only this game on server and await the promise
+    try {
+      await updateGameOnServer(updatedGame);
+      return Promise.resolve();
+    } catch (error) {
+      console.error('Error updating game on server:', error);
+      return Promise.reject(error);
+    }
   };
 
   const declareWinner = (gameId, winnerId) => {
@@ -817,13 +833,34 @@ export function GameProvider({ children }) {
     const game = games.find(g => g.id === gameId);
     if (!game) return;
     
-    // Update player statistics - all winners get +1 win
+    // For Ace: Calculate round wins (0-point rounds) for each player
+    // Match winners don't get extra points - only round wins count
+    const roundWinCounts = {};
+    
+    game.players.forEach(player => {
+      roundWinCounts[player.id] = 0;
+    });
+    
+    // Count round wins (0-point rounds) for each player
+    if (game.rounds && game.rounds.length > 0) {
+      game.rounds.forEach(round => {
+        if (round.winners) {
+          Object.keys(round.winners).forEach(playerId => {
+            if (round.winners[playerId] === true) {
+              roundWinCounts[playerId] = (roundWinCounts[playerId] || 0) + 1;
+            }
+          });
+        }
+      });
+    }
+    
+    // Update player statistics - wins based on round wins, not match wins
     const updatedPlayerStats = players.map(player => {
       const isInGame = game.players.find(p => p.id === player.id);
       if (isInGame) {
         const newTotalGames = player.totalGames + 1;
-        const isWinner = winnerIds.includes(player.id);
-        const newWins = player.wins + (isWinner ? 1 : 0);
+        const roundWins = roundWinCounts[player.id] || 0;
+        const newWins = player.wins + roundWins; // Add round wins, not match wins
         const winPercentage = newTotalGames > 0 ? Math.round((newWins / newTotalGames) * 100) : 0;
         return {
           ...player,
@@ -842,7 +879,8 @@ export function GameProvider({ children }) {
       ...game,
       status: 'completed',
       winners: winnerIds,
-      winner: winnerIds[0] // Set first winner as primary (for compatibility)
+      winner: winnerIds[0], // Set first winner as primary (for compatibility)
+      completedAt: new Date().toISOString()
     };
     
     const updatedGames = games.map(g => g.id === gameId ? updatedGame : g);

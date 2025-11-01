@@ -38,13 +38,20 @@ export async function GET(request) {
         
         playerStatsMap[gamePlayer.id].totalGames += 1;
         
-        // Check for multiple winners (Ace games) or single winner
-        const isWinner = game.winners && game.winners.length > 0
-          ? game.winners.includes(gamePlayer.id)
-          : game.winner === gamePlayer.id;
-        
-        if (isWinner) {
-          playerStatsMap[gamePlayer.id].wins += 1;
+        // For Ace: Accumulate total points (not wins)
+        // In Ace, lower points = better performance
+        if (game.type.toLowerCase() === 'ace') {
+          // Add player's total points from this game to their cumulative score
+          playerStatsMap[gamePlayer.id].wins += gamePlayer.totalPoints || 0;
+        } else {
+          // For Chess/Rummy: Count match wins normally
+          const isWinner = game.winners && game.winners.length > 0
+            ? game.winners.includes(gamePlayer.id)
+            : game.winner === gamePlayer.id;
+          
+          if (isWinner) {
+            playerStatsMap[gamePlayer.id].wins += 1;
+          }
         }
         
         // For Chess: count draws (games with no winner)
@@ -68,26 +75,7 @@ export async function GET(request) {
 
     // Calculate detailed stats for WPR calculation
     const statsArray = Object.values(playerStatsMap).map(player => {
-      // Calculate basic win percentage first
-      let totalPoints = 0;
-      
-      if (gameType.toLowerCase() === 'chess') {
-        // Chess: Win = 1 point, Draw = 0.5 point, Loss = 0 point
-        totalPoints = (player.wins * 1) + (player.draws * 0.5);
-      } else if (gameType.toLowerCase() === 'rummy') {
-        // Rummy: Win = 1 point, Final (without win) = 0.25 point
-        const finalsWithoutWins = player.finals - player.wins;
-        totalPoints = (player.wins * 1) + (finalsWithoutWins * 0.25);
-      } else {
-        // Ace: Simple win rate (wins only)
-        totalPoints = player.wins * 1;
-      }
-      
-      const winPercentage = player.totalGames > 0 
-        ? Math.round((totalPoints / player.totalGames) * 100)
-        : 0;
-      
-      // Calculate additional stats needed for WPR
+      // First, calculate totalRounds for Ace games (needed for win percentage)
       let dropPercentage = 0;
       let roundWins = 0;
       let totalRounds = 0;
@@ -116,6 +104,43 @@ export async function GET(request) {
           }
         });
       });
+      
+      // Calculate basic win percentage
+      let totalPoints = 0;
+      let winPercentage = 0;
+      
+      if (gameType.toLowerCase() === 'chess') {
+        // Chess: Win = 1 point, Draw = 0.5 point, Loss = 0 point
+        totalPoints = (player.wins * 1) + (player.draws * 0.5);
+        winPercentage = player.totalGames > 0 
+          ? Math.round((totalPoints / player.totalGames) * 100)
+          : 0;
+      } else if (gameType.toLowerCase() === 'rummy') {
+        // Rummy: Win = 1 point, Final (without win) = 0.25 point
+        const finalsWithoutWins = player.finals - player.wins;
+        totalPoints = (player.wins * 1) + (finalsWithoutWins * 0.25);
+        winPercentage = player.totalGames > 0 
+          ? Math.round((totalPoints / player.totalGames) * 100)
+          : 0;
+      } else {
+        // Ace: Calculate average points per round
+        // Lower average = Better performance
+        // Calculate total points accumulated across all games
+        let totalPointsAccumulated = 0;
+        filteredGames.forEach(game => {
+          const gamePlayer = game.players.find(gp => gp.id === player.id);
+          if (gamePlayer) {
+            totalPointsAccumulated += gamePlayer.totalPoints || 0;
+          }
+        });
+        
+        totalPoints = totalPointsAccumulated;
+        // Win rate = average points per round (as percentage for display)
+        // Lower is better, but we show as is
+        winPercentage = totalRounds > 0 
+          ? Math.round((totalPointsAccumulated / totalRounds) * 100)
+          : 0;
+      }
       
       // Calculate drop percentage (inverse for bonus - lower drops = higher bonus)
       const totalDrops = filteredGames.reduce((sum, game) => {
@@ -153,9 +178,9 @@ export async function GET(request) {
           
           wpr = Math.round((winsScore + drawsScore) / player.totalGames);
         } else {
-          // Ace: Simple win-based rating
-          // Rating = (Wins × 100) / TotalGames
-          wpr = Math.round((player.wins * 100) / player.totalGames);
+          // Ace: Use average points per round as rating
+          // This is winPercentage (which is avgPoints/round * 100)
+          wpr = winPercentage;
         }
       }
       
@@ -166,15 +191,19 @@ export async function GET(request) {
         dropPercentage: Math.round(dropPercentage),
         roundWins,
         totalRounds,
-        roundWinRate: Math.round(roundWinRate)
+        roundWinRate: Math.round(roundWinRate),
+        // For Ace: Override totalGames to show totalRounds instead
+        totalGames: gameType.toLowerCase() === 'ace' ? totalRounds : player.totalGames
       };
     });
     
-    // Sort by WPR (Weighted Performance Rating), then by wins, then by total games
+    // Sort by WPR (Weighted Performance Rating)
     const topPlayers = statsArray
       .sort((a, b) => {
+        // Sort by WPR descending (higher rating first)
         if (b.wpr !== a.wpr) return b.wpr - a.wpr;
-        if (b.wins !== a.wins) return b.wins - a.wins;
+        
+        // Secondary sort by total games (more experience)
         return b.totalGames - a.totalGames;
       })
       .slice(0, 10); // Top 10 players

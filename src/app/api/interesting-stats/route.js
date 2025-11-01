@@ -246,9 +246,12 @@ export async function GET(request) {
                     stats.mustPlayGameIds.push(game.id);
                   }
                   
-                  // Check if they won this round (clutch win = 0 points!)
-                  if (round.winners && round.winners[playerId]) {
-                    stats.mustPlayWins++;
+                  // Check if they survived this round (didn't get eliminated)
+                  // Survived = they didn't exceed max points after this round
+                  const scoreInRound = round.scores[playerId] || 0;
+                  const pointsAfterRound = currentPoints + scoreInRound;
+                  if (pointsAfterRound < maxPoints) {
+                    stats.mustPlayWins++; // Rename variable but keep for compatibility - tracks survivals
                   }
                 }
               }
@@ -473,7 +476,18 @@ export async function GET(request) {
       const filtered = playerList.filter(p => p.mustPlayRounds >= 3 && p.clutchPercentage > 0);
       if (filtered.length === 0) return null;
       
-      const sorted = filtered.sort((a, b) => b.clutchPercentage - a.clutchPercentage);
+      const sorted = filtered.sort((a, b) => {
+        // Primary: Sort by clutch percentage (higher is better)
+        if (b.clutchPercentage !== a.clutchPercentage) {
+          return b.clutchPercentage - a.clutchPercentage;
+        }
+        // Tie-breaker 1: Total must-play survivals (higher is better)
+        if (b.mustPlayWins !== a.mustPlayWins) {
+          return b.mustPlayWins - a.mustPlayWins;
+        }
+        // Tie-breaker 2: Total must-play rounds (more rounds = more reliable stat)
+        return b.mustPlayRounds - a.mustPlayRounds;
+      });
       const topPlayer = sorted[0];
       
       return {
@@ -512,7 +526,18 @@ export async function GET(request) {
       const filtered = playerList.filter(p => p.gamesPlayed >= 3 && p.winPercentage > 0);
       if (filtered.length === 0) return null;
       
-      const sorted = filtered.sort((a, b) => b.winPercentage - a.winPercentage);
+      const sorted = filtered.sort((a, b) => {
+        // Primary: Sort by win percentage (higher is better)
+        if (b.winPercentage !== a.winPercentage) {
+          return b.winPercentage - a.winPercentage;
+        }
+        // Tie-breaker 1: Total match wins (higher is better)
+        if (b.matchWins !== a.matchWins) {
+          return b.matchWins - a.matchWins;
+        }
+        // Tie-breaker 2: Total games played (more games = more reliable stat)
+        return b.gamesPlayed - a.gamesPlayed;
+      });
       const topPlayer = sorted[0];
       
       return {
@@ -531,7 +556,18 @@ export async function GET(request) {
       const filtered = playerList.filter(p => p.gamesPlayed >= 3 && p.finalPercentage > 0);
       if (filtered.length === 0) return null;
       
-      const sorted = filtered.sort((a, b) => b.finalPercentage - a.finalPercentage);
+      const sorted = filtered.sort((a, b) => {
+        // Primary: Sort by final percentage (higher is better)
+        if (b.finalPercentage !== a.finalPercentage) {
+          return b.finalPercentage - a.finalPercentage;
+        }
+        // Tie-breaker 1: Total finals reached (higher is better)
+        if (b.finals !== a.finals) {
+          return b.finals - a.finals;
+        }
+        // Tie-breaker 2: Total games played (more games = more reliable stat)
+        return b.gamesPlayed - a.gamesPlayed;
+      });
       const topPlayer = sorted[0];
       
       return {
@@ -550,7 +586,18 @@ export async function GET(request) {
       const filtered = playerList.filter(p => p.totalRounds >= 10 && p.roundWinPercentage > 0);
       if (filtered.length === 0) return null;
       
-      const sorted = filtered.sort((a, b) => b.roundWinPercentage - a.roundWinPercentage);
+      const sorted = filtered.sort((a, b) => {
+        // Primary: Sort by round win percentage (higher is better)
+        if (b.roundWinPercentage !== a.roundWinPercentage) {
+          return b.roundWinPercentage - a.roundWinPercentage;
+        }
+        // Tie-breaker 1: Total round wins (higher is better)
+        if (b.roundWins !== a.roundWins) {
+          return b.roundWins - a.roundWins;
+        }
+        // Tie-breaker 2: Total rounds played (more rounds = more reliable stat)
+        return b.totalRounds - a.totalRounds;
+      });
       const topPlayer = sorted[0];
       
       return {
@@ -569,7 +616,18 @@ export async function GET(request) {
       const filtered = playerList.filter(p => p.totalRounds >= 10 && p.dropPercentage > 0);
       if (filtered.length === 0) return null;
       
-      const sorted = filtered.sort((a, b) => b.dropPercentage - a.dropPercentage);
+      const sorted = filtered.sort((a, b) => {
+        // Primary: Sort by drop percentage (higher is "better" for this stat)
+        if (b.dropPercentage !== a.dropPercentage) {
+          return b.dropPercentage - a.dropPercentage;
+        }
+        // Tie-breaker 1: Total drops (higher means more drops)
+        if (b.totalDrops !== a.totalDrops) {
+          return b.totalDrops - a.totalDrops;
+        }
+        // Tie-breaker 2: Total rounds played (more rounds = more reliable stat)
+        return b.totalRounds - a.totalRounds;
+      });
       const topPlayer = sorted[0];
       
       return {
@@ -588,7 +646,18 @@ export async function GET(request) {
       const filtered = playerList.filter(p => p.totalRounds >= 10 && p.bravePlayerPercentage > 0);
       if (filtered.length === 0) return null;
       
-      const sorted = filtered.sort((a, b) => b.bravePlayerPercentage - a.bravePlayerPercentage);
+      const sorted = filtered.sort((a, b) => {
+        // Primary: Sort by brave player percentage (higher is better)
+        if (b.bravePlayerPercentage !== a.bravePlayerPercentage) {
+          return b.bravePlayerPercentage - a.bravePlayerPercentage;
+        }
+        // Tie-breaker 1: Total played rounds (higher is better)
+        if (b.playedRounds !== a.playedRounds) {
+          return b.playedRounds - a.playedRounds;
+        }
+        // Tie-breaker 2: Total rounds (more rounds = more reliable stat)
+        return b.totalRounds - a.totalRounds;
+      });
       const topPlayer = sorted[0];
       
       return {
@@ -607,7 +676,18 @@ export async function GET(request) {
       const filtered = playerList.filter(p => p.gamesPlayed >= 3 && p.scores80Percentage > 0);
       if (filtered.length === 0) return null;
       
-      const sorted = filtered.sort((a, b) => b.scores80Percentage - a.scores80Percentage);
+      const sorted = filtered.sort((a, b) => {
+        // Primary: Sort by 80s percentage (higher is "better" for this stat)
+        if (b.scores80Percentage !== a.scores80Percentage) {
+          return b.scores80Percentage - a.scores80Percentage;
+        }
+        // Tie-breaker 1: Total 80s scored (higher means more 80s)
+        if (b.scores80 !== a.scores80) {
+          return b.scores80 - a.scores80;
+        }
+        // Tie-breaker 2: Total games played (more games = more reliable stat)
+        return b.gamesPlayed - a.gamesPlayed;
+      });
       const topPlayer = sorted[0];
       
       return {
@@ -626,7 +706,18 @@ export async function GET(request) {
       const filtered = playerList.filter(p => p.gamesPlayed >= 3 && p.finalLossPercentage > 0);
       if (filtered.length === 0) return null;
       
-      const sorted = filtered.sort((a, b) => b.finalLossPercentage - a.finalLossPercentage);
+      const sorted = filtered.sort((a, b) => {
+        // Primary: Sort by final loss percentage (higher is "better" for this stat)
+        if (b.finalLossPercentage !== a.finalLossPercentage) {
+          return b.finalLossPercentage - a.finalLossPercentage;
+        }
+        // Tie-breaker 1: Total final losses (higher means more losses)
+        if (b.finalLosses !== a.finalLosses) {
+          return b.finalLosses - a.finalLosses;
+        }
+        // Tie-breaker 2: Total games played (more games = more reliable stat)
+        return b.gamesPlayed - a.gamesPlayed;
+      });
       const topPlayer = sorted[0];
       
       return {

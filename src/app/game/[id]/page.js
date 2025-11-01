@@ -24,8 +24,9 @@ export default function GamePage({ params }) {
   const [showDeclareWinnerModal, setShowDeclareWinnerModal] = useState(false);
   const [showMarkDrawModal, setShowMarkDrawModal] = useState(false);
   const [showUpdateMaxPointsModal, setShowUpdateMaxPointsModal] = useState(false);
-  const [showMarkAcePlayerModal, setShowMarkAcePlayerModal] = useState(false);
   const [showEndAceGameModal, setShowEndAceGameModal] = useState(false);
+  const [showRemovePlayerModal, setShowRemovePlayerModal] = useState(false);
+  const [selectedPlayerToRemove, setSelectedPlayerToRemove] = useState(null);
   const [addingRound, setAddingRound] = useState(false);
   const [roundScores, setRoundScores] = useState({});
   const [droppedPlayers, setDroppedPlayers] = useState({});
@@ -37,13 +38,13 @@ export default function GamePage({ params }) {
   const [newMaxPoints, setNewMaxPoints] = useState('');
   const [selectedPlayerToAdd, setSelectedPlayerToAdd] = useState(null);
   const [selectedWinner, setSelectedWinner] = useState(null);
-  const [selectedAcePlayer, setSelectedAcePlayer] = useState(null);
   const [selectedAceWinners, setSelectedAceWinners] = useState([]);
   const [editingRound, setEditingRound] = useState(null); // Track which round is being edited
   
   // Track if players are loaded and round scores initialized
   const playersLoadedRef = useRef(false);
   const roundScoresInitializedRef = useRef(false);
+  const addingRoundRef = useRef(false); // Prevent race condition with multiple quick clicks
 
   // Optimized fetch game function - can be reused for refresh
   const fetchGame = useCallback(async () => {
@@ -307,10 +308,10 @@ export default function GamePage({ params }) {
         [playerId]: '0'
       }));
     } else {
-      // If un-marking winner, clear the score
+      // If un-marking winner, set back to 1 for Ace, clear for others
       setRoundScores(prev => ({
         ...prev,
-        [playerId]: ''
+        [playerId]: isAce ? '1' : ''
       }));
     }
   };
@@ -345,28 +346,32 @@ export default function GamePage({ params }) {
       [playerId]: !prev[playerId]
     }));
     
-    // If marking as full, automatically set score to 80
+    // If marking as full, automatically set score (1 for Ace, 80 for Rummy)
     if (!fullPlayers[playerId]) {
       setRoundScores(prev => ({
         ...prev,
-        [playerId]: '80'
+        [playerId]: isAce ? '1' : '80'
       }));
     } else {
-      // If un-marking full, clear the score
+      // If un-marking full, set back to 1 for Ace, clear for others
       setRoundScores(prev => ({
         ...prev,
-        [playerId]: ''
+        [playerId]: isAce ? '1' : ''
       }));
     }
   };
 
   const handleAddRound = async () => {
-    // Prevent duplicate submissions (race condition guard)
-    if (addingRound) return;
+    // Prevent duplicate submissions (race condition guard with useRef for immediate lock)
+    if (addingRoundRef.current || addingRound) return;
     
+    addingRoundRef.current = true;
     setAddingRound(true);
     
     try {
+      const isAce = game.type.toLowerCase() === 'ace';
+      const isRummy = game.type.toLowerCase() === 'rummy';
+      
       // Validate: At least one player must have a score/status
       const hasAnyScore = Object.values(roundScores).some(score => score !== '');
       const hasAnyStatus = Object.values(droppedPlayers).some(v => v) || 
@@ -376,8 +381,26 @@ export default function GamePage({ params }) {
       
       if (!hasAnyScore && !hasAnyStatus) {
         alert('Please enter scores or select a status (Winner/Drop/Full) for at least one player');
+        addingRoundRef.current = false;
         setAddingRound(false);
         return;
+      }
+      
+      // Validate: At least one active (non-eliminated) player must participate (for new rounds only)
+      if (!editingRound && isRummy) {
+        const activePlayersWithData = Object.keys(roundScores).filter(playerId => {
+          const player = game.players.find(p => p.id === playerId);
+          const hasData = roundScores[playerId] !== '' || droppedPlayers[playerId] || 
+                         doubleDropPlayers[playerId] || winnerPlayers[playerId] || fullPlayers[playerId];
+          return !player?.isLost && hasData;
+        });
+        
+        if (activePlayersWithData.length === 0) {
+          alert('At least one active (non-eliminated) player must participate in the round');
+          addingRoundRef.current = false;
+          setAddingRound(false);
+          return;
+        }
       }
       
       // Convert empty strings to 0 before saving, but use 20 for dropped players, 40 for double drops, 80 for full, and 0 for winners
@@ -385,6 +408,8 @@ export default function GamePage({ params }) {
       const dropInfo = {};
       const doubleDropInfo = {};
       const winnerInfo = {};
+      const fullInfo = {};
+      const mustPlayInfo = {}; // Track must-play status for analytics
       
       Object.keys(roundScores).forEach(playerId => {
         if (droppedPlayers[playerId]) {
@@ -392,54 +417,136 @@ export default function GamePage({ params }) {
           dropInfo[playerId] = true;
           doubleDropInfo[playerId] = false;
           winnerInfo[playerId] = false;
+          fullInfo[playerId] = false;
+          mustPlayInfo[playerId] = false;
         } else if (doubleDropPlayers[playerId]) {
           scoresWithDefaults[playerId] = 40; // Double Drop = 40 points
           dropInfo[playerId] = false;
           doubleDropInfo[playerId] = true;
           winnerInfo[playerId] = false;
+          fullInfo[playerId] = false;
+          mustPlayInfo[playerId] = false;
         } else if (fullPlayers[playerId]) {
-          scoresWithDefaults[playerId] = 80; // Full = 80 points
+          scoresWithDefaults[playerId] = isAce ? 1 : 80; // Full = 1 point for Ace, 80 for Rummy
           dropInfo[playerId] = false;
           doubleDropInfo[playerId] = false;
           winnerInfo[playerId] = false;
+          fullInfo[playerId] = true;
+          mustPlayInfo[playerId] = false;
         } else if (winnerPlayers[playerId]) {
           scoresWithDefaults[playerId] = 0; // Winner = 0 points
           dropInfo[playerId] = false;
           doubleDropInfo[playerId] = false;
           winnerInfo[playerId] = true;
+          fullInfo[playerId] = false;
+          mustPlayInfo[playerId] = false;
         } else {
-          // Better validation: use Number() and check for NaN
+          // Comprehensive validation: use Number() and check for NaN, negatives, unrealistic values, decimals
           const scoreValue = Number(roundScores[playerId]);
-          if (isNaN(scoreValue) || scoreValue < 0) {
-            alert(`Invalid score for ${game.players.find(p => p.id === playerId)?.name}. Please enter a valid number.`);
+          const playerName = game.players.find(p => p.id === playerId)?.name || 'Unknown';
+          
+          if (isNaN(scoreValue)) {
+            alert(`Invalid score for ${playerName}. Please enter a valid number.`);
+            addingRoundRef.current = false;
             setAddingRound(false);
-            throw new Error('Invalid score');
+            return;
           }
+          
+          if (scoreValue < 0) {
+            alert(`Invalid score for ${playerName}. Score cannot be negative.`);
+            addingRoundRef.current = false;
+            setAddingRound(false);
+            return;
+          }
+          
+          // For Rummy, validate reasonable score range and whole numbers
+          if (isRummy) {
+            if (scoreValue > 200) {
+              alert(`Invalid score for ${playerName}. Rummy scores should not exceed 200 points.`);
+              addingRoundRef.current = false;
+              setAddingRound(false);
+              return;
+            }
+            
+            if (!Number.isInteger(scoreValue)) {
+              alert(`Invalid score for ${playerName}. Rummy scores must be whole numbers (no decimals).`);
+              addingRoundRef.current = false;
+              setAddingRound(false);
+              return;
+            }
+          }
+          
           scoresWithDefaults[playerId] = scoreValue || 0;
           dropInfo[playerId] = false;
           doubleDropInfo[playerId] = false;
           winnerInfo[playerId] = false;
+          fullInfo[playerId] = false;
+          
+          // Track must-play status for analytics (Rummy only)
+          if (isRummy && !editingRound) {
+            const consecutiveDrops = getConsecutiveDrops(playerId);
+            const player = game.players.find(p => p.id === playerId);
+            const canAffordDrop = player && (player.totalPoints + 20 < game.maxPoints);
+            mustPlayInfo[playerId] = (consecutiveDrops >= 3 || !canAffordDrop);
+          } else {
+            mustPlayInfo[playerId] = false;
+          }
         }
       });
       
+      // Edit mode validation: Prevent reviving eliminated players
+      if (editingRound && isRummy) {
+        const roundIndex = editingRound.roundNumber - 1;
+        
+        for (const playerId of Object.keys(scoresWithDefaults)) {
+          const player = game.players.find(p => p.id === playerId);
+          
+          if (player?.isLost) {
+            // Calculate what the player's total would be after this edit
+            let recalculatedTotal = 0;
+            
+            // Sum all rounds up to and including the edited round
+            for (let i = 0; i <= roundIndex; i++) {
+              if (i === roundIndex) {
+                // Use the new score for the edited round
+                recalculatedTotal += scoresWithDefaults[playerId] || 0;
+              } else if (game.rounds[i] && game.rounds[i].scores) {
+                // Use existing scores for other rounds
+                recalculatedTotal += game.rounds[i].scores[playerId] || 0;
+              }
+            }
+            
+            // If the recalculated total is below maxPoints, this would "revive" the player
+            if (recalculatedTotal < game.maxPoints) {
+              alert(`Cannot edit: This change would bring ${player.name}'s total to ${recalculatedTotal}, reviving them from elimination. Eliminated players cannot be brought back. Please use Remove Player if needed.`);
+              addingRoundRef.current = false;
+              setAddingRound(false);
+              return;
+            }
+          }
+        }
+      }
+      
       if (editingRound) {
         // Update existing round
-        await updateRound(params.id, editingRound.roundNumber, scoresWithDefaults, dropInfo, winnerInfo, doubleDropInfo);
+        await updateRound(params.id, editingRound.roundNumber, scoresWithDefaults, dropInfo, winnerInfo, doubleDropInfo, fullInfo, mustPlayInfo);
         setEditingRound(null);
       } else {
         // Add new round
-        await addRound(params.id, scoresWithDefaults, dropInfo, winnerInfo, doubleDropInfo);
+        await addRound(params.id, scoresWithDefaults, dropInfo, winnerInfo, doubleDropInfo, fullInfo, mustPlayInfo);
       }
       
-      // Reset scores for next round with empty strings
+      // Reset scores for next round immediately after successful operation
       resetRoundScores();
       setShowAddRoundModal(false);
       
       // Game will auto-update via useEffect watching 'games'
     } catch (error) {
       console.error('Failed to add/update round:', error);
-      alert('Failed to add round. Please try again.');
+      alert('Failed to add/update round. Please try again.');
+      // Don't reset modal states on error so user can retry
     } finally {
+      addingRoundRef.current = false;
       setAddingRound(false);
     }
   };
@@ -502,24 +609,6 @@ export default function GamePage({ params }) {
     // Game will auto-update via useEffect watching 'games'
   };
 
-  const handleMarkAcePlayer = () => {
-    if (!selectedAcePlayer) {
-      alert('Please select the loser');
-      return;
-    }
-    
-    // For Ace: Ace player (loser) gets 0 points, all others get 1 point
-    const aceScores = {};
-    game.players.forEach(player => {
-      aceScores[player.id] = player.id === selectedAcePlayer ? 0 : 1;
-    });
-    
-    addRound(params.id, aceScores);
-    setShowMarkAcePlayerModal(false);
-    setSelectedAcePlayer(null);
-    // Game will auto-update via useEffect watching 'games'
-  };
-
   const handleEndAceGame = () => {
     if (!game || game.players.length === 0) {
       alert('No players in game');
@@ -556,6 +645,65 @@ export default function GamePage({ params }) {
         ? prev.filter(id => id !== playerId)
         : [...prev, playerId]
     );
+  };
+
+  const handleRemovePlayer = async () => {
+    if (!selectedPlayerToRemove) {
+      alert('Please select a player to remove');
+      return;
+    }
+    
+    // Remove player from game by filtering them out
+    const updatedPlayers = game.players.filter(p => p.id !== selectedPlayerToRemove);
+    
+    if (updatedPlayers.length < 2) {
+      alert('Cannot remove player. Game must have at least 2 players.');
+      return;
+    }
+    
+    // Remove player from all rounds
+    const updatedRounds = game.rounds.map(round => {
+      const { [selectedPlayerToRemove]: removed, ...remainingScores } = round.scores;
+      const { [selectedPlayerToRemove]: removedWinner, ...remainingWinners } = round.winners || {};
+      const { [selectedPlayerToRemove]: removedDrop, ...remainingDrops } = round.drops || {};
+      const { [selectedPlayerToRemove]: removedDoubleDrop, ...remainingDoubleDrops } = round.doubleDrops || {};
+      
+      return {
+        ...round,
+        scores: remainingScores,
+        winners: remainingWinners,
+        drops: remainingDrops,
+        doubleDrops: remainingDoubleDrops
+      };
+    });
+    
+    const updatedGame = {
+      ...game,
+      players: updatedPlayers,
+      rounds: updatedRounds,
+      history: updatedRounds
+    };
+    
+    // Update game on server
+    try {
+      const response = await fetch(`/api/games/${params.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedGame)
+      });
+      
+      if (response.ok) {
+        setShowRemovePlayerModal(false);
+        setSelectedPlayerToRemove(null);
+        // Refresh game data
+        await fetchGame();
+      } else {
+        alert('Failed to remove player');
+      }
+    } catch (error) {
+      console.error('Error removing player:', error);
+      alert('Failed to remove player');
+    }
   };
 
   const formatDate = (dateString) => {
@@ -674,9 +822,17 @@ export default function GamePage({ params }) {
                     <>
                       <button 
                         className="btn btn-primary"
-                        onClick={() => setShowMarkAcePlayerModal(true)}
+                        onClick={() => {
+                          // For Ace games, initialize all players with 1 point by default
+                          const initialScores = {};
+                          game.players.forEach(player => {
+                            initialScores[player.id] = '1';
+                          });
+                          setRoundScores(initialScores);
+                          setShowAddRoundModal(true);
+                        }}
                       >
-                        🎯 Mark Ace Player
+                        📝 Add Round Points
                       </button>
                       <button 
                         className="btn btn-success"
@@ -716,7 +872,7 @@ export default function GamePage({ params }) {
               )}
               {game.status === 'in_progress' && !isGameCreator() && (
                 <span className={styles.playerNote}>
-                  {isChess ? 'Only game creator can declare winner' : isAce ? 'Only game creator can mark ace player, add players and end game' : 'Only game creator can add rounds and players'}
+                  {isChess ? 'Only game creator can declare winner' : isAce ? 'Only game creator can update rounds, add players and end game' : 'Only game creator can add rounds and players'}
                 </span>
               )}
             </div>
@@ -865,6 +1021,27 @@ export default function GamePage({ params }) {
                   }}
                 >
                   ➕ Add Player
+                </button>
+              </div>
+            )}
+            
+            {/* Action buttons for Ace games - below the standings table */}
+            {isAce && game.status === 'in_progress' && isGameCreator() && (
+              <div style={{ 
+                display: 'flex', 
+                gap: '12px', 
+                marginTop: '20px',
+                padding: '16px',
+                background: 'rgba(59, 130, 246, 0.05)',
+                borderRadius: '8px',
+                borderTop: '2px solid rgba(59, 130, 246, 0.1)',
+                flexWrap: 'wrap'
+              }}>
+                <button 
+                  className="btn btn-secondary"
+                  onClick={() => setShowRemovePlayerModal(true)}
+                >
+                  ➖ Remove Player
                 </button>
               </div>
             )}
@@ -1108,22 +1285,30 @@ export default function GamePage({ params }) {
                             <button
                               className="btn btn-secondary"
                               onClick={() => {
+                                // Add confirmation dialog with warning about recalculation
+                                if (!confirm(`⚠️ Warning: Editing Round ${event.roundNumber} will recalculate all subsequent rounds and player totals.\n\nThis action may affect:\n• Player standings\n• Elimination status\n• Game completion\n\nAre you sure you want to continue?`)) {
+                                  return;
+                                }
+                                
                                 setEditingRound(event);
                                 // Pre-fill the scores for editing
                                 const editScores = {};
                                 const editDropped = {};
                                 const editDoubleDropped = {};
                                 const editWinners = {};
+                                const editFull = {};
                                 game.players.forEach(player => {
                                   editScores[player.id] = event.scores && event.scores[player.id] !== undefined ? event.scores[player.id].toString() : '';
                                   editDropped[player.id] = event.drops && event.drops[player.id] === true;
                                   editDoubleDropped[player.id] = event.doubleDrops && event.doubleDrops[player.id] === true;
                                   editWinners[player.id] = event.winners && event.winners[player.id] === true;
+                                  editFull[player.id] = event.full && event.full[player.id] === true;
                                 });
                                 setRoundScores(editScores);
                                 setDroppedPlayers(editDropped);
                                 setDoubleDropPlayers(editDoubleDropped);
                                 setWinnerPlayers(editWinners);
+                                setFullPlayers(editFull);
                                 setShowAddRoundModal(true);
                               }}
                               style={{ padding: '4px 8px', fontSize: '12px' }}
@@ -1151,6 +1336,7 @@ export default function GamePage({ params }) {
                             const hasDropped = event.drops && event.drops[player.id] === true;
                             const hasDoubleDrop = event.doubleDrops && event.doubleDrops[player.id] === true;
                             const isWinner = event.winners && event.winners[player.id] === true;
+                            const isFull = event.full && event.full[player.id] === true;
                             
                             // OPTIMIZED: Get previous total from pre-calculated lookup instead of recalculating
                             const previousTotal = (!isChess && !isAce && cumulativeTotalsByRound[event.roundNumber]) 
@@ -1174,7 +1360,7 @@ export default function GamePage({ params }) {
                                   )}
                                   {player.name}
                                   {isAceInRound && <span style={{ marginLeft: '8px', color: 'var(--danger)' }}>🎯</span>}
-                                  {(score === 0 && !isAceInRound) || isWinner ? (
+                                  {((score === 0 && !isAceInRound) || (isWinner && !isAce)) ? (
                                     <span style={{ 
                                       marginLeft: '8px', 
                                       fontSize: '11px',
@@ -1187,7 +1373,7 @@ export default function GamePage({ params }) {
                                       W
                                     </span>
                                   ) : null}
-                                  {score === 80 && (
+                                  {isFull && (
                                     <span style={{ 
                                       marginLeft: '8px', 
                                       fontSize: '11px',
@@ -1377,35 +1563,70 @@ export default function GamePage({ params }) {
                         disabled={droppedPlayers[player.id] || doubleDropPlayers[player.id] || winnerPlayers[player.id] || fullPlayers[player.id]}
                         style={{ flex: '1', minWidth: '60px', textAlign: 'center' }}
                       />
-                      {isRummy && (
+                      {/* Winner toggle for Rummy and Ace games */}
+                      {(isRummy || isAce) && (
                         <>
-                          <label style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center',
-                            gap: '6px',
-                            cursor: 'pointer',
-                            padding: '8px 12px',
-                            background: winnerPlayers[player.id] ? 'var(--success)' : 'transparent',
-                            border: '2px solid var(--success)',
-                            borderRadius: '6px',
-                            color: winnerPlayers[player.id] ? 'white' : 'var(--success)',
-                            fontWeight: '600',
-                            fontSize: '14px',
-                            whiteSpace: 'nowrap',
-                            transition: 'all 0.2s',
-                            flexShrink: '0',
-                            marginBottom: '0'
-                          }}>
+                          <label 
+                            style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              gap: '6px',
+                              cursor: 'pointer',
+                              padding: '8px 12px',
+                              background: winnerPlayers[player.id] ? 'var(--success)' : 'transparent',
+                              border: '2px solid var(--success)',
+                              borderRadius: '6px',
+                              color: winnerPlayers[player.id] ? 'white' : 'var(--success)',
+                              fontWeight: '600',
+                              fontSize: '14px',
+                              whiteSpace: 'nowrap',
+                              transition: 'all 0.2s',
+                              flexShrink: '0',
+                              marginBottom: '0'
+                            }}
+                            title={isAce ? "ACE (0 points)" : "Winner (0 points)"}
+                          >
                             <input 
                               type="checkbox"
                               checked={winnerPlayers[player.id] || false}
                               onChange={() => handleWinnerToggle(player.id)}
                               style={{ display: 'none' }}
                             />
-                            W
+                            {isAce ? 'ACE' : 'W'}
                           </label>
-                          {canDrop ? (
+                          {/* Final button for Ace games (1 point) */}
+                          {isAce && (
+                            <label style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              gap: '6px',
+                              cursor: 'pointer',
+                              padding: '8px 12px',
+                              background: fullPlayers[player.id] ? 'var(--danger)' : 'transparent',
+                              border: '2px solid var(--danger)',
+                              borderRadius: '6px',
+                              color: fullPlayers[player.id] ? 'white' : 'var(--danger)',
+                              fontWeight: '600',
+                              fontSize: '14px',
+                              whiteSpace: 'nowrap',
+                              transition: 'all 0.2s',
+                              flexShrink: '0',
+                              marginBottom: '0'
+                            }}
+                            title="Final (1 point)"
+                          >
+                            <input 
+                              type="checkbox"
+                              checked={fullPlayers[player.id] || false}
+                              onChange={() => handleFullToggle(player.id)}
+                              style={{ display: 'none' }}
+                            />
+                            Final
+                          </label>
+                          )}
+                          {!isAce && (canDrop ? (
                             <>
                               <label style={{ 
                                 display: 'flex', 
@@ -1481,33 +1702,35 @@ export default function GamePage({ params }) {
                             }}>
                               ⚠️ Must Play
                             </div>
+                          ))}
+                          {!isAce && (
+                            <label style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              gap: '6px',
+                              cursor: 'pointer',
+                              padding: '8px 12px',
+                              background: fullPlayers[player.id] ? 'var(--danger)' : 'transparent',
+                              border: '2px solid var(--danger)',
+                              borderRadius: '6px',
+                              color: fullPlayers[player.id] ? 'white' : 'var(--danger)',
+                              fontWeight: '600',
+                              fontSize: '14px',
+                              whiteSpace: 'nowrap',
+                              transition: 'all 0.2s',
+                              flexShrink: '0',
+                              marginBottom: '0'
+                            }}>
+                              <input 
+                                type="checkbox"
+                                checked={fullPlayers[player.id] || false}
+                                onChange={() => handleFullToggle(player.id)}
+                                style={{ display: 'none' }}
+                              />
+                              F
+                            </label>
                           )}
-                          <label style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center',
-                            gap: '6px',
-                            cursor: 'pointer',
-                            padding: '8px 12px',
-                            background: fullPlayers[player.id] ? 'var(--danger)' : 'transparent',
-                            border: '2px solid var(--danger)',
-                            borderRadius: '6px',
-                            color: fullPlayers[player.id] ? 'white' : 'var(--danger)',
-                            fontWeight: '600',
-                            fontSize: '14px',
-                            whiteSpace: 'nowrap',
-                            transition: 'all 0.2s',
-                            flexShrink: '0',
-                            marginBottom: '0'
-                          }}>
-                            <input 
-                              type="checkbox"
-                              checked={fullPlayers[player.id] || false}
-                              onChange={() => handleFullToggle(player.id)}
-                              style={{ display: 'none' }}
-                            />
-                            F
-                          </label>
                         </>
                       )}
                     </div>
@@ -1845,68 +2068,6 @@ export default function GamePage({ params }) {
         </div>
       )}
 
-      {/* Mark Ace Player Modal - For Ace Games */}
-      {showMarkAcePlayerModal && (
-        <div className="modal-overlay" onClick={() => {
-          setShowMarkAcePlayerModal(false);
-          setSelectedAcePlayer(null);
-        }}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>🎯 Mark Ace Player (Loser)</h2>
-            
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
-              Select the player who lost this round (gets 0, others get 1):
-            </p>
-            
-            <div className={styles.playerList}>
-              {game.players.map(player => (
-                <div 
-                  key={player.id}
-                  className={`${styles.playerItem} ${
-                    selectedAcePlayer === player.id ? styles.selected : ''
-                  }`}
-                  onClick={() => setSelectedAcePlayer(player.id)}
-                >
-                  {getPlayerProfilePhoto(player.id) ? (
-                    <img 
-                      src={getPlayerProfilePhoto(player.id)} 
-                      alt={player.name}
-                      className={styles.playerAvatar}
-                    />
-                  ) : (
-                    <span className="avatar" style={{ fontSize: '24px' }}>{player.avatar}</span>
-                  )}
-                  <span style={{ fontSize: '16px', fontWeight: '500' }}>{player.name}</span>
-                  <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-                    ({player.totalPoints})
-                  </span>
-                  {selectedAcePlayer === player.id && <span style={{ fontSize: '20px' }}>✓</span>}
-                </div>
-              ))}
-            </div>
-
-            <div className={styles.modalActions}>
-              <button 
-                className="btn btn-secondary" 
-                onClick={() => {
-                  setShowMarkAcePlayerModal(false);
-                  setSelectedAcePlayer(null);
-                }}
-              >
-                Cancel
-              </button>
-              <button 
-                className="btn btn-danger" 
-                onClick={handleMarkAcePlayer}
-                disabled={!selectedAcePlayer}
-              >
-                Mark as Ace (0)
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* End Ace Game Modal - Declare Winners */}
       {showEndAceGameModal && (
         <div className="modal-overlay" onClick={() => {
@@ -1963,6 +2124,70 @@ export default function GamePage({ params }) {
                 disabled={selectedAceWinners.length === 0}
               >
                 Declare Winner{selectedAceWinners.length > 1 ? 's' : ''} 🎉
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Player Modal - For Ace Games */}
+      {showRemovePlayerModal && (
+        <div className="modal-overlay" onClick={() => {
+          setShowRemovePlayerModal(false);
+          setSelectedPlayerToRemove(null);
+        }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>➖ Remove Player</h2>
+            
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
+              Select a player to remove from this Ace game.
+              <br /><br />
+              <strong>⚠️ Warning:</strong>
+              <br />• Player will be removed from all rounds
+              <br />• Their scores will be deleted
+              <br />• This action cannot be undone
+            </p>
+            
+            <div className={styles.playerList}>
+              {game.players.map(player => (
+                <div 
+                  key={player.id}
+                  className={`${styles.playerItem} ${
+                    selectedPlayerToRemove === player.id ? styles.selected : ''
+                  }`}
+                  onClick={() => setSelectedPlayerToRemove(player.id)}
+                >
+                  {getPlayerProfilePhoto(player.id) ? (
+                    <img 
+                      src={getPlayerProfilePhoto(player.id)} 
+                      alt={player.name}
+                      className={styles.playerAvatar}
+                    />
+                  ) : (
+                    <span className="avatar" style={{ fontSize: '24px' }}>{player.avatar}</span>
+                  )}
+                  <span style={{ fontSize: '16px', fontWeight: '500' }}>{player.name}</span>
+                  {selectedPlayerToRemove === player.id && <span style={{ fontSize: '20px' }}>✓</span>}
+                </div>
+              ))}
+            </div>
+
+            <div className={styles.modalActions}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => {
+                  setShowRemovePlayerModal(false);
+                  setSelectedPlayerToRemove(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-danger" 
+                onClick={handleRemovePlayer}
+                disabled={!selectedPlayerToRemove}
+              >
+                Remove Player
               </button>
             </div>
           </div>

@@ -73,6 +73,7 @@ export async function GET(request) {
         title: game.title,
         createdAt: game.createdAt,
         winner: game.winner,
+        winners: game.winners || (game.winner ? [game.winner] : []), // Support multiple winners for Ace
         status: game.status,
         type: game.type,
         players: playersForDisplay,

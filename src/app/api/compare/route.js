@@ -89,18 +89,64 @@ export async function GET(request) {
                             game.players.some(p => p.id === player2Id);
         if (isHeadToHead) {
           stats.headToHeadGames++;
-          if (game.winner === playerId) {
-            stats.headToHeadWins++;
+          
+          // For Ace: Head-to-head wins based on round wins comparison
+          if (gameType.toLowerCase() === 'ace') {
+            let player1RoundWins = 0;
+            let player2RoundWins = 0;
+            
+            if (game.rounds && game.rounds.length > 0) {
+              game.rounds.forEach(round => {
+                if (round.winners) {
+                  if (round.winners[player1Id] === true) player1RoundWins++;
+                  if (round.winners[player2Id] === true) player2RoundWins++;
+                }
+              });
+            }
+            
+            // Current player won if they have more round wins
+            if (playerId === player1Id && player1RoundWins > player2RoundWins) {
+              stats.headToHeadWins++;
+            } else if (playerId === player2Id && player2RoundWins > player1RoundWins) {
+              stats.headToHeadWins++;
+            }
+          } else {
+            // For Chess/Rummy: Normal head-to-head win check
+            if (game.winner === playerId) {
+              stats.headToHeadWins++;
+            }
           }
         }
         
         // Win tracking
-        if (game.winner === playerId) {
-          stats.wins++;
-          currentWinStreak++;
-          stats.maxConsecutiveWins = Math.max(stats.maxConsecutiveWins, currentWinStreak);
+        // For Ace: Count round wins, NOT match wins
+        if (gameType.toLowerCase() === 'ace') {
+          if (game.rounds && game.rounds.length > 0) {
+            let roundWinsInGame = 0;
+            game.rounds.forEach(round => {
+              if (round.winners && round.winners[playerId] === true) {
+                stats.wins++;
+                roundWinsInGame++;
+              }
+            });
+            
+            // Track win streak based on whether player had any round wins in this game
+            if (roundWinsInGame > 0) {
+              currentWinStreak++;
+              stats.maxConsecutiveWins = Math.max(stats.maxConsecutiveWins, currentWinStreak);
+            } else {
+              currentWinStreak = 0;
+            }
+          }
         } else {
-          currentWinStreak = 0;
+          // For Chess/Rummy: Count match wins normally
+          if (game.winner === playerId) {
+            stats.wins++;
+            currentWinStreak++;
+            stats.maxConsecutiveWins = Math.max(stats.maxConsecutiveWins, currentWinStreak);
+          } else {
+            currentWinStreak = 0;
+          }
         }
         
         // Finals tracking (Rummy)

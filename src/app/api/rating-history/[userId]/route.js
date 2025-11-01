@@ -85,10 +85,27 @@ export async function GET(request, { params }) {
       const playerInGame = game.players.find(p => p.id === userId);
       cumulativeStats.totalGames++;
       
-      // Check if winner
-      const isWinner = game.winner === userId || (game.winners && game.winners.includes(userId));
-      if (isWinner) {
-        cumulativeStats.wins++;
+      let isWinner = false;
+      let roundWinsInThisGame = 0;
+      
+      // For Ace: Count round wins (0-point rounds), NOT match wins
+      if (gameType.toLowerCase() === 'ace') {
+        if (game.rounds && game.rounds.length > 0) {
+          game.rounds.forEach(round => {
+            if (round.winners && round.winners[userId] === true) {
+              cumulativeStats.wins++;
+              roundWinsInThisGame++;
+            }
+          });
+        }
+        // Consider it a "win" for display if player had any round wins in this game
+        isWinner = roundWinsInThisGame > 0;
+      } else {
+        // For Chess/Rummy: Count match wins normally
+        isWinner = game.winner === userId || (game.winners && game.winners.includes(userId));
+        if (isWinner) {
+          cumulativeStats.wins++;
+        }
       }
       
       // Check for draws (Chess)
@@ -104,7 +121,7 @@ export async function GET(request, { params }) {
         }
       }
       
-      // Count rounds and drops
+      // Count rounds and drops (skip round wins for Ace since already counted above)
       if (game.rounds) {
         game.rounds.forEach(round => {
           if (round.scores && round.scores[userId] !== undefined) {
@@ -115,7 +132,8 @@ export async function GET(request, { params }) {
               cumulativeStats.totalDrops++;
             }
             
-            if (round.winners && round.winners[userId]) {
+            // Only count roundWins for non-Ace games (Ace already counted above)
+            if (gameType.toLowerCase() !== 'ace' && round.winners && round.winners[userId]) {
               cumulativeStats.roundWins++;
             }
           }
@@ -156,7 +174,22 @@ export async function GET(request, { params }) {
     // Always include the last game if not already included
     if (history[history.length - 1]?.gameNumber !== cumulativeStats.totalGames) {
       const lastGame = sortedGames[sortedGames.length - 1];
-      const isWinner = lastGame.winner === userId || (lastGame.winners && lastGame.winners.includes(userId));
+      
+      let isWinner = false;
+      if (gameType.toLowerCase() === 'ace') {
+        // For Ace: Check if player had any round wins in this game
+        if (lastGame.rounds && lastGame.rounds.length > 0) {
+          lastGame.rounds.forEach(round => {
+            if (round.winners && round.winners[userId] === true) {
+              isWinner = true;
+            }
+          });
+        }
+      } else {
+        // For Chess/Rummy: Normal match win check
+        isWinner = lastGame.winner === userId || (lastGame.winners && lastGame.winners.includes(userId));
+      }
+      
       const dropRate = cumulativeStats.totalRounds > 0 ? 
         (cumulativeStats.totalDrops / cumulativeStats.totalRounds) * 100 : 0;
       

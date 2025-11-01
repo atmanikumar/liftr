@@ -347,12 +347,17 @@ export default function Home() {
                   <tr>
                     <th style={{ textAlign: 'center' }}>Game Type</th>
                     <th style={{ textAlign: 'center' }}>Players</th>
-                    <th style={{ textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {inProgressGames.map((game) => (
-                    <tr key={game.id}>
+                    <tr 
+                      key={game.id}
+                      onClick={() => router.push(`/game/${game.id}`)}
+                      style={{ cursor: 'pointer' }}
+                      className={styles.clickableRow}
+                      title="Open game"
+                    >
                       <td style={{ textAlign: 'center' }}>
                         <strong>{game.type}</strong>
                       </td>
@@ -371,6 +376,7 @@ export default function Home() {
                                   border: '2px solid var(--bg-color)',
                                   borderRadius: '50%'
                                 }}
+                                title={p.name}
                               />
                             ) : (
                               <span 
@@ -378,23 +384,19 @@ export default function Home() {
                                 className="avatar" 
                                 style={{ 
                                   fontSize: '16px',
-                                  marginLeft: index > 0 ? '4px' : '0'
+                                  marginLeft: index > 0 ? '-8px' : '0',
+                                  zIndex: game.players.length - index,
+                                  border: '2px solid var(--bg-color)',
+                                  borderRadius: '50%',
+                                  display: 'inline-block'
                                 }}
+                                title={p.name}
                               >
                                 {p.avatar}
                               </span>
                             )
                           ))}
                         </div>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <button 
-                          className="btn btn-primary"
-                          onClick={() => router.push(`/game/${game.id}`)}
-                          style={{ padding: '4px 12px', fontSize: '14px' }}
-                        >
-                          View
-                        </button>
                       </td>
                     </tr>
                   ))}
@@ -816,22 +818,69 @@ export default function Home() {
                         </>
                       ) : (
                         <>
-                          {/* Winner Column */}
+                          {/* Winner Column - Support multiple winners for Ace */}
                           <td style={{ textAlign: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                              {game.winner ? (() => {
-                                const winner = game.players.find(p => p.id === game.winner);
-                                return winner?.profilePhoto ? (
-                                  <img 
-                                    src={winner.profilePhoto} 
-                                    alt={winner.name}
-                                    className={styles.playerAvatar}
-                                    title={winner.name}
-                                  />
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              {game.winners && game.winners.length > 0 ? (
+                                game.winners.length > 1 ? (
+                                  // Multiple winners (Ace games) - Horizontally overlapped
+                                  <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+                                    {game.winners.map((winnerId, index) => {
+                                      const winner = game.players.find(p => p.id === winnerId);
+                                      return winner?.profilePhoto ? (
+                                        <img 
+                                          key={winnerId}
+                                          src={winner.profilePhoto} 
+                                          alt={winner.name}
+                                          className={styles.playerAvatar}
+                                          title={winner.name}
+                                          style={{ 
+                                            marginLeft: index > 0 ? '-16px' : '0',
+                                            border: '3px solid var(--bg-primary)',
+                                            zIndex: game.winners.length - index,
+                                            transition: 'transform 0.2s ease',
+                                            cursor: 'pointer'
+                                          }}
+                                          onMouseEnter={(e) => e.target.style.transform = 'scale(1.1) translateY(-2px)'}
+                                          onMouseLeave={(e) => e.target.style.transform = 'scale(1) translateY(0)'}
+                                        />
+                                      ) : (
+                                        <span 
+                                          key={winnerId} 
+                                          className="avatar" 
+                                          title={winner?.name}
+                                          style={{ 
+                                            fontSize: '20px',
+                                            marginLeft: index > 0 ? '-8px' : '0',
+                                            border: '2px solid var(--bg-primary)',
+                                            borderRadius: '50%',
+                                            padding: '4px',
+                                            backgroundColor: 'var(--bg-secondary)',
+                                            zIndex: game.winners.length - index
+                                          }}
+                                        >
+                                          {winner?.avatar}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
                                 ) : (
-                                  <span>{winner?.name}</span>
-                                );
-                              })() : (
+                                  // Single winner
+                                  (() => {
+                                    const winner = game.players.find(p => p.id === game.winners[0]);
+                                    return winner?.profilePhoto ? (
+                                      <img 
+                                        src={winner.profilePhoto} 
+                                        alt={winner.name}
+                                        className={styles.playerAvatar}
+                                        title={winner.name}
+                                      />
+                                    ) : (
+                                      <span>{winner?.name}</span>
+                                    );
+                                  })()
+                                )
+                              ) : (
                                 <span style={{ color: 'var(--text-secondary)' }}>Draw</span>
                               )}
                               {game.players.length === 2 && (
@@ -852,7 +901,7 @@ export default function Home() {
                           <td style={{ textAlign: 'center' }}>
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
                               {game.players
-                                .filter(p => p.id !== game.winner) // Exclude winner from this column
+                                .filter(p => !(game.winners && game.winners.includes(p.id))) // Exclude all winners from this column
                                 .sort((a, b) => {
                                   // Sort runners first
                                   const aIsRunner = filterGameType === 'Rummy' && game.runners?.some(r => r.id === a.id);
