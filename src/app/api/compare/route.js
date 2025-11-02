@@ -223,8 +223,12 @@ export async function GET(request) {
                 
                 if (mustPlayAfterDrops || underPressure) {
                   stats.mustPlayRounds++;
-                  if (round.winners && round.winners[playerId]) {
-                    stats.mustPlayWins++;
+                  
+                  // Check if they survived (didn't get eliminated) regardless of points scored
+                  const scoreInRound = score || 0;
+                  const pointsAfterRound = currentPoints + scoreInRound;
+                  if (pointsAfterRound < maxPoints) {
+                    stats.mustPlayWins++; // Tracks survivals, not just wins
                   }
                 }
               }

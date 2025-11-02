@@ -142,12 +142,21 @@ function ProfileContent() {
     const scaleY = image.naturalHeight / image.height;
     const ctx = canvas.getContext('2d');
 
-    const pixelRatio = window.devicePixelRatio || 1;
+    // Calculate actual crop dimensions
+    let cropWidth = completedCrop.width * scaleX;
+    let cropHeight = completedCrop.height * scaleY;
 
-    canvas.width = completedCrop.width * scaleX * pixelRatio;
-    canvas.height = completedCrop.height * scaleY * pixelRatio;
+    // Limit max dimensions to 800x800 to reduce file size
+    const maxDimension = 800;
+    if (cropWidth > maxDimension || cropHeight > maxDimension) {
+      const ratio = Math.min(maxDimension / cropWidth, maxDimension / cropHeight);
+      cropWidth = cropWidth * ratio;
+      cropHeight = cropHeight * ratio;
+    }
 
-    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    canvas.width = cropWidth;
+    canvas.height = cropHeight;
+
     ctx.imageSmoothingQuality = 'high';
 
     ctx.drawImage(
@@ -158,8 +167,8 @@ function ProfileContent() {
       completedCrop.height * scaleY,
       0,
       0,
-      completedCrop.width * scaleX,
-      completedCrop.height * scaleY
+      cropWidth,
+      cropHeight
     );
 
     return new Promise((resolve, reject) => {
@@ -172,7 +181,7 @@ function ProfileContent() {
           resolve(blob);
         },
         'image/jpeg',
-        0.95
+        0.85 // Reduced quality from 0.95 to 0.85 for smaller file size
       );
     });
   }, [completedCrop]);
@@ -192,10 +201,10 @@ function ProfileContent() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file size
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    // Validate file size (original file before compression)
+    const maxSize = 10 * 1024 * 1024; // 10MB for original file
     if (file.size > maxSize) {
-      setError('File size must be less than 10MB');
+      setError('File size must be less than 10MB. The image will be compressed after cropping.');
       return;
     }
 
@@ -232,9 +241,9 @@ function ProfileContent() {
         return;
       }
 
-      // Check blob size
-      if (croppedBlob.size > 10 * 1024 * 1024) {
-        setError('Cropped image is too large. Please crop a smaller area.');
+      // Check blob size (after compression, should be under 2MB)
+      if (croppedBlob.size > 2 * 1024 * 1024) {
+        setError('Compressed image is still too large. Please crop a smaller area or use a different image.');
         setUploading(false);
         return;
       }
