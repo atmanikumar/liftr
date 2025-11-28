@@ -1,87 +1,72 @@
 import { NextResponse } from 'next/server';
-import { verifyPassword, generateToken, initDefaultAdmin } from '@/lib/auth';
-import { cookies } from 'next/headers';
-import { getUsers, saveUsers, getPlayers, savePlayers } from '@/lib/storage';
+import { queryOne, execute } from '@/services/database/dbService';
+import { comparePassword, generateToken, getSafeUserData } from '@/services/auth/authService';
+import { COOKIE_NAME } from '@/constants/app';
 
 export async function POST(request) {
   try {
     const { username, password } = await request.json();
 
+    // Validate input
     if (!username || !password) {
       return NextResponse.json(
-        { error: 'Username and password required' },
+        { error: 'Username and password are required' },
         { status: 400 }
       );
     }
 
-    // Get users from storage
-    let users = await getUsers();
-    
-    // If no users exist, initialize with default admin
-    if (users.length === 0) {
-      const admin = await initDefaultAdmin();
-      users = [admin];
-      await saveUsers(users);
-      
-      // Also add admin as a player (check if not already exists)
-      let players = await getPlayers();
-      const adminExists = players.find(p => p.id === admin.id);
-      if (!adminExists) {
-        const adminPlayer = {
-          id: admin.id,
-          name: admin.name,
-          avatar: '👑', // Crown for admin
-          wins: 0,
-          gamesPlayed: 0,
-          winPercentage: 0,
-          rank: 0,
-        };
-        players.push(adminPlayer);
-        await savePlayers(players);
-      }
-    }
-
     // Find user
-    const user = users.find(u => u.username === username);
-    
+    const user = await queryOne(
+      'SELECT * FROM liftr_users WHERE username = ?',
+      [username]
+    );
+
     if (!user) {
       return NextResponse.json(
-        { error: 'Invalid credentials' },
+        { error: 'Invalid username or password' },
         { status: 401 }
       );
     }
 
     // Verify password
-    const isValid = await verifyPassword(password, user.password);
-    
-    if (!isValid) {
+    const isValidPassword = await comparePassword(password, user.password);
+
+    if (!isValidPassword) {
       return NextResponse.json(
-        { error: 'Invalid credentials' },
+        { error: 'Invalid username or password' },
         { status: 401 }
       );
     }
 
-    // Generate token
-    const token = generateToken(user);
+    // Update last login
+    await execute(
+      'UPDATE liftr_users SET lastLogin = CURRENT_TIMESTAMP WHERE id = ?',
+      [user.id]
+    );
 
-    // Set cookie
-    cookies().set('auth-token', token, {
+    // Generate JWT token
+    const token = generateToken({
+      id: user.id,
+      username: user.username,
+      role: user.role,
+    });
+
+    // Create response with cookie
+    const response = NextResponse.json({
+      success: true,
+      user: getSafeUserData(user),
+    });
+
+    response.cookies.set(COOKIE_NAME, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 30 * 24 * 60 * 60, // 30 days
-      path: '/'
+      maxAge: 60 * 60 * 24 * 90, // 90 days
     });
 
-    // Return user data (without password)
-    const { password: _, ...userData } = user;
-    
-    return NextResponse.json({
-      success: true,
-      user: userData
-    });
-
+    return response;
   } catch (error) {
+    console.error('Login error:', error);
     return NextResponse.json(
       { error: 'Login failed' },
       { status: 500 }

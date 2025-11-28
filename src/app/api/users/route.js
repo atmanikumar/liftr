@@ -1,77 +1,25 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { verifyToken, hashPassword, initDefaultAdmin } from '@/lib/auth';
-import { getUsers, saveUsers, getPlayers, savePlayers } from '@/lib/storage';
+import { query, execute } from '@/services/database/dbService';
+import { hashPassword, getSafeUserData } from '@/services/auth/authService';
+import { requireAdmin } from '@/lib/authMiddleware';
 
-// GET all users (admin and player roles)
+// GET all users (admin only)
 export async function GET() {
+  const authResult = await requireAdmin();
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
-    const token = cookies().get('auth-token')?.value;
-    const user = verifyToken(token);
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 403 }
-      );
-    }
-
-    let users = await getUsers();
+    const users = await query('SELECT * FROM liftr_users ORDER BY createdAt DESC');
     
-    // Initialize with default admin if empty
-    if (users.length === 0) {
-      const admin = await initDefaultAdmin();
-      users = [admin];
-      await saveUsers(users);
-      
-      // Also add admin as a player (check if not already exists)
-      let players = await getPlayers();
-      const adminExists = players.find(p => p.id === admin.id);
-      if (!adminExists) {
-        const adminPlayer = {
-          id: admin.id,
-          name: admin.name,
-          avatar: '👑', // Crown for admin
-          wins: 0,
-          gamesPlayed: 0,
-          totalGames: 0,
-          winPercentage: 0,
-          rank: 0,
-        };
-        players.push(adminPlayer);
-        await savePlayers(players);
-      }
-    }
+    // Remove passwords from response
+    const safeUsers = users.map(user => getSafeUserData(user));
 
-    // Merge users with their player stats
-    const players = await getPlayers();
-    const usersWithStats = users.map(user => {
-      const playerData = players.find(p => p.id === user.id);
-      return {
-        id: user.id,
-        username: user.username,
-        name: user.name,
-        role: user.role,
-        createdAt: user.createdAt,
-        profilePhoto: user.profilePhoto || null,
-        // Player stats
-        avatar: playerData?.avatar || '👤',
-        wins: playerData?.wins || 0,
-        gamesPlayed: playerData?.gamesPlayed || 0,
-        totalGames: playerData?.totalGames || 0,
-        winPercentage: playerData?.winPercentage || 0,
-        rank: playerData?.rank || 0
-      };
-    });
-
-    return NextResponse.json(usersWithStats, {
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-      }
+    return NextResponse.json({
+      success: true,
+      users: safeUsers,
     });
   } catch (error) {
+    console.error('Fetch users error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch users' },
       { status: 500 }
@@ -81,91 +29,58 @@ export async function GET() {
 
 // POST create new user (admin only)
 export async function POST(request) {
+  const authResult = await requireAdmin();
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
-    const token = cookies().get('auth-token')?.value;
-    const user = verifyToken(token);
+    const { username, password, name, role = 'user' } = await request.json();
 
-    if (!user || (user.role !== 'admin' && user.role !== 'superAdmin')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 403 }
-      );
-    }
-
-    const { username, password, name, role } = await request.json();
-
+    // Validate input
     if (!username || !password || !name) {
       return NextResponse.json(
-        { error: 'Username, password, and name required' },
+        { error: 'Username, password, and name are required' },
         { status: 400 }
       );
     }
 
-    let users = await getUsers();
-
     // Check if username already exists
-    if (users.find(u => u.username === username)) {
+    const existingUser = await query(
+      'SELECT id FROM liftr_users WHERE username = ?',
+      [username]
+    );
+
+    if (existingUser.length > 0) {
       return NextResponse.json(
         { error: 'Username already exists' },
-        { status: 400 }
+        { status: 409 }
       );
     }
 
     // Hash password
     const hashedPassword = await hashPassword(password);
 
-    // Create new user
-    const newUser = {
-      id: `user-${Date.now()}`,
-      username,
-      password: hashedPassword,
-      name,
-      role: role || 'player',
-      createdAt: new Date().toISOString()
-    };
+    // Create user
+    const result = await execute(
+      'INSERT INTO liftr_users (username, password, name, role) VALUES (?, ?, ?, ?)',
+      [username, hashedPassword, name, role]
+    );
 
-    users.push(newUser);
-    const saveResult = await saveUsers(users);
-    if (!saveResult) {
-      return NextResponse.json(
-        { error: 'Failed to save user to database' },
-        { status: 500 }
-      );
-    }
+    // Fetch created user
+    const newUser = await query(
+      'SELECT * FROM liftr_users WHERE id = ?',
+      [result.lastInsertRowid]
+    );
 
-    // Also add as a player for game tracking (check if not already exists)
-    let players = await getPlayers();
-    const playerExists = players.find(p => p.id === newUser.id);
-    
-    if (!playerExists) {
-      // Generate random superhero avatar
-      const avatars = ['🦸‍♂️', '🦹‍♂️', '🕷️', '🦇', '⚡', '💪', '🔥', '⭐', '🎯', '🏆', '👊', '🛡️', '⚔️', '🎪', '🎭', '🎬'];
-      const randomAvatar = avatars[Math.floor(Math.random() * avatars.length)];
-      
-      const newPlayer = {
-        id: newUser.id,
-        name: newUser.name,
-        avatar: randomAvatar,
-        wins: 0,
-        gamesPlayed: 0,
-        winPercentage: 0,
-        rank: 0,
-      };
-      
-      players.push(newPlayer);
-      await savePlayers(players);
-    }
-
-    // Return user without password
-    const { password: _, ...safeUser } = newUser;
-
-    return NextResponse.json(safeUser);
+    return NextResponse.json({
+      success: true,
+      user: getSafeUserData(newUser[0]),
+    });
   } catch (error) {
+    console.error('Create user error:', error);
     return NextResponse.json(
       { error: 'Failed to create user' },
       { status: 500 }
     );
   }
 }
-
 

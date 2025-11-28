@@ -1,108 +1,132 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import {
+  Box,
+  Card,
+  CardContent,
+  TextField,
+  Button,
+  Typography,
+  Alert,
+  Container,
+} from '@mui/material';
+import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
+import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
-import styles from './page.module.css';
+import { login, clearError, selectAuth } from '@/redux/slices/authSlice';
+import Loader from '@/components/common/Loader';
 
 export default function LoginPage() {
-  const router = useRouter();
-  const { user, login, loading } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const dispatch = useDispatch();
+  const router = useRouter();
+  const { loading, error, isAuthenticated } = useSelector(selectAuth);
 
-  // Redirect if already logged in
   useEffect(() => {
-    if (!loading && user) {
+    // Clear any previous errors on mount
+    dispatch(clearError());
+  }, [dispatch]);
+
+  useEffect(() => {
+    // Redirect to home if already authenticated
+    if (isAuthenticated) {
       router.push('/');
     }
-  }, [user, loading, router]);
+  }, [isAuthenticated, router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setIsLoading(true);
+    
+    if (!username || !password) {
+      return;
+    }
 
-    const result = await login(username, password);
-
-    if (result.success) {
+    const result = await dispatch(login({ username, password }));
+    
+    if (login.fulfilled.match(result)) {
       router.push('/');
-    } else {
-      setError(result.error || 'Login failed');
-      setIsLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className={styles.loginPage}>
-        <div className="container">
-          <div className={styles.loginCard}>
-            <p>Loading...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (user) {
-    return null; // Will redirect
-  }
-
   return (
-    <div className={styles.loginPage}>
-      <div className="container">
-        <div className={styles.loginCard}>
-          <div className={styles.loginHeader}>
-            <h1 className={styles.title}>House of Games</h1>
-          </div>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #1976d2 0%, #0d47a1 100%)',
+      }}
+    >
+      <Container maxWidth="sm">
+        <Card sx={{ borderRadius: 4, boxShadow: 6 }}>
+          <CardContent sx={{ p: 4 }}>
+            {/* Logo and Title */}
+            <Box sx={{ textAlign: 'center', mb: 4 }}>
+              <FitnessCenterIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
+              <Typography variant="h4" fontWeight="bold">
+                Liftr
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Track your fitness journey
+              </Typography>
+            </Box>
 
-          <form onSubmit={handleSubmit} className={styles.loginForm}>
+            {/* Error Alert */}
             {error && (
-              <div className={styles.error}>
+              <Alert severity="error" sx={{ mb: 3 }} onClose={() => dispatch(clearError())}>
                 {error}
-              </div>
+              </Alert>
             )}
 
-            <div className="form-group">
-              <label>Username</label>
-              <input
-                type="text"
+            {/* Login Form */}
+            <form onSubmit={handleSubmit}>
+              <TextField
+                fullWidth
+                label="Username"
+                variant="outlined"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username"
+                sx={{ mb: 2 }}
                 required
                 autoFocus
-                disabled={isLoading}
+                disabled={loading}
               />
-            </div>
 
-            <div className="form-group">
-              <label>Password</label>
-              <input
+              <TextField
+                fullWidth
+                label="Password"
                 type="password"
+                variant="outlined"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
+                sx={{ mb: 3 }}
                 required
-                disabled={isLoading}
+                disabled={loading}
               />
-            </div>
 
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={isLoading}
-              style={{ width: '100%', marginTop: '8px' }}
-            >
-              {isLoading ? 'Logging in...' : 'Login'}
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
+              <Button
+                fullWidth
+                type="submit"
+                variant="contained"
+                size="large"
+                disabled={loading || !username || !password}
+                sx={{ py: 1.5 }}
+              >
+                {loading ? <Loader message="" /> : 'Login'}
+              </Button>
+            </form>
+
+            {/* Footer */}
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 3, textAlign: 'center' }}>
+              Your fitness journey starts here
+            </Typography>
+          </CardContent>
+        </Card>
+      </Container>
+    </Box>
   );
 }
 

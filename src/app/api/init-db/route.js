@@ -1,27 +1,91 @@
 import { NextResponse } from 'next/server';
-import { initDatabase } from '@/lib/storage';
+import { execute } from '@/services/database/dbService';
+import { hashPassword } from '@/services/auth/authService';
 
-// Initialize database tables
 export async function GET() {
   try {
-    const success = await initDatabase();
-    
-    if (success) {
-      return NextResponse.json({ 
-        message: 'Database initialized successfully',
-        success: true 
-      });
-    } else {
-      return NextResponse.json({ 
-        message: 'Database initialization failed',
-        success: false 
-      }, { status: 500 });
+    // Create liftr_users table
+    await execute(`
+      CREATE TABLE IF NOT EXISTS liftr_users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        name TEXT NOT NULL,
+        role TEXT DEFAULT 'user',
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        lastLogin TEXT
+      )
+    `);
+
+    // Create liftr_workouts table
+    await execute(`
+      CREATE TABLE IF NOT EXISTS liftr_workouts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        equipmentName TEXT,
+        equipmentPhoto TEXT,
+        muscleFocus TEXT,
+        description TEXT,
+        createdBy INTEGER,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (createdBy) REFERENCES liftr_users(id)
+      )
+    `);
+
+    // Create liftr_training_programs table
+    await execute(`
+      CREATE TABLE IF NOT EXISTS liftr_training_programs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        workoutIds TEXT NOT NULL,
+        description TEXT,
+        createdBy INTEGER,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (createdBy) REFERENCES liftr_users(id)
+      )
+    `);
+
+    // Create liftr_workout_sessions table
+    await execute(`
+      CREATE TABLE IF NOT EXISTS liftr_workout_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER NOT NULL,
+        workoutId INTEGER,
+        trainingProgramId INTEGER,
+        sets INTEGER,
+        reps TEXT,
+        weight TEXT,
+        duration INTEGER,
+        notes TEXT,
+        completedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (userId) REFERENCES liftr_users(id),
+        FOREIGN KEY (workoutId) REFERENCES liftr_workouts(id),
+        FOREIGN KEY (trainingProgramId) REFERENCES liftr_training_programs(id)
+      )
+    `);
+
+    // Create default admin user if not exists
+    const hashedPassword = await hashPassword('admin123');
+    try {
+      await execute(
+        'INSERT INTO liftr_users (username, password, name, role) VALUES (?, ?, ?, ?)',
+        ['admin', hashedPassword, 'Administrator', 'admin']
+      );
+    } catch (error) {
+      // User might already exist, ignore error
+      console.log('Admin user already exists');
     }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Database initialized successfully',
+    });
   } catch (error) {
-    return NextResponse.json({ 
-      error: error.message,
-      success: false 
-    }, { status: 500 });
+    console.error('Database initialization error:', error);
+    return NextResponse.json(
+      { error: 'Failed to initialize database' },
+      { status: 500 }
+    );
   }
 }
 

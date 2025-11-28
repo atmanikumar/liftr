@@ -1,169 +1,301 @@
-# Vilayattu Veedu - Cursor AI Rules
+# Liftr - Fitness Tracking App - Cursor AI Rules
 
 ## Project Context
-This is a Next.js card game tracking application with Turso SQLite database for persistence.
+This is a Next.js fitness tracking application with Turso SQLite database, Redux state management, and Material UI components.
+
+## 🏗️ Application Structure
+
+### Directory Organization
+```
+src/
+├── app/                      # Next.js App Router pages
+│   ├── login/               # Login page
+│   ├── workouts/            # Workouts management
+│   ├── training-programs/   # Grouped workouts (training programs)
+│   ├── users/               # User management (admin)
+│   ├── progress/            # User progress tracking
+│   ├── recent/              # Recent workouts
+│   └── api/                 # API routes
+├── components/              # Reusable UI components
+│   ├── common/             # Common components (Loader, etc)
+│   ├── layout/             # Layout components (Navbar, Sidebar)
+│   └── features/           # Feature-specific components
+├── redux/                   # Redux state management
+│   ├── slices/             # Redux slices
+│   └── store.js            # Redux store configuration
+├── services/               # Service layer (modular)
+│   ├── database/          # Database abstraction
+│   ├── auth/              # Authentication service
+│   └── api/               # API client utilities
+├── lib/                    # Utility libraries
+├── constants/             # App-wide constants
+├── styles/                # Global styles and theme
+└── types/                 # TypeScript types (if using TS)
+```
+
+### File Naming Conventions
+- **Components**: PascalCase (e.g., `UserTable.js`)
+- **Pages**: lowercase with hyphens (e.g., `training-programs`)
+- **Styles**: Match component name (e.g., `UserTable.module.css`)
+- **Constants**: UPPER_SNAKE_CASE in files named `constants.js`
+- **Services**: camelCase (e.g., `authService.js`)
+
+## 🔐 Security Guidelines
+
+### 1. No Hardcoded Secrets
+- ❌ Never hardcode API keys, tokens, or passwords
+- ✅ Always use environment variables from `.env.local`
+- ✅ Sensitive values must be in `.env.local` (gitignored)
+
+### 2. Protected Endpoints
+- ✅ All API routes must verify JWT token
+- ✅ Admin-only routes must check user role
+- ✅ Use middleware for route protection
+
+### 3. Password Security
+- ✅ Always hash passwords with bcrypt
+- ✅ Never log actual passwords
+- ✅ Never return passwords in API responses
+
+### 4. SQL Injection Prevention
+- ✅ Always use parameterized queries
+- ✅ Never concatenate user input into SQL
+- ✅ Use `?` placeholders with args array
+
+### 5. XSS Prevention
+- ✅ Sanitize user input before rendering
+- ✅ Never use dangerouslySetInnerHTML unless necessary
+
+## 🎨 UI/UX Guidelines
+
+### Material UI Standards
+- Use Material UI components exclusively
+- Follow Material Design principles
+- Dark theme as default (can be toggled)
+- Responsive design (mobile-first)
+
+### Loading States
+- Show Material UI `CircularProgress` or `LinearProgress` for all async operations
+- Use consistent loader component from `components/common/Loader.js`
+- Display skeleton screens for initial page loads
+
+### Theme Configuration
+- Primary Color: Deep blue (#1976d2)
+- Dark Mode: Dark background with proper contrast
+- Use Material UI's `ThemeProvider`
+- Store theme preference in localStorage
+
+## 📦 Redux State Management
+
+### Store Structure
+```javascript
+{
+  auth: {
+    user: null | User,
+    isAuthenticated: boolean,
+    loading: boolean,
+    error: string | null
+  },
+  workouts: {
+    items: Workout[],
+    loading: boolean,
+    error: string | null
+  },
+  trainingPrograms: {
+    items: TrainingProgram[],
+    loading: boolean,
+    error: string | null
+  },
+  users: {
+    items: User[],
+    loading: boolean,
+    error: string | null
+  }
+}
+```
+
+### Redux Best Practices
+- Use Redux Toolkit (createSlice, createAsyncThunk)
+- Keep slices small and focused
+- Use selectors for derived state
+- Handle loading/error states consistently
+
+## 🗄️ Database Schema
+
+**Important**: All Liftr table names must be prefixed with `liftr_`
+
+### Tables
+```sql
+liftr_users (
+  id INTEGER PRIMARY KEY,
+  username TEXT UNIQUE,
+  password TEXT, -- bcrypt hashed
+  name TEXT,
+  role TEXT DEFAULT 'user', -- 'user' | 'admin'
+  createdAt TEXT,
+  lastLogin TEXT
+)
+
+liftr_workouts (
+  id INTEGER PRIMARY KEY,
+  name TEXT,
+  equipmentName TEXT,
+  equipmentPhoto TEXT, -- URL or base64
+  muscleFocus TEXT, -- e.g., 'Chest', 'Legs', 'Back'
+  description TEXT,
+  createdBy INTEGER, -- user id
+  createdAt TEXT
+)
+
+liftr_training_programs (
+  id INTEGER PRIMARY KEY,
+  name TEXT, -- e.g., 'Leg Day', 'Push Day'
+  workoutIds TEXT, -- JSON array of workout IDs
+  createdBy INTEGER,
+  createdAt TEXT
+)
+
+liftr_workout_sessions (
+  id INTEGER PRIMARY KEY,
+  userId INTEGER,
+  workoutId INTEGER,
+  trainingProgramId INTEGER,
+  sets INTEGER,
+  reps TEXT, -- JSON array
+  weight TEXT, -- JSON array
+  duration INTEGER, -- minutes
+  notes TEXT,
+  completedAt TEXT
+)
+```
+
+## 🔧 Service Layer (Modular)
+
+### Database Service (`services/database/dbService.js`)
+- Abstract database operations
+- Easy to swap Turso with other databases
+- Export: `query`, `execute`, `transaction`
+
+### Auth Service (`services/auth/authService.js`)
+- Handle login, logout, token verification
+- Easy to swap JWT with other auth methods
+- Export: `login`, `verifyToken`, `hashPassword`, `comparePassword`
+
+### API Client (`services/api/apiClient.js`)
+- Centralized API calls
+- Handle errors and loading states
+- Export: `get`, `post`, `put`, `delete`
 
 ## 🚫 File Creation Rules
 
-### NEVER Create These Files (Unless Explicitly Requested):
+### NEVER Create These Files:
 - README.md
 - CHANGELOG.md
 - CONTRIBUTING.md
 - LICENSE.md
-- Any .md documentation files
-- Any instruction/guide MD files (e.g., SETUP.md, GUIDE.md, INSTRUCTIONS.md, HOW_TO.md, etc.)
+- SETUP_GUIDE.md
+- PROJECT_SUMMARY.md
+- QUICK_START.md
+- Any .md documentation/instruction files
 - .txt summary files
 - .sh test script files
 
-### Exception:
-Only create documentation files if the user explicitly says "create a README" or similar.
-
 ### Important:
-- ❌ NEVER create instruction MD files after implementing features
-- ❌ NEVER create guide files to document changes
-- ❌ NEVER create setup guide files
-- ✅ Only update code and existing configuration files
+Documentation and instructions should ONLY be in code comments or inline JSDoc, NEVER in separate .md files.
 
-## 🔐 Security Guidelines (Auto-Check Every Response)
+## 🎯 Feature Requirements
 
-### Before Making Changes, Verify:
-1. **No Hardcoded Secrets**
-   - ❌ Never hardcode API keys, tokens, or passwords in code
-   - ✅ Always use environment variables
-   - ✅ Check that sensitive values are in .env.local (which is .gitignored)
+### Login Page
+- Username and password fields
+- JWT authentication with 3-month expiry
+- Store token in httpOnly cookie
+- Redirect to home on success
 
-2. **No Exposed Endpoints**
-   - ❌ No unprotected delete/clear/admin endpoints
-   - ✅ All admin endpoints must check: `user.role === 'admin'`
-   - ✅ All endpoints must verify JWT token from cookies
+### Navigation
+- Navbar with burger menu icon
+- Collapsible sidebar with:
+  - Workouts
+  - Training Programs
+  - Users (admin only)
+  - My Progress
+  - Recent Workouts
+- Active route highlighting
 
-3. **Password Security**
-   - ✅ Always hash passwords with bcrypt
-   - ✅ Never log actual passwords (use [REDACTED])
-   - ✅ Never return passwords in API responses
+### Workouts Page
+- Table/Grid view of all workouts
+- Add/Edit/Delete functionality
+- Fields: Equipment name, photo, muscle focus
+- Search and filter options
 
-4. **SQL Injection Prevention**
-   - ✅ Always use parameterized queries
-   - ✅ Never concatenate user input into SQL
-   - ✅ Use `?` placeholders in SQL with args array
+### Training Programs Page
+- Create grouped workouts
+- Select multiple workouts
+- Name the program (e.g., "Leg Day")
+- Assign to users
 
-5. **XSS Prevention**
-   - ✅ Never use dangerouslySetInnerHTML unless absolutely necessary
-   - ✅ Sanitize user input before rendering
-
-## 📂 Project Structure
-
-### Key Files:
-- `src/lib/turso.js` - Database client and operations
-- `src/lib/auth.js` - Authentication logic (JWT, bcrypt)
-- `src/lib/storage.js` - Storage layer (exports Turso functions)
-- `src/context/AuthContext.js` - Auth state management
-- `src/context/GameContext.js` - Game state management
-- `src/middleware.js` - Route protection
-
-### Database Tables:
-- `users` - Authentication (username, password, role, name, createdAt)
-- `players` - Game stats (id, name, avatar, wins, gamesPlayed, etc)
-- `games` - Game records (id, title, gameType, players, rounds, etc)
-
-### API Routes:
-- `/api/auth/login` - Login (no auth required)
-- `/api/auth/me` - Get current user (requires auth)
-- `/api/users` - User management (admin only)
-- `/api/players` - Player data (no auth, read-only)
-- `/api/games` - Game data (no auth)
-- `/api/init-db` - Initialize database tables
-
-## 🎨 UI/UX Guidelines
-
-### Styling:
-- Use CSS Modules (`.module.css`)
-- Dark theme with dark blue primary color
-- Responsive design (mobile-first)
-- Use emoji avatars for players
-
-### Components:
-- Use functional components with hooks
-- Use `useAuth()` for authentication state
-- Use `useGame()` for game state
-- Always check `isAdmin()` before showing admin features
-
-## 🔧 Environment Variables
-
-### Required in .env.local:
-```bash
-TURSO_DATABASE_URL=your-turso-url
-TURSO_AUTH_TOKEN=your-turso-token
-JWT_SECRET=your-secret-key
-```
-
-### NOT Required (Deprecated):
-- ADMIN_USERNAME ❌
-- ADMIN_PASSWORD ❌
-(Admin is now created in database on first run)
-
-## 🐛 Common Issues & Solutions
-
-### Issue: "no such table" errors
-**Solution:** Call `/api/init-db` to initialize tables
-
-### Issue: Users not persisting
-**Solution:** Check Turso credentials in .env.local
-
-### Issue: Login not working
-**Solution:** Clear cookies, refresh, ensure admin exists in DB
+### Users Page (Admin Only)
+- Material UI DataGrid/Table
+- Add new user
+- Reset password functionality
+- Role management
 
 ## 📝 Code Quality Rules
 
-### When Editing Files:
-1. Preserve existing code style (tabs/spaces, quotes)
-2. Add comments for complex logic
-3. Use descriptive variable names
-4. Handle errors gracefully (try/catch)
-5. Add console.log for debugging (but remove before production)
+### Component Structure
+```javascript
+// 1. Imports (grouped)
+import { useState } from 'react';
+import { Button, Box } from '@mui/material';
+import { useDispatch } from 'react-redux';
+import styles from './Component.module.css';
 
-### When Creating New Features:
-1. Check if authentication is required
-2. Add proper error handling
-3. Return appropriate HTTP status codes
-4. Log errors to console
-5. Validate user input
+// 2. Constants
+const COMPONENT_CONSTANTS = {};
 
-## 🚀 Deployment
+// 3. Component
+export default function Component() {
+  // a. Hooks
+  // b. State
+  // c. Effects
+  // d. Handlers
+  // e. Render
+}
+```
 
-### Vercel Deployment:
-1. Push to GitHub
-2. Add environment variables in Vercel dashboard
-3. Deploy
-4. Visit `/api/init-db` once to initialize tables
-5. Login with initial credentials (mani/vilayadu)
+### Error Handling
+- Always use try/catch for async operations
+- Display user-friendly error messages
+- Log errors to console in development
+- Return appropriate HTTP status codes
+
+### Environment Variables
+```bash
+# .env.local
+TURSO_DATABASE_URL=libsql://liftr_your-db-name.turso.io
+TURSO_AUTH_TOKEN=your-turso-token
+JWT_SECRET=your-secret-key
+JWT_EXPIRY=90d
+```
+
+**Important**: All Turso database names must be prefixed with `liftr_`
+
+## 🚀 Deployment Checklist
+
+1. ✅ All environment variables set in Vercel
+2. ✅ Initialize database tables (`/api/init-db`)
+3. ✅ Create admin user
+4. ✅ Test authentication flow
+5. ✅ Verify responsive design
 
 ## ⚠️ Important Notes
 
-### Database Operations:
-- Turso operations are async - always use `await`
-- Use `String()` to convert values before inserting
-- Handle empty arrays gracefully
-
-### Authentication:
-- JWT tokens expire in 30 days
-- Cookies are httpOnly for security
-- Middleware checks all protected routes
-
-### Game Logic:
-- Max points default: 120
-- Players above max points are marked as "Lost"
-- Winner is last player below max points
-
-## 🎯 Project Goals
-
-1. **Simple UX** - Easy to use during actual card games
-2. **Fast Performance** - Quick round entry, instant updates
-3. **Reliable Storage** - Never lose game data
-4. **Mobile-Friendly** - Play on phones during games
-5. **Secure** - Protect user data and admin functions
+- **JWT Expiry**: 90 days (3 months)
+- **Cookie Security**: httpOnly, secure in production
+- **Database**: Turso SQLite (but swappable via service layer)
+- **State Management**: Redux Toolkit only
+- **UI Library**: Material UI only
+- **Theme**: Dark mode by default
 
 ---
 
-**Remember:** Always prioritize security and user experience. When in doubt, ask the user before making breaking changes.
-
+**Remember**: Modularity is key. Every service should be easily replaceable without affecting the rest of the application.

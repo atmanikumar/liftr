@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { verifyToken } from '@/lib/auth';
-import { getUserById } from '@/lib/storage';
+import { queryOne } from '@/services/database/dbService';
+import { verifyToken, getSafeUserData } from '@/services/auth/authService';
+import { COOKIE_NAME } from '@/constants/app';
 
 export async function GET() {
   try {
-    const token = cookies().get('auth-token')?.value;
+    const cookieStore = cookies();
+    const token = cookieStore.get(COOKIE_NAME)?.value;
 
     if (!token) {
       return NextResponse.json(
@@ -14,6 +16,7 @@ export async function GET() {
       );
     }
 
+    // Verify token
     const decoded = verifyToken(token);
 
     if (!decoded) {
@@ -23,8 +26,11 @@ export async function GET() {
       );
     }
 
-    // Get fresh user data from database to include latest profilePhoto
-    const user = await getUserById(decoded.id);
+    // Get fresh user data from database
+    const user = await queryOne(
+      'SELECT * FROM liftr_users WHERE id = ?',
+      [decoded.id]
+    );
 
     if (!user) {
       return NextResponse.json(
@@ -33,11 +39,12 @@ export async function GET() {
       );
     }
 
-    // Remove password from response
-    const { password: _, ...userData } = user;
-
-    return NextResponse.json({ user: userData });
+    return NextResponse.json({
+      success: true,
+      user: getSafeUserData(user),
+    });
   } catch (error) {
+    console.error('Auth check error:', error);
     return NextResponse.json(
       { error: 'Authentication check failed' },
       { status: 500 }
