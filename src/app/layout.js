@@ -15,6 +15,8 @@ export default function RootLayout({ children }) {
         <title>Liftr - Fitness Tracking App</title>
         <meta name="description" content="Track your fitness journey with Liftr" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/logo.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/logo.png" />
       </head>
       <body>
         <Provider store={store}>
