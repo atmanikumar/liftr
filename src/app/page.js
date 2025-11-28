@@ -81,7 +81,7 @@ export default function HomePage() {
             </Typography>
             <Typography variant="body2" color="text.secondary">
               This section will show your recent workouts and quick action buttons.
-              We'll implement this in the next phase!
+              We&apos;ll implement this in the next phase!
             </Typography>
           </Paper>
         </Grid>
