@@ -70,7 +70,7 @@ export default function MainLayout({ children }) {
           backgroundColor: 'background.default',
         }}
       >
-        <Toolbar />
+        <Toolbar sx={{ minHeight: '70px !important' }} />
         {children}
       </Box>
     </Box>

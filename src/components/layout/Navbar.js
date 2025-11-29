@@ -31,7 +31,7 @@ export default function Navbar({ onMenuClick }) {
 
   return (
     <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-      <Toolbar>
+      <Toolbar sx={{ minHeight: '70px !important', py: 1 }}>
         <IconButton
           color="inherit"
           aria-label="open drawer"
@@ -42,7 +42,7 @@ export default function Navbar({ onMenuClick }) {
           <MenuIcon />
         </IconButton>
 
-        <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+        <Typography variant="h5" noWrap component="div" sx={{ flexGrow: 1, fontWeight: 700 }}>
           Liftr
         </Typography>
 

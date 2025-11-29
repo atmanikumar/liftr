@@ -50,7 +50,7 @@ const menuItems = [
     adminOnly: false,
   },
   {
-    title: 'Training Programs',
+    title: 'Workout Plans',
     path: '/training-programs',
     icon: 'CalendarMonthIcon',
     adminOnly: false,

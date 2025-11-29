@@ -30,8 +30,6 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
-import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchTrainingPrograms,
@@ -144,14 +142,17 @@ export default function TrainingProgramsPage() {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">Training Programs</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="h4" sx={{ flexGrow: 1, minWidth: 'fit-content' }}>
+          Workout Plans
+        </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => handleOpenDialog()}
+          sx={{ whiteSpace: 'nowrap' }}
         >
-          Create Program
+          Create
         </Button>
       </Box>
 
@@ -161,12 +162,9 @@ export default function TrainingProgramsPage() {
           <Grid item xs={12} sm={6} md={4} key={program.id}>
             <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <CardContent sx={{ flexGrow: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <CalendarMonthIcon sx={{ fontSize: 40, color: 'primary.main', mr: 2 }} />
-                  <Typography variant="h6">
-                    {program.name}
-                  </Typography>
-                </Box>
+                <Typography variant="h6" sx={{ mb: 2 }}>
+                  {program.name}
+                </Typography>
                 
                 {program.description && (
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -183,7 +181,6 @@ export default function TrainingProgramsPage() {
                       key={workoutId}
                       label={getWorkoutName(workoutId)}
                       size="small"
-                      icon={<FitnessCenterIcon />}
                       color="primary"
                       variant="outlined"
                     />
@@ -213,15 +210,14 @@ export default function TrainingProgramsPage() {
 
       {programs.length === 0 && !loading && (
         <Box sx={{ textAlign: 'center', py: 8 }}>
-          <CalendarMonthIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
-          <Typography variant="h6" color="text.secondary">
-            No training programs yet
+          <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
+            No workout plans yet
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Create a program to group your workouts (e.g., Leg Day, Push Day)
+            Create a plan to group your workouts (e.g., Leg Day Quad, Upper Body Circuit)
           </Typography>
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
-            Create Program
+            Create
           </Button>
         </Box>
       )}

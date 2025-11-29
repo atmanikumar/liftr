@@ -22,10 +22,14 @@ import {
   MenuItem,
   Alert,
   Snackbar,
+  Collapse,
+  Stack,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LockResetIcon from '@mui/icons-material/LockReset';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchUsers,
@@ -56,6 +60,9 @@ export default function UsersPage() {
     role: 'user',
   });
   const [newPassword, setNewPassword] = useState('');
+
+  // Expanded user state
+  const [expandedUser, setExpandedUser] = useState(null);
 
   // Snackbar state
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -128,54 +135,100 @@ export default function UsersPage() {
         </Button>
       </Box>
 
-      {/* Users Table */}
+      {/* Users Table - Simplified with Collapsible Details */}
       <TableContainer component={Paper}>
         <Table>
           <TableHead>
             <TableRow>
               <TableCell><strong>Username</strong></TableCell>
-              <TableCell><strong>Name</strong></TableCell>
-              <TableCell><strong>Role</strong></TableCell>
-              <TableCell><strong>Created At</strong></TableCell>
               <TableCell><strong>Last Login</strong></TableCell>
-              <TableCell align="right"><strong>Actions</strong></TableCell>
+              <TableCell width={50}></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {users.map((user) => (
-              <TableRow key={user.id} hover>
-                <TableCell>{user.username}</TableCell>
-                <TableCell>{user.name}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={user.role}
-                    color={user.role === 'admin' ? 'secondary' : 'primary'}
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>
-                  {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
-                </TableCell>
-                <TableCell>
-                  {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
-                </TableCell>
-                <TableCell align="right">
-                  <IconButton
-                    color="primary"
-                    onClick={() => openResetDialog(user)}
-                    title="Reset Password"
-                  >
-                    <LockResetIcon />
-                  </IconButton>
-                  <IconButton
-                    color="error"
-                    onClick={() => openDeleteDialog(user)}
-                    title="Delete User"
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
+              <>
+                <TableRow 
+                  key={user.id} 
+                  hover 
+                  onClick={() => setExpandedUser(expandedUser === user.id ? null : user.id)}
+                  sx={{ cursor: 'pointer' }}
+                >
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {user.username}
+                      {user.role === 'admin' && (
+                        <Chip label="Admin" color="secondary" size="small" />
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    {user.lastLogin 
+                      ? new Date(user.lastLogin).toLocaleString()
+                      : 'Never'}
+                  </TableCell>
+                  <TableCell>
+                    <IconButton size="small">
+                      {expandedUser === user.id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+                <TableRow key={`${user.id}-details`}>
+                  <TableCell colSpan={3} sx={{ py: 0, borderBottom: expandedUser === user.id ? undefined : 'none' }}>
+                    <Collapse in={expandedUser === user.id} timeout="auto" unmountOnExit>
+                      <Box sx={{ py: 2, px: 2, backgroundColor: 'rgba(255, 255, 255, 0.02)' }}>
+                        <Stack spacing={2}>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Full Name
+                            </Typography>
+                            <Typography variant="body2">{user.name || 'N/A'}</Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Created At
+                            </Typography>
+                            <Typography variant="body2">
+                              {user.createdAt ? new Date(user.createdAt).toLocaleString() : 'N/A'}
+                            </Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Role
+                            </Typography>
+                            <Typography variant="body2">{user.role}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', gap: 1, pt: 1 }}>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              startIcon={<LockResetIcon />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openResetDialog(user);
+                              }}
+                            >
+                              Reset Password
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              color="error"
+                              size="small"
+                              startIcon={<DeleteIcon />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openDeleteDialog(user);
+                              }}
+                            >
+                              Delete
+                            </Button>
+                          </Box>
+                        </Stack>
+                      </Box>
+                    </Collapse>
+                  </TableCell>
+                </TableRow>
+              </>
             ))}
           </TableBody>
         </Table>

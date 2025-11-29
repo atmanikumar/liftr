@@ -20,11 +20,16 @@ import {
   Chip,
   Alert,
   Snackbar,
+  InputAdornment,
+  Pagination,
+  Stack,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import SelfImprovementIcon from '@mui/icons-material/SelfImprovement';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import SearchIcon from '@mui/icons-material/Search';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchWorkouts,
@@ -59,6 +64,15 @@ export default function WorkoutsPage() {
     description: '',
   });
 
+  // Image upload state
+  const [uploading, setUploading] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+
+  // Search and pagination state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(12);
+
   // Snackbar state
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
@@ -77,6 +91,7 @@ export default function WorkoutsPage() {
         muscleFocus: workout.muscleFocus || '',
         description: workout.description || '',
       });
+      setImagePreview(workout.equipmentPhoto || null);
     } else {
       setEditMode(false);
       setSelectedWorkout(null);
@@ -87,8 +102,47 @@ export default function WorkoutsPage() {
         muscleFocus: '',
         description: '',
       });
+      setImagePreview(null);
     }
     setDialogOpen(true);
+  };
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Show preview immediately
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload to ImageKit
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setFormData(prev => ({ ...prev, equipmentPhoto: data.url }));
+        setSnackbar({ open: true, message: 'Image uploaded successfully', severity: 'success' });
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Failed to upload image', severity: 'error' });
+      setImagePreview(null);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleCloseDialog = () => {
@@ -128,14 +182,29 @@ export default function WorkoutsPage() {
     setDeleteDialogOpen(true);
   };
 
+  // Filter workouts based on search
+  const filteredWorkouts = workouts.filter(workout =>
+    workout.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    workout.equipmentName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    workout.muscleFocus?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Paginate workouts
+  const paginatedWorkouts = filteredWorkouts.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  const totalPages = Math.ceil(filteredWorkouts.length / rowsPerPage);
+
   if (loading && workouts.length === 0) {
-    return <Loader fullScreen message="Loading workouts..." />;
+    return <Loader fullScreen />;
   }
 
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4">Workouts</Typography>
         <Button
           variant="contained"
@@ -146,9 +215,34 @@ export default function WorkoutsPage() {
         </Button>
       </Box>
 
+      {/* Search Bar */}
+      <Box sx={{ mb: 3 }}>
+        <TextField
+          fullWidth
+          placeholder="Search workouts by name, equipment, or muscle group..."
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            setPage(0); // Reset to first page on search
+          }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          }}
+        />
+      </Box>
+
+      {/* Results count */}
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Showing {paginatedWorkouts.length} of {filteredWorkouts.length} workouts
+      </Typography>
+
       {/* Workouts Grid */}
       <Grid container spacing={3}>
-        {workouts.map((workout) => (
+        {paginatedWorkouts.map((workout) => (
           <Grid item xs={12} sm={6} md={4} key={workout.id}>
             <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <CardMedia
@@ -202,10 +296,35 @@ export default function WorkoutsPage() {
         ))}
       </Grid>
 
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+          <Stack spacing={2}>
+            <Pagination
+              count={totalPages}
+              page={page + 1}
+              onChange={(e, value) => setPage(value - 1)}
+              color="primary"
+              size="large"
+            />
+          </Stack>
+        </Box>
+      )}
+
+      {filteredWorkouts.length === 0 && !loading && searchQuery && (
+        <Box sx={{ textAlign: 'center', py: 8 }}>
+          <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
+            No workouts found for &quot;{searchQuery}&quot;
+          </Typography>
+          <Button variant="outlined" onClick={() => setSearchQuery('')}>
+            Clear Search
+          </Button>
+        </Box>
+      )}
+
       {workouts.length === 0 && !loading && (
         <Box sx={{ textAlign: 'center', py: 8 }}>
-          <SelfImprovementIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
-          <Typography variant="h6" color="text.secondary">
+          <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
             No workouts yet
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -235,13 +354,59 @@ export default function WorkoutsPage() {
               onChange={(e) => setFormData({ ...formData, equipmentName: e.target.value })}
               fullWidth
             />
-            <TextField
-              label="Equipment Photo URL"
-              value={formData.equipmentPhoto}
-              onChange={(e) => setFormData({ ...formData, equipmentPhoto: e.target.value })}
-              fullWidth
-              helperText="Enter image URL or leave empty"
-            />
+            
+            {/* Image Upload Section */}
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>
+                Equipment Photo
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Button
+                  variant="outlined"
+                  component="label"
+                  startIcon={<CloudUploadIcon />}
+                  disabled={uploading}
+                >
+                  {uploading ? 'Uploading...' : 'Upload Image'}
+                  <input
+                    type="file"
+                    hidden
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                  />
+                </Button>
+                <Button
+                  variant="outlined"
+                  component="label"
+                  startIcon={<PhotoCameraIcon />}
+                  disabled={uploading}
+                >
+                  Capture Photo
+                  <input
+                    type="file"
+                    hidden
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleImageUpload}
+                  />
+                </Button>
+              </Box>
+              {imagePreview && (
+                <Box sx={{ mt: 2, position: 'relative' }}>
+                  <img 
+                    src={imagePreview} 
+                    alt="Preview" 
+                    style={{ 
+                      width: '100%', 
+                      maxHeight: '300px', 
+                      objectFit: 'contain',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255, 255, 255, 0.1)'
+                    }} 
+                  />
+                </Box>
+              )}
+            </Box>
             <TextField
               select
               label="Muscle Focus"

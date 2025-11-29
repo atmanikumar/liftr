@@ -1,0 +1,73 @@
+LIFTR - Database Seeding Instructions
+======================================
+
+Follow these steps in order to populate your database with workouts and training programs:
+
+1. START THE DEV SERVER
+   ---------------------
+   npm run dev
+
+
+2. INITIALIZE DATABASE TABLES
+   ---------------------------
+   Open browser and visit:
+   http://localhost:3000/api/init-db
+
+   This creates all tables including the new 'rir' (Reps in Reserve) column.
+
+
+3. SEED WORKOUTS AND PROGRAMS
+   ---------------------------
+   Run this command in terminal:
+   curl -X POST http://localhost:3000/api/seed-data
+
+   This creates:
+   - 24 workouts (Leg Extension, Leg Curl, Hack Squat, etc.)
+   - 4 workout plans:
+     * Leg Day - Quad Focused
+     * Delts & Arms
+     * Leg Day - Ham & Glute Focused
+     * Upper Body Circuit
+
+
+4. SEED SAMPLE WORKOUT SESSION
+   ----------------------------
+   Run this command in terminal:
+   curl -X POST http://localhost:3000/api/seed-workout-session
+
+   This creates a complete workout session for "Leg Day - Quad Focused" with:
+   - Leg Extension: 2 sets (50kg×10, 55kg×10)
+   - Leg Curl: 2 sets (30kg×12 RIR4, 40kg×12 RIR2)
+   - Hack Squat: 2 sets (45lbs×10, 55lbs×10)
+   - Leg Press: 2 sets (90lbs×10, 100lbs×10)
+   - Bulgarian Split Squats: 2 sets (15 reps bodyweight)
+   - Calf Raise: 2 sets (70lbs×12 RIR2, 70lbs×12 RIR2)
+
+
+5. VERIFY IN THE APP
+   ------------------
+   - Login with: admin / admin123
+   - Go to Workouts page - should see 24 workouts
+   - Go to Workout Plans page - should see 4 plans
+   - Go to Home page - should see available workout plans
+
+
+TROUBLESHOOTING
+---------------
+If you get "user already exists" error on step 2, that's normal - the admin user is already created.
+
+If workouts aren't showing:
+- Check browser console for errors
+- Verify tables exist in Turso dashboard
+- Check that TURSO_DATABASE_URL in .env.local is correct
+
+
+IMAGEKIT SETUP (Optional - for workout images)
+-----------------------------------------------
+Add to .env.local:
+IMAGEKIT_PUBLIC_KEY=your_public_key
+IMAGEKIT_PRIVATE_KEY=your_private_key
+IMAGEKIT_URL_ENDPOINT=https://ik.imagekit.io/porkalam
+
+Then you can upload images when adding/editing workouts.
+

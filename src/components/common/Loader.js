@@ -78,6 +78,7 @@ function CssDumbbell({ size = 60 }) {
             0 2px 4px rgba(0, 0, 0, 0.8)
           `,
           border: '2.5px solid rgba(34, 211, 238, 0.25)',
+          zIndex: 2,
           overflow: 'hidden',
           '&::before': {
             content: '""',
@@ -107,13 +108,14 @@ function CssDumbbell({ size = 60 }) {
         />
       </Box>
 
-      {/* Bar/Handle - More metallic */}
+      {/* Bar/Handle - More metallic, FULL WIDTH */}
       <Box
         sx={{
           position: 'absolute',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: size * 0.75,
+          left: '0',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          width: '100%',
           height: size * 0.28,
           background: 'linear-gradient(180deg, #a8b4c4 0%, #7d8694 35%, #5a6270 65%, #3d4552 100%)',
           borderRadius: '14px',
@@ -123,6 +125,7 @@ function CssDumbbell({ size = 60 }) {
             0 3px 10px rgba(0, 0, 0, 0.4)
           `,
           border: '1.5px solid rgba(160, 174, 192, 0.4)',
+          zIndex: 1,
           '&::before': {
             content: '""',
             position: 'absolute',
@@ -184,6 +187,7 @@ function CssDumbbell({ size = 60 }) {
             0 2px 4px rgba(0, 0, 0, 0.8)
           `,
           border: '2.5px solid rgba(34, 211, 238, 0.25)',
+          zIndex: 2,
           overflow: 'hidden',
           '&::before': {
             content: '""',

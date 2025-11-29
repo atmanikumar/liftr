@@ -55,6 +55,7 @@ export async function GET() {
         sets INTEGER,
         reps TEXT,
         weight TEXT,
+        rir TEXT,
         duration INTEGER,
         notes TEXT,
         completedAt TEXT DEFAULT CURRENT_TIMESTAMP,
