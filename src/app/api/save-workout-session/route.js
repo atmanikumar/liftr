@@ -17,36 +17,47 @@ export async function POST(request) {
     }
 
     const userId = authResult.user.id;
-    const insertedSessions = [];
+    let totalSetsInserted = 0;
 
-    // Insert each workout session
+    // Insert each set as a separate row
     for (const session of sessions) {
-      const result = await execute(
-        `INSERT INTO liftr_workout_sessions 
-         (userId, workoutId, trainingProgramId, sets, reps, weight, rir, completedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          userId,
-          session.workoutId,
-          session.trainingProgramId,
-          session.sets,
-          JSON.stringify(session.reps),
-          JSON.stringify(session.weight),
-          JSON.stringify(session.rir),
-          session.completedAt,
-        ]
-      );
-
-      insertedSessions.push({
-        sessionId: Number(result.lastInsertRowid),
-        workoutId: session.workoutId,
-      });
+      const { workoutId, trainingProgramId, sets, completedAt } = session;
+      
+      // Extract unit from weight strings (e.g., "50lbs" -> "lbs")
+      const unit = session.weight[0]?.match(/(lbs|kg)/)?.[0] || 'lbs';
+      
+      // Insert each set as a separate row
+      for (let i = 0; i < sets.length; i++) {
+        // Extract numeric weight value
+        const weightStr = session.weight[i] || '0';
+        const weight = parseFloat(weightStr.replace(/[^\d.]/g, '')) || 0;
+        
+        await execute(
+          `INSERT INTO liftr_workout_sessions 
+           (userId, workoutId, trainingProgramId, setNumber, reps, weight, rir, unit, completedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            workoutId,
+            trainingProgramId,
+            i + 1, // Set number (1-indexed)
+            session.reps[i] || 0,
+            weight,
+            session.rir[i] || 0,
+            unit,
+            completedAt,
+          ]
+        );
+        totalSetsInserted++;
+      }
     }
+
+    // Delete active workout after successful save
+    await execute('DELETE FROM liftr_active_workouts WHERE userId = ?', [userId]);
 
     return NextResponse.json({
       success: true,
-      message: `Saved ${insertedSessions.length} workout sessions`,
-      sessions: insertedSessions,
+      message: `Saved ${totalSetsInserted} sets across ${sessions.length} workouts`,
     });
   } catch (error) {
     console.error('Save workout session error:', error);

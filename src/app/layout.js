@@ -14,16 +14,16 @@ export default function RootLayout({ children }) {
       <head>
         <title>Liftr - Fitness Tracking App</title>
         <meta name="description" content="Track your fitness journey with Liftr" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
         
         {/* PWA Meta Tags */}
         <meta name="application-name" content="Liftr" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black" />
         <meta name="apple-mobile-web-app-title" content="Liftr" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="theme-color" content="#ff6b35" />
+        <meta name="theme-color" content="#000000" />
         
         {/* Icons */}
         <link rel="icon" href="/logo.png" type="image/png" />

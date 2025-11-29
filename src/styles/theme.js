@@ -16,9 +16,9 @@ export const darkTheme = createTheme({
       contrastText: '#000000',
     },
     success: {
-      main: '#84cc16', // Lime green
-      light: '#a3e635',
-      dark: '#65a30d',
+      main: '#10b981', // Emerald green - darker, better contrast with black
+      light: '#34d399',
+      dark: '#059669',
     },
     warning: {
       main: '#ff6b35', // Orange

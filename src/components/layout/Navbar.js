@@ -30,7 +30,14 @@ export default function Navbar({ onMenuClick }) {
   };
 
   return (
-    <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+    <AppBar 
+      position="fixed" 
+      sx={{ 
+        zIndex: (theme) => theme.zIndex.drawer + 1,
+        // iOS PWA safe area
+        paddingTop: 'env(safe-area-inset-top)',
+      }}
+    >
       <Toolbar sx={{ minHeight: '70px !important', py: 1 }}>
         <IconButton
           color="inherit"
@@ -70,7 +77,7 @@ export default function Navbar({ onMenuClick }) {
         >
           <MenuItem disabled>
             <Typography variant="body2" color="text.secondary">
-              {user?.username} {user?.role === 'admin' && '(Admin)'}
+              {user?.name || user?.username}
             </Typography>
           </MenuItem>
           <MenuItem onClick={handleLogout}>

@@ -10,18 +10,16 @@ import {
   Paper,
   Button,
   Chip,
-  LinearProgress,
   Stack,
 } from '@mui/material';
-import SportsGymnasticsIcon from '@mui/icons-material/SportsGymnastics';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectUser } from '@/redux/slices/authSlice';
 import { fetchTrainingPrograms, selectTrainingPrograms } from '@/redux/slices/trainingProgramsSlice';
 import { useRouter } from 'next/navigation';
+import { getTodayCalories } from '@/lib/caloriesCalculator';
 
 export default function HomePage() {
   const user = useSelector(selectUser);
@@ -29,9 +27,46 @@ export default function HomePage() {
   const router = useRouter();
   const programs = useSelector(selectTrainingPrograms);
   const [completedToday, setCompletedToday] = useState([]);
+  const [activeWorkout, setActiveWorkout] = useState(null);
+  const [loadingActive, setLoadingActive] = useState(true);
+  const [todayCalories, setTodayCalories] = useState(0);
 
   useEffect(() => {
     dispatch(fetchTrainingPrograms());
+    
+    // Check for active workout
+    const fetchActiveWorkout = async () => {
+      try {
+        const response = await fetch('/api/active-workout');
+        const data = await response.json();
+        if (data.activeWorkout) {
+          setActiveWorkout(data.activeWorkout);
+        }
+      } catch (e) {
+        console.error('Failed to load active workout:', e);
+      } finally {
+        setLoadingActive(false);
+      }
+    };
+    
+    fetchActiveWorkout();
+    
+    // Fetch today's calories
+    const fetchTodayCalories = async () => {
+      try {
+        const response = await fetch('/api/progress');
+        const data = await response.json();
+        if (data.recentSessions) {
+          const calories = getTodayCalories(data.recentSessions);
+          setTodayCalories(calories);
+        }
+      } catch (e) {
+        console.error('Failed to calculate calories:', e);
+      }
+    };
+    
+    fetchTodayCalories();
+    
     // Load completed workouts from localStorage
     const today = new Date().toDateString();
     const stored = localStorage.getItem(`completed_${today}`);
@@ -72,147 +107,144 @@ export default function HomePage() {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        Welcome back, {user?.name || user?.username}! 💪
-      </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-        Ready to crush your fitness goals today?
-      </Typography>
+      {/* Today's Calories */}
+      {todayCalories > 0 && (
+        <Paper sx={{ p: 2, mb: 3, background: 'linear-gradient(135deg, #ff6b35 0%, #ff8c5a 100%)' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+            <LocalFireDepartmentIcon sx={{ fontSize: 40, color: 'white' }} />
+            <Box>
+              <Typography variant="h4" sx={{ color: 'white', fontWeight: 'bold' }}>
+                {todayCalories} cal
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>
+                Calories burned today
+              </Typography>
+            </Box>
+          </Box>
+        </Paper>
+      )}
 
       <Grid container spacing={3}>
-        {/* Quick Stats Cards */}
-        <Grid item xs={12} sm={6} md={4}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <SportsGymnasticsIcon sx={{ fontSize: 40, color: 'primary.main' }} />
-                <Box>
-                  <Typography variant="h6">Today</Typography>
-                  <Typography variant="h4">{todayCompleted.length}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Workouts completed
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={4}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <CalendarMonthIcon sx={{ fontSize: 40, color: 'secondary.main' }} />
-                <Box>
-                  <Typography variant="h6">Workout Plans</Typography>
-                  <Typography variant="h4">{programs.length}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Total plans
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={4}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <TrendingUpIcon sx={{ fontSize: 40, color: 'success.main' }} />
-                <Box>
-                  <Typography variant="h6">Available</Typography>
-                  <Typography variant="h4">{availablePrograms.length}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Plans to do
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Today's Workout Plan Selector */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-              Select Today&apos;s Workout Plan
-            </Typography>
-            
-            {availablePrograms.length === 0 ? (
-              <Box sx={{ textAlign: 'center', py: 4 }}>
-                <Typography color="text.secondary">
-                  No workout plans available today. You&apos;ve either completed all or need a rest day!
-                </Typography>
-                <Button
-                  variant="outlined"
-                  sx={{ mt: 2 }}
-                  onClick={() => router.push('/training-programs')}
-                >
-                  Create New Plan
-                </Button>
-              </Box>
-            ) : (
-              <Stack spacing={2}>
-                {availablePrograms.map((program) => (
-                  <Card 
-                    key={program.id}
-                    sx={{
-                      transition: 'all 0.3s',
-                      '&:hover': {
-                        transform: 'translateY(-2px)',
-                        boxShadow: 4,
-                      },
-                    }}
-                  >
-                    <CardContent>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-                        <Box sx={{ flexGrow: 1 }}>
-                          <Typography variant="h6" gutterBottom>
-                            {program.name}
-                          </Typography>
-                          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
-                            <Chip
-                              label={`${program.workoutIds?.length || 0} exercises`}
-                              size="small"
-                              color="primary"
-                              variant="outlined"
-                            />
-                            {isCompletedToday(program.id) && (
-                              <Chip
-                                icon={<CheckCircleIcon />}
-                                label="Completed"
-                                size="small"
-                                color="success"
-                              />
-                            )}
-                          </Box>
-                        </Box>
-                        {!isCompletedToday(program.id) ? (
-                          <Button
-                            variant="contained"
-                            startIcon={<PlayCircleOutlineIcon />}
-                            onClick={() => {
-                              router.push(`/active-workout/${program.id}`);
-                            }}
-                          >
-                            Start
-                          </Button>
-                        ) : (
-                          <Chip
-                            icon={<CheckCircleIcon />}
-                            label="Done for today!"
-                            color="success"
-                          />
-                        )}
+        {/* Active Workout - Show if one exists */}
+        {activeWorkout && !loadingActive && (
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3, border: '2px solid', borderColor: 'primary.main' }}>
+              <Typography variant="h6" gutterBottom color="primary.main">
+                Continue Your Workout
+              </Typography>
+              {programs.find(p => p.id === activeWorkout.trainingProgramId) && (
+                <Card>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                      <Box sx={{ flexGrow: 1 }}>
+                        <Typography variant="h6" gutterBottom>
+                          {programs.find(p => p.id === activeWorkout.trainingProgramId)?.name}
+                        </Typography>
+                        <Chip
+                          label="In Progress"
+                          size="small"
+                          color="warning"
+                          icon={<PlayCircleOutlineIcon />}
+                        />
                       </Box>
-                    </CardContent>
-                  </Card>
-                ))}
-              </Stack>
-            )}
-          </Paper>
-        </Grid>
+                      <Button
+                        variant="contained"
+                        startIcon={<PlayCircleOutlineIcon />}
+                        onClick={() => router.push(`/active-workout/${activeWorkout.trainingProgramId}`)}
+                      >
+                        Continue
+                      </Button>
+                    </Box>
+                  </CardContent>
+                </Card>
+              )}
+            </Paper>
+          </Grid>
+        )}
+
+        {/* Today's Workout Plan Selector - Only show if no active workout */}
+        {!activeWorkout && !loadingActive && (
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
+                Select Today&apos;s Workout Plan
+              </Typography>
+              
+              {availablePrograms.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography color="text.secondary">
+                    No workout plans available today. You&apos;ve either completed all or need a rest day!
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    sx={{ mt: 2 }}
+                    onClick={() => router.push('/workout-plans')}
+                  >
+                    Create New Plan
+                  </Button>
+                </Box>
+              ) : (
+                <Stack spacing={2}>
+                  {availablePrograms.map((program) => (
+                    <Card 
+                      key={program.id}
+                      sx={{
+                        transition: 'all 0.3s',
+                        '&:hover': {
+                          transform: 'translateY(-2px)',
+                          boxShadow: 4,
+                        },
+                      }}
+                    >
+                      <CardContent>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                          <Box sx={{ flexGrow: 1 }}>
+                            <Typography variant="h6" gutterBottom>
+                              {program.name}
+                            </Typography>
+                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
+                              <Chip
+                                label={`${program.workoutIds?.length || 0} exercises`}
+                                size="small"
+                                color="primary"
+                                variant="outlined"
+                              />
+                              {isCompletedToday(program.id) && (
+                                <Chip
+                                  icon={<CheckCircleIcon />}
+                                  label="Completed"
+                                  size="small"
+                                  color="success"
+                                />
+                              )}
+                            </Box>
+                          </Box>
+                          {!isCompletedToday(program.id) ? (
+                            <Button
+                              variant="contained"
+                              startIcon={<PlayCircleOutlineIcon />}
+                              onClick={() => {
+                                router.push(`/active-workout/${program.id}`);
+                              }}
+                            >
+                              Start
+                            </Button>
+                          ) : (
+                            <Chip
+                              icon={<CheckCircleIcon />}
+                              label="Done for today!"
+                              color="success"
+                            />
+                          )}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Stack>
+              )}
+            </Paper>
+          </Grid>
+        )}
       </Grid>
     </Box>
   );

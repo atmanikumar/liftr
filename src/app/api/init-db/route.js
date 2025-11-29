@@ -52,15 +52,29 @@ export async function GET() {
         userId INTEGER NOT NULL,
         workoutId INTEGER,
         trainingProgramId INTEGER,
-        sets INTEGER,
-        reps TEXT,
-        weight TEXT,
-        rir TEXT,
+        setNumber INTEGER,
+        reps INTEGER,
+        weight REAL,
+        rir INTEGER,
+        unit TEXT DEFAULT 'lbs',
         duration INTEGER,
         notes TEXT,
         completedAt TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (userId) REFERENCES liftr_users(id),
         FOREIGN KEY (workoutId) REFERENCES liftr_workouts(id),
+        FOREIGN KEY (trainingProgramId) REFERENCES liftr_training_programs(id)
+      )
+    `);
+
+    // Create liftr_active_workouts table to track started but not completed workouts
+    await execute(`
+      CREATE TABLE IF NOT EXISTS liftr_active_workouts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER NOT NULL,
+        trainingProgramId INTEGER NOT NULL,
+        workoutData TEXT NOT NULL,
+        startedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (userId) REFERENCES liftr_users(id),
         FOREIGN KEY (trainingProgramId) REFERENCES liftr_training_programs(id)
       )
     `);

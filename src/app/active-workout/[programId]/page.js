@@ -88,6 +88,7 @@ export default function ActiveWorkoutPage() {
   const [loading, setLoading] = useState(true);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
+  const [lastSessionData, setLastSessionData] = useState(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -101,50 +102,85 @@ export default function ActiveWorkoutPage() {
   }, [dispatch]);
 
   useEffect(() => {
-    if (programs.length > 0 && workouts.length > 0) {
-      const selectedProgram = programs.find(p => p.id === programId);
-      if (selectedProgram) {
-        setProgram(selectedProgram);
-        const workoutIds = selectedProgram.workoutIds || [];
-        const workoutList = workoutIds.map(id => 
-          workouts.find(w => w.id === id)
-        ).filter(Boolean);
-        setProgramWorkouts(workoutList);
-        
-        // Try to load saved workout data from localStorage
-        const savedData = localStorage.getItem('activeWorkout');
-        
-        if (savedData) {
+    const initializeWorkout = async () => {
+      if (programs.length > 0 && workouts.length > 0) {
+        const selectedProgram = programs.find(p => p.id === programId);
+        if (selectedProgram) {
+          setProgram(selectedProgram);
+          const workoutIds = selectedProgram.workoutIds || [];
+          const workoutList = workoutIds.map(id => 
+            workouts.find(w => w.id === id)
+          ).filter(Boolean);
+          setProgramWorkouts(workoutList);
+          
+          // Try to load active workout from DB first
           try {
-            const parsedData = JSON.parse(savedData);
-            // Verify the data matches current workout IDs
-            const hasMatchingWorkouts = workoutList.some(w => parsedData[w.id]);
-            if (hasMatchingWorkouts) {
-              setWorkoutData(parsedData);
+            const activeResponse = await fetch('/api/active-workout');
+            const activeData = await activeResponse.json();
+            
+            if (activeData.activeWorkout && activeData.activeWorkout.trainingProgramId === programId) {
+              setWorkoutData(activeData.activeWorkout.workoutData);
               return;
             }
           } catch (e) {
-            console.error('Failed to parse saved workout data', e);
+            console.error('Failed to load active workout:', e);
+          }
+          
+          // Try to load last session for prefilling
+          try {
+            const lastSessionResponse = await fetch(`/api/last-session/${programId}`);
+            const lastSessionResult = await lastSessionResponse.json();
+            
+            if (lastSessionResult.lastSession) {
+              setLastSessionData(lastSessionResult.lastSession);
+            }
+          } catch (e) {
+            console.error('Failed to load last session:', e);
+          }
+          
+          // Initialize workout data with 2 sets for each workout (default reps: 12)
+          // Prefill from last session if available
+          const initialData = {};
+          workoutList.forEach(workout => {
+            const lastSession = lastSessionData?.[workout.id];
+            
+            initialData[workout.id] = {
+              unit: lastSession?.unit || 'lbs',
+              sets: lastSession?.sets.map(set => ({
+                weight: set.weight || 0,
+                reps: set.reps || 12,
+                rir: set.rir || 0,
+                completed: false,
+                previousWeight: set.weight || 0, // Store for comparison
+              })) || [
+                { weight: 0, reps: 12, rir: 0, completed: false, previousWeight: 0 },
+                { weight: 0, reps: 12, rir: 0, completed: false, previousWeight: 0 },
+              ],
+              workoutCompleted: false,
+            };
+          });
+          
+          setWorkoutData(initialData);
+          
+          // Save as active workout in DB
+          try {
+            await fetch('/api/active-workout', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                trainingProgramId: programId,
+                workoutData: initialData,
+              }),
+            });
+          } catch (e) {
+            console.error('Failed to save active workout:', e);
           }
         }
-        
-        // Initialize workout data with 2 sets for each workout (default reps: 12)
-        const initialData = {};
-        workoutList.forEach(workout => {
-          initialData[workout.id] = {
-            unit: 'lbs', // Unit at workout level
-            sets: [
-              { weight: 0, reps: 12, rir: 0, completed: false },
-              { weight: 0, reps: 12, rir: 0, completed: false },
-            ],
-            workoutCompleted: false,
-          };
-        });
-        setWorkoutData(initialData);
-        localStorage.setItem('activeWorkout', JSON.stringify(initialData));
       }
-    }
-  }, [programs, workouts, programId]);
+    };
+    
+    initializeWorkout();
+  }, [programs, workouts, programId, lastSessionData]);
 
   const updateSet = (workoutId, setIndex, field, value) => {
     setWorkoutData(prev => {
@@ -171,8 +207,12 @@ export default function ActiveWorkoutPage() {
         },
       };
       
-      // Save to localStorage
-      localStorage.setItem('activeWorkout', JSON.stringify(updatedData));
+      // Save to DB
+      fetch('/api/active-workout', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workoutData: updatedData }),
+      }).catch(e => console.error('Failed to save:', e));
       
       return updatedData;
     });
@@ -188,8 +228,12 @@ export default function ActiveWorkoutPage() {
         },
       };
       
-      // Save to localStorage
-      localStorage.setItem('activeWorkout', JSON.stringify(updatedData));
+      // Save to DB
+      fetch('/api/active-workout', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workoutData: updatedData }),
+      }).catch(e => console.error('Failed to save:', e));
       
       return updatedData;
     });
@@ -215,14 +259,19 @@ export default function ActiveWorkoutPage() {
               weight: newWeight, 
               reps: lastSet?.reps || 12, 
               rir: lastSet?.rir || 0, 
-              completed: false 
+              completed: false,
+              previousWeight: lastSet?.previousWeight || 0 
             },
           ],
         },
       };
       
-      // Save to localStorage
-      localStorage.setItem('activeWorkout', JSON.stringify(updatedData));
+      // Save to DB
+      fetch('/api/active-workout', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workoutData: updatedData }),
+      }).catch(e => console.error('Failed to save:', e));
       
       return updatedData;
     });
@@ -238,8 +287,12 @@ export default function ActiveWorkoutPage() {
         },
       };
       
-      // Save to localStorage
-      localStorage.setItem('activeWorkout', JSON.stringify(updatedData));
+      // Save to DB
+      fetch('/api/active-workout', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workoutData: updatedData }),
+      }).catch(e => console.error('Failed to save:', e));
       
       return updatedData;
     });
@@ -261,40 +314,15 @@ export default function ActiveWorkoutPage() {
         },
       };
       
-      // Save to localStorage
-      localStorage.setItem('activeWorkout', JSON.stringify(updatedData));
+      // Save to DB
+      fetch('/api/active-workout', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workoutData: updatedData }),
+      }).catch(e => console.error('Failed to save:', e));
       
       return updatedData;
     });
-  };
-
-  const completeWorkout = async (workoutId) => {
-    // Mark workout as completed
-    setWorkoutData(prev => {
-      const workout = prev[workoutId];
-      const updatedData = {
-        ...prev,
-        [workoutId]: {
-          ...workout,
-          workoutCompleted: true,
-          sets: workout.sets.map(set => ({ ...set, completed: true })),
-        },
-      };
-      
-      // Save to localStorage
-      localStorage.setItem('activeWorkout', JSON.stringify(updatedData));
-      
-      return updatedData;
-    });
-
-    // Find next workout to expand
-    const currentIndex = programWorkouts.findIndex(w => w.id === workoutId);
-    if (currentIndex < programWorkouts.length - 1) {
-      const nextWorkout = programWorkouts[currentIndex + 1];
-      setExpandedWorkout(nextWorkout.id);
-    } else {
-      setExpandedWorkout(null);
-    }
   };
 
   // Swipe handlers for weight adjustment
@@ -455,8 +483,11 @@ export default function ActiveWorkoutPage() {
                   </Typography>
                   <Chip 
                     label={`${completedSets}/${workoutSets.length} sets`}
-                    color={workoutData[workout.id]?.workoutCompleted ? 'success' : 'default'}
                     size="small"
+                    sx={{
+                      bgcolor: 'rgba(255, 255, 255, 0.1)',
+                      color: 'white',
+                    }}
                   />
                   {workout.muscleFocus && (
                     <Chip label={workout.muscleFocus} size="small" variant="outlined" />
@@ -491,7 +522,7 @@ export default function ActiveWorkoutPage() {
 
                 <Stack spacing={2}>
                   {workoutSets.map((set, setIndex) => (
-                    <Card key={setIndex} sx={{ bgcolor: set.completed ? 'success.dark' : 'background.paper' }}>
+                    <Card key={setIndex} sx={{ bgcolor: 'background.paper' }}>
                       <CardContent>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                           <Typography variant="subtitle1" fontWeight="bold">
@@ -521,22 +552,38 @@ export default function ActiveWorkoutPage() {
                         <Grid container spacing={2}>
                           {/* Weight with swipe support */}
                           <Grid item xs={12} sm={4}>
-                            <TextField
-                              select
-                              fullWidth
-                              label="Weight"
-                              value={set.weight}
-                              onChange={(e) => updateSet(workout.id, setIndex, 'weight', parseFloat(e.target.value))}
-                              size="small"
-                              onTouchStart={handleTouchStart}
-                              onTouchMove={handleTouchMove}
-                              onTouchEnd={() => handleTouchEnd(workout.id, setIndex, set.weight)}
-                              helperText="Swipe ↕ to adjust"
-                            >
-                              {WEIGHT_OPTIONS.map(w => (
-                                <MenuItem key={w} value={w}>{w}</MenuItem>
-                              ))}
-                            </TextField>
+                            <Box sx={{ position: 'relative' }}>
+                              <TextField
+                                select
+                                fullWidth
+                                label="Weight"
+                                value={set.weight}
+                                onChange={(e) => updateSet(workout.id, setIndex, 'weight', parseFloat(e.target.value))}
+                                size="small"
+                                onTouchStart={handleTouchStart}
+                                onTouchMove={handleTouchMove}
+                                onTouchEnd={() => handleTouchEnd(workout.id, setIndex, set.weight)}
+                                helperText="Swipe ↕ to adjust"
+                              >
+                                {WEIGHT_OPTIONS.map(w => (
+                                  <MenuItem key={w} value={w}>{w}</MenuItem>
+                                ))}
+                              </TextField>
+                              {set.previousWeight && set.weight > set.previousWeight && (
+                                <Chip
+                                  label={`+${set.weight - set.previousWeight}`}
+                                  size="small"
+                                  color="success"
+                                  sx={{
+                                    position: 'absolute',
+                                    top: -8,
+                                    right: -8,
+                                    height: 20,
+                                    fontSize: '0.7rem',
+                                  }}
+                                />
+                              )}
+                            </Box>
                           </Grid>
 
                           {/* Reps */}
@@ -584,20 +631,6 @@ export default function ActiveWorkoutPage() {
                   >
                     Add Set
                   </Button>
-
-                  {/* Complete Workout Button */}
-                  {!workoutData[workout.id]?.workoutCompleted && (
-                    <Button
-                      variant="contained"
-                      color="success"
-                      startIcon={<CheckCircleIcon />}
-                      onClick={() => completeWorkout(workout.id)}
-                      fullWidth
-                      disabled={workoutSets.filter(s => s.completed).length === 0}
-                    >
-                      Complete Workout & Move to Next
-                    </Button>
-                  )}
                 </Stack>
               </AccordionDetails>
             </Accordion>

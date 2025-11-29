@@ -71,6 +71,7 @@ export default function MainLayout({ children }) {
         }}
       >
         <Toolbar sx={{ minHeight: '70px !important' }} />
+        <Box sx={{ paddingTop: 'env(safe-area-inset-top, 0px)' }} />
         {children}
       </Box>
     </Box>
