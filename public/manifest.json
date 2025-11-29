@@ -1,38 +1,52 @@
 {
-  "name": "House of Games - Vilayattu Veedu",
-  "short_name": "House of Games",
-  "description": "Track your card game scores and statistics",
+  "name": "Liftr - Fitness Tracking App",
+  "short_name": "Liftr",
+  "description": "Track your fitness journey with Liftr",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0a0f",
-  "theme_color": "#3b82f6",
-  "orientation": "portrait",
-  "scope": "/",
+  "background_color": "#000000",
+  "theme_color": "#ff6b35",
+  "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/favicon/web-app-manifest-192x192.png",
+      "src": "/logo.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
-      "src": "/favicon/web-app-manifest-512x512.png",
+      "src": "/logo.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "fitness", "lifestyle"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Workouts",
+      "short_name": "Workouts",
+      "description": "View and manage workouts",
+      "url": "/workouts",
+      "icons": [
+        {
+          "src": "/logo.png",
+          "sizes": "96x96"
+        }
+      ]
     },
     {
-      "src": "/favicon/web-app-manifest-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/favicon/web-app-manifest-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "name": "Training Programs",
+      "short_name": "Programs",
+      "description": "View training programs",
+      "url": "/training-programs",
+      "icons": [
+        {
+          "src": "/logo.png",
+          "sizes": "96x96"
+        }
+      ]
     }
   ]
 }
-
