@@ -38,7 +38,7 @@ export default function Navbar({ onMenuClick }) {
         top: 0,
         left: 0,
         right: 0,
-        backgroundColor: 'var(--status-bar-color, #0a0a0a)', // Use CSS variable for consistency
+        backgroundColor: 'var(--status-bar-color, #3b82f6)', // Use CSS variable for consistency
         borderRadius: 0,
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.5)',
       }}
