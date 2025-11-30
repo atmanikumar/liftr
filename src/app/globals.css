@@ -29,8 +29,9 @@ body {
                     radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.02) 0%, transparent 50%);
   background-attachment: fixed;
   min-height: 100vh;
-  /* iOS PWA: Add safe area insets for notch and home indicator */
-  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  /* iOS PWA: Remove body padding - let components handle safe areas */
+  padding: 0;
+  margin: 0;
 }
 
 a {

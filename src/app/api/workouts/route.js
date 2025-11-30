@@ -56,6 +56,13 @@ export async function POST(request) {
       [result.lastInsertRowid]
     );
 
+    if (!newWorkout || newWorkout.length === 0) {
+      return NextResponse.json(
+        { error: 'Failed to fetch created workout' },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
       workout: newWorkout[0],

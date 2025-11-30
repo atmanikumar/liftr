@@ -42,10 +42,12 @@ export default function HomePage() {
   const [selectedWorkoutMuscles, setSelectedWorkoutMuscles] = useState([]);
 
   useEffect(() => {
-    const fetchHomeData = async () => {
+    const abortController = new AbortController();
+    
+    const fetchHomeData = async (signal) => {
       try {
         // Single API call to get all home page data
-        const response = await fetch('/api/home');
+        const response = await fetch('/api/home', { signal });
         const data = await response.json();
         
         if (data.workoutPlans) {
@@ -60,24 +62,29 @@ export default function HomePage() {
         setTodayCalories(data.todayCalories || 0);
         setProgressData(data.progress || null);
       } catch (e) {
-        console.error('Failed to load home data:', e);
+        if (e.name !== 'AbortError') {
+          console.error('Failed to load home data:', e);
+        }
       } finally {
-        setLoadingData(false);
+        if (!signal.aborted) {
+          setLoadingData(false);
+        }
       }
     };
     
-    fetchHomeData();
+    fetchHomeData(abortController.signal);
     
     // Refresh data when page becomes visible (e.g., after completing a workout)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        fetchHomeData();
+        fetchHomeData(abortController.signal);
       }
     };
     
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
+      abortController.abort();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
@@ -161,12 +168,15 @@ export default function HomePage() {
                             }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedWorkoutMuscles(workoutPlans.find(p => p.id === workout.trainingProgramId).muscleDistribution);
-                              setMuscleMapOpen(true);
+                              const plan = workoutPlans.find(p => p.id === workout.trainingProgramId);
+                              if (plan?.muscleDistribution) {
+                                setSelectedWorkoutMuscles(plan.muscleDistribution);
+                                setMuscleMapOpen(true);
+                              }
                             }}
                           >
                             <MuscleBodyMap 
-                              muscleDistribution={workoutPlans.find(p => p.id === workout.trainingProgramId).muscleDistribution}
+                              muscleDistribution={workoutPlans.find(p => p.id === workout.trainingProgramId)?.muscleDistribution || []}
                               size="small"
                               showToggle={false}
                               showBreakdown={false}
@@ -220,7 +230,10 @@ export default function HomePage() {
               <Grid item xs={12}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom sx={{ mb: 2, textAlign: 'center' }}>
-                    Muscle Group Distribution
+                    {user?.username ? `${user.username}'s ` : ''}Muscle Distribution
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mb: 2 }}>
+                    Last 7 days • Auto-resets after 1 week of rest
                   </Typography>
                   <MuscleBodyMap muscleDistribution={progressData.muscleDistribution} />
                 </Paper>

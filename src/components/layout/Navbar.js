@@ -38,11 +38,19 @@ export default function Navbar({ onMenuClick }) {
         top: 0,
         left: 0,
         right: 0,
-        // iOS PWA safe area - add padding at top for notch/status bar
-        paddingTop: 'env(safe-area-inset-top, 0px)',
+        backgroundColor: '#0a0a0a', // Very dark gray, slightly lighter than pure black
+        borderRadius: 0, // Remove border radius
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.5)', // Subtle shadow instead
       }}
     >
-      <Toolbar sx={{ minHeight: '70px !important', py: 1 }}>
+      <Toolbar sx={{ 
+        minHeight: '70px !important', 
+        py: 1,
+        // iOS PWA safe area - add padding at top for notch/status bar
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        paddingLeft: 'calc(16px + env(safe-area-inset-left, 0px))',
+        paddingRight: 'calc(16px + env(safe-area-inset-right, 0px))',
+      }}>
         <IconButton
           color="inherit"
           aria-label="open drawer"

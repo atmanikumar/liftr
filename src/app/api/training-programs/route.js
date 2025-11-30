@@ -60,6 +60,13 @@ export async function POST(request) {
       [result.lastInsertRowid]
     );
 
+    if (!newProgram || newProgram.length === 0) {
+      return NextResponse.json(
+        { error: 'Failed to fetch created program' },
+        { status: 500 }
+      );
+    }
+
     const parsedProgram = {
       ...newProgram[0],
       workoutIds: JSON.parse(newProgram[0].workoutIds),

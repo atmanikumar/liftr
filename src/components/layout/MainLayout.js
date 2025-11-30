@@ -64,13 +64,13 @@ export default function MainLayout({ children }) {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
           width: '100%',
           minHeight: '100vh',
           backgroundColor: 'background.default',
           // Account for navbar height + safe area
           paddingTop: 'calc(70px + env(safe-area-inset-top, 0px) + 24px)', // 70px navbar + safe area + default padding
-          // Also add safe area for bottom on iOS devices
+          paddingLeft: 'calc(24px + env(safe-area-inset-left, 0px))',
+          paddingRight: 'calc(24px + env(safe-area-inset-right, 0px))',
           paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
         }}
       >

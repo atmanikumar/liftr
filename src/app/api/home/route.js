@@ -115,6 +115,9 @@ export async function GET(request) {
     // Get all workouts to calculate muscle distribution for each plan
     const allWorkouts = await query(`SELECT id, name, muscleFocus FROM liftr_workouts`);
     
+    // Create a Map for O(1) lookups instead of O(n) find operations
+    const workoutMap = new Map(allWorkouts.map(w => [w.id, w]));
+    
     // Parse workoutIds for each plan and calculate muscle distribution
     const plans = workoutPlans.map(plan => {
       const workoutIds = JSON.parse(plan.workoutIds || '[]');
@@ -122,7 +125,7 @@ export async function GET(request) {
       // Calculate muscle distribution for this plan based on its workouts
       const muscleCount = {};
       workoutIds.forEach(workoutId => {
-        const workout = allWorkouts.find(w => w.id === workoutId);
+        const workout = workoutMap.get(workoutId);
         if (workout && workout.muscleFocus) {
           muscleCount[workout.muscleFocus] = (muscleCount[workout.muscleFocus] || 0) + 1;
         }
@@ -158,7 +161,6 @@ export async function GET(request) {
 
     // Calculate calories per day for last 30 days
     const caloriesByDay = {};
-    const workoutsByMuscle = {};
     
     allRecentSessions.forEach(session => {
       const date = new Date(session.completedAt).toISOString().split('T')[0];
@@ -169,15 +171,31 @@ export async function GET(request) {
       }
       const setCalories = calculateSetCalories(session.equipmentName);
       caloriesByDay[date] += setCalories;
-      
-      // Muscle group distribution
+    });
+
+    // 6. Get muscle distribution from last 7 days ONLY (muscles recover after 1 week)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const last7DaysSessions = await query(
+      `SELECT w.muscleFocus
+       FROM liftr_workout_sessions ws
+       JOIN liftr_workouts w ON ws.workoutId = w.id
+       WHERE ws.userId = ? 
+       AND ws.completedAt >= ?`,
+      [userId, sevenDaysAgo.toISOString()]
+    );
+
+    // Count muscle workouts (each workout = 1 shade level)
+    const workoutsByMuscle = {};
+    for (const session of last7DaysSessions) {
       if (session.muscleFocus) {
         if (!workoutsByMuscle[session.muscleFocus]) {
           workoutsByMuscle[session.muscleFocus] = 0;
         }
         workoutsByMuscle[session.muscleFocus]++;
       }
-    });
+    }
 
     // Prepare chart data for last 30 days
     const last30Days = [];
@@ -218,13 +236,16 @@ export async function GET(request) {
     }
     
     // Convert to array and get workout names for each plan
+    // Create a Map of plans for O(1) lookups
+    const planMap = new Map(plans.map(p => [p.id, p]));
+    
     const recentCompletedPlans = [];
     const sortedSessions = Array.from(completedProgramSessions.values())
       .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
       .slice(0, 5);
     
     for (const sessionData of sortedSessions) {
-      const plan = plans.find(p => p.id === sessionData.trainingProgramId);
+      const plan = planMap.get(sessionData.trainingProgramId);
       if (plan) {
         // Get actual workouts performed in this specific session
         const sessionWorkouts = allRecentSessions.filter(
@@ -232,19 +253,18 @@ export async function GET(request) {
                s.completedAt === sessionData.completedAt
         );
         
-        // Get unique workout IDs from this session
+        // Get unique workout IDs and use workoutMap for details (no additional query needed!)
         const performedWorkoutIds = [...new Set(sessionWorkouts.map(s => s.workoutId))];
+        const workoutDetails = performedWorkoutIds
+          .map(id => workoutMap.get(id))
+          .filter(Boolean);
         
-        if (performedWorkoutIds.length > 0) {
-          // Get workout details only for workouts actually performed
-          const workoutDetails = await query(
-            `SELECT id, name, muscleFocus FROM liftr_workouts WHERE id IN (${performedWorkoutIds.join(',')})` 
-          );
-          
+        if (workoutDetails.length > 0) {
           // Calculate muscle distribution from actual performed workouts
+          // Use workoutMap for O(1) lookups instead of find()
           const muscleFocusCount = {};
           sessionWorkouts.forEach(s => {
-            const workout = workoutDetails.find(w => w.id === s.workoutId);
+            const workout = workoutMap.get(s.workoutId);
             if (workout && workout.muscleFocus) {
               muscleFocusCount[workout.muscleFocus] = (muscleFocusCount[workout.muscleFocus] || 0) + 1;
             }
