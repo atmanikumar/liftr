@@ -97,12 +97,16 @@ export default function Sidebar({ open, onClose, variant = 'temporary' }) {
       <Toolbar />
       <Divider />
       <List>
-        {filteredMenuItems.map((item) => {
+        {filteredMenuItems.map((item, index) => {
           const IconComponent = iconMap[item.icon];
           const isActive = pathname === item.path;
 
           return (
-            <ListItem key={item.path} disablePadding>
+            <ListItem 
+              key={item.path} 
+              disablePadding
+              sx={{ pt: index === 0 ? 2 : 0 }}
+            >
               <Link href={item.path} passHref legacyBehavior>
                 <ListItemButton
                   component="a"
