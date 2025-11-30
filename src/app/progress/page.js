@@ -88,7 +88,8 @@ export default function ProgressPage() {
     summary = {}, 
     chartData = {},
     muscleDistribution = [], 
-    workoutsByDate = [] 
+    workoutsByDate = [],
+    achievements = []
   } = progressData || {};
 
   const { workoutsPerDay = [] } = chartData;
@@ -277,6 +278,74 @@ export default function ProgressPage() {
             )}
           </Paper>
         </Grid>
+
+        {/* Achievements Section */}
+        {achievements && achievements.length > 0 && (
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                <EmojiEventsIcon sx={{ color: '#c4ff0d', fontSize: 32, mr: 1 }} />
+                <Typography variant="h6">🏆 My Achievements</Typography>
+              </Box>
+              <Grid container spacing={2}>
+                {achievements.map((achievement, idx) => (
+                  <Grid item xs={12} md={6} key={idx}>
+                    <Card sx={{ 
+                      bgcolor: 'rgba(196, 255, 13, 0.1)', 
+                      border: '1px solid rgba(196, 255, 13, 0.3)',
+                      transition: 'all 0.3s',
+                      '&:hover': {
+                        bgcolor: 'rgba(196, 255, 13, 0.15)',
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 4px 12px rgba(196, 255, 13, 0.3)',
+                      }
+                    }}>
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
+                          <Typography variant="h6" sx={{ color: '#c4ff0d' }}>
+                            {achievement.exerciseName}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {new Date(achievement.achievedAt).toLocaleDateString('en-IN', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                              timeZone: 'Asia/Kolkata'
+                            })}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                          <Typography variant="body2" color="text.secondary">
+                            From
+                          </Typography>
+                          <Typography variant="body1" fontWeight="bold">
+                            {achievement.previousWeight} {achievement.unit}
+                          </Typography>
+                          <TrendingUpIcon sx={{ color: '#c4ff0d' }} />
+                          <Typography variant="body1" fontWeight="bold" sx={{ color: '#c4ff0d' }}>
+                            {achievement.newWeight} {achievement.unit}
+                          </Typography>
+                          <Box sx={{ 
+                            ml: 'auto',
+                            px: 2,
+                            py: 0.5,
+                            bgcolor: 'rgba(196, 255, 13, 0.3)',
+                            borderRadius: 2,
+                            border: '1px solid #c4ff0d',
+                          }}>
+                            <Typography variant="body2" fontWeight="bold" sx={{ color: '#c4ff0d' }}>
+                              +{achievement.improvement} {achievement.unit}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            </Paper>
+          </Grid>
+        )}
       </Grid>
     </Box>
   );

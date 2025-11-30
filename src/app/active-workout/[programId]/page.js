@@ -21,6 +21,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  CircularProgress,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -36,7 +37,7 @@ import { fetchWorkouts, selectWorkouts } from '@/redux/slices/workoutsSlice';
 import Loader from '@/components/common/Loader';
 import MuscleBodyMap from '@/components/common/MuscleBodyMap';
 
-const WEIGHT_UNITS = ['lbs', 'kg'];
+const WEIGHT_UNITS = ['lbs', 'kgs'];
 const RIR_OPTIONS = [0, 1, 2, 3, 4, 5, 6];
 const REPS_OPTIONS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
@@ -86,13 +87,16 @@ export default function ActiveWorkoutPage() {
   const [program, setProgram] = useState(null);
   const [programWorkouts, setProgramWorkouts] = useState([]);
   const [workoutData, setWorkoutData] = useState({});
-  const [expandedWorkout, setExpandedWorkout] = useState(null);
+  const [expandedWorkouts, setExpandedWorkouts] = useState([]); // Changed to array to support multiple
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [addWorkoutDialogOpen, setAddWorkoutDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const [activeWorkoutData, setActiveWorkoutData] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [addingWorkout, setAddingWorkout] = useState(false);
   
   const initializedRef = useRef(false);
 
@@ -102,7 +106,7 @@ export default function ActiveWorkoutPage() {
         dispatch(fetchTrainingPrograms()),
         dispatch(fetchWorkouts()),
       ]);
-      setLoading(false);
+      // Don't set loading to false here - wait for program to be initialized
     };
     loadData();
   }, [dispatch]);
@@ -136,6 +140,9 @@ export default function ActiveWorkoutPage() {
             
             // Set workout data
             setWorkoutData(aw.workoutData);
+            
+            // Only set loading to false after program is loaded
+            setLoading(false);
           } else {
             router.push('/');
           }
@@ -342,8 +349,14 @@ export default function ActiveWorkoutPage() {
   };
 
   const addWorkoutToSession = async (workoutId) => {
+    if (addingWorkout) return; // Prevent duplicate clicks
+    
+    setAddingWorkout(true);
     const workout = workouts.find(w => w.id === workoutId);
-    if (!workout) return;
+    if (!workout) {
+      setAddingWorkout(false);
+      return;
+    }
 
     setProgramWorkouts(prev => [...prev, workout]);
 
@@ -393,10 +406,14 @@ export default function ActiveWorkoutPage() {
       return updated;
     });
 
+    setAddingWorkout(false);
     setAddWorkoutDialogOpen(false);
   };
 
   const handleSaveWorkout = async () => {
+    if (saving) return; // Prevent duplicate clicks
+    
+    setSaving(true);
     try {
       if (!program || !program.id) {
         throw new Error('Program information not available');
@@ -404,23 +421,34 @@ export default function ActiveWorkoutPage() {
 
       const sessions = [];
       programWorkouts.forEach(workout => {
+        if (!workoutData[workout.id] || !workoutData[workout.id].sets) {
+          return; // Skip if no data
+        }
+        
         const sets = workoutData[workout.id].sets.filter(set => set.completed);
         if (sets.length > 0) {
-          const workoutUnit = workoutData[workout.id].unit;
+          const workoutUnit = workoutData[workout.id].unit || 'lbs';
           sessions.push({
             workoutId: workout.id,
             trainingProgramId: program.id, // Use program.id which is the trainingProgramId
             sets: sets.map((s, idx) => ({
               setNumber: idx + 1,
-              weight: s.weight,
-              reps: s.reps,
-              rir: s.rir,
+              weight: s.weight || 0,
+              reps: s.reps || 0,
+              rir: s.rir || 0,
               previousWeight: s.previousWeight || 0,
             })),
             unit: workoutUnit,
           });
         }
       });
+      
+      // Validate that we have at least one session to save
+      if (sessions.length === 0) {
+        setSaving(false);
+        alert('Please complete at least one set before saving');
+        return;
+      }
 
       const response = await fetch('/api/save-workout-session', {
         method: 'POST',
@@ -436,8 +464,14 @@ export default function ActiveWorkoutPage() {
         throw new Error(data.error || 'Failed to save workout');
       }
 
-      router.push('/');
+      // Navigate to achievements page if there are any improvements or decreases
+      if ((data.improvements && data.improvements.length > 0) || (data.decreases && data.decreases.length > 0)) {
+        router.push(`/achievements?session=${data.completedAt}`);
+      } else {
+        router.push('/');
+      }
     } catch (error) {
+      setSaving(false);
       console.error('Failed to save workout:', error);
       alert('Failed to save workout: ' + error.message);
     }
@@ -518,8 +552,14 @@ export default function ActiveWorkoutPage() {
           return (
             <Accordion
               key={workout.id}
-              expanded={expandedWorkout === workout.id}
-              onChange={() => setExpandedWorkout(expandedWorkout === workout.id ? null : workout.id)}
+              expanded={expandedWorkouts.includes(workout.id)}
+              onChange={() => {
+                setExpandedWorkouts(prev => 
+                  prev.includes(workout.id) 
+                    ? prev.filter(id => id !== workout.id) // Collapse if already expanded
+                    : [...prev, workout.id] // Expand and keep others expanded
+                );
+              }}
             >
               <AccordionSummary 
                 expandIcon={<ExpandMoreIcon />}
@@ -743,11 +783,11 @@ export default function ActiveWorkoutPage() {
         </Button>
         <Button
           variant="contained"
-          startIcon={<SaveIcon />}
+          startIcon={saving ? null : <SaveIcon />}
           onClick={() => setSaveDialogOpen(true)}
-          disabled={progress === 0}
+          disabled={progress === 0 || saving}
         >
-          Save Workout
+          {saving ? <CircularProgress size={20} color="inherit" /> : 'Save Workout'}
         </Button>
       </Box>
 
@@ -802,9 +842,14 @@ export default function ActiveWorkoutPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSaveDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSaveWorkout} variant="contained">
-            Save
+          <Button onClick={() => setSaveDialogOpen(false)} disabled={saving}>Cancel</Button>
+          <Button 
+            onClick={handleSaveWorkout} 
+            variant="contained"
+            disabled={saving}
+            startIcon={saving ? null : undefined}
+          >
+            {saving ? <CircularProgress size={20} color="inherit" /> : 'Save'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -823,14 +868,15 @@ export default function ActiveWorkoutPage() {
                 <Card 
                   key={workout.id}
                   sx={{ 
-                    cursor: 'pointer',
+                    cursor: addingWorkout ? 'default' : 'pointer',
                     transition: 'all 0.2s',
+                    opacity: addingWorkout ? 0.5 : 1,
                     '&:hover': {
-                      bgcolor: 'action.hover',
-                      transform: 'translateX(4px)',
+                      bgcolor: addingWorkout ? 'inherit' : 'action.hover',
+                      transform: addingWorkout ? 'none' : 'translateX(4px)',
                     }
                   }}
-                  onClick={() => addWorkoutToSession(workout.id)}
+                  onClick={() => !addingWorkout && addWorkoutToSession(workout.id)}
                 >
                   <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

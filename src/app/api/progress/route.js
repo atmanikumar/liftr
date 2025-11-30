@@ -113,6 +113,15 @@ export async function GET(request) {
       day.calories = Math.round(caloriesByDay[day.date] || 0);
     });
 
+    // Get all achievements
+    const achievements = await query(
+      `SELECT * FROM liftr_achievements 
+       WHERE userId = ?
+       ORDER BY achievedAt DESC
+       LIMIT 100`,
+      [userId]
+    );
+
     return NextResponse.json({
       summary: {
         totalWorkouts: Object.keys(workoutsByDate).length,
@@ -134,6 +143,7 @@ export async function GET(request) {
         muscle,
         sets: count,
       })).sort((a, b) => b.sets - a.sets),
+      achievements,
     });
   } catch (error) {
     console.error('Error fetching progress:', error);

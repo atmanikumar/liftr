@@ -22,6 +22,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import { useSelector } from 'react-redux';
 import { selectUser } from '@/redux/slices/authSlice';
 import { useRouter } from 'next/navigation';
@@ -40,6 +41,37 @@ export default function HomePage() {
   const [loadingData, setLoadingData] = useState(true);
   const [muscleMapOpen, setMuscleMapOpen] = useState(false);
   const [selectedWorkoutMuscles, setSelectedWorkoutMuscles] = useState([]);
+  const [todayAchievements, setTodayAchievements] = useState([]);
+
+  // Fetch today's achievements
+  useEffect(() => {
+    const abortController = new AbortController();
+    
+    const fetchTodayAchievements = async () => {
+      try {
+        const response = await fetch(`/api/achievements/today`, {
+          signal: abortController.signal
+        });
+        const data = await response.json();
+        
+        if (data.achievements && data.achievements.length > 0) {
+          setTodayAchievements(data.achievements);
+        }
+      } catch (e) {
+        if (e.name === 'AbortError') {
+          // Request was aborted, ignore
+          return;
+        }
+        console.error('Failed to fetch today achievements:', e);
+      }
+    };
+
+    fetchTodayAchievements();
+    
+    return () => {
+      abortController.abort();
+    };
+  }, []);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -97,6 +129,61 @@ export default function HomePage() {
   return (
     <Box>
       <Grid container spacing={3}>
+        {/* Today's Achievements */}
+        {todayAchievements.length > 0 && (
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3, bgcolor: 'rgba(196, 255, 13, 0.05)', border: '2px solid #c4ff0d' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                <CheckCircleIcon sx={{ fontSize: 40, color: '#c4ff0d' }} />
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="h5" sx={{ color: '#c4ff0d', fontWeight: 'bold' }}>
+                    🎉 Today&apos;s Achievements!
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Great job, {user?.name || user?.username}! You improved your strength today.
+                  </Typography>
+                </Box>
+              </Box>
+              
+              <Stack spacing={2}>
+                {todayAchievements.map((ach, idx) => (
+                  <Card key={idx} sx={{ bgcolor: 'rgba(196, 255, 13, 0.1)', border: '1px solid rgba(196, 255, 13, 0.3)' }}>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        {ach.exerciseName}
+                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {ach.previousWeight} {ach.unit}
+                        </Typography>
+                        <TrendingUpIcon sx={{ color: '#c4ff0d', fontSize: 20 }} />
+                        <Typography variant="body1" fontWeight="bold" sx={{ color: '#c4ff0d' }}>
+                          {ach.newWeight} {ach.unit}
+                        </Typography>
+                        <Chip 
+                          label={`+${ach.improvement} ${ach.unit}`}
+                          size="small"
+                          icon={<TrendingUpIcon />}
+                          sx={{ ml: 'auto', bgcolor: '#c4ff0d', color: '#000', fontWeight: 'bold' }}
+                        />
+                      </Box>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Stack>
+              
+              <Button
+                variant="outlined"
+                onClick={() => router.push('/progress')}
+                sx={{ mt: 3, borderColor: '#c4ff0d', color: '#c4ff0d' }}
+                fullWidth
+              >
+                View All Progress →
+              </Button>
+            </Paper>
+          </Grid>
+        )}
+
         {/* In Progress Workouts */}
         {activeWorkouts.length > 0 && (
           <Grid item xs={12}>
@@ -375,6 +462,40 @@ export default function HomePage() {
                                 <Typography variant="caption" color="text.secondary">
                                   Focus: {plan.muscleFocusGroups.map(m => `${m.muscle} (${m.count}x)`).join(', ')}
                                 </Typography>
+                              )}
+                              
+                              {/* Comparison with last session */}
+                              {plan.comparison && plan.comparison.hasComparison && (
+                                <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                  {plan.comparison.improvements.length > 0 && plan.comparison.improvements.map((imp, idx) => (
+                                    <Chip
+                                      key={`imp-${idx}`}
+                                      icon={<TrendingUpIcon />}
+                                      label={`${imp.exercise}: +${imp.increase} ${imp.unit}`}
+                                      size="small"
+                                      sx={{
+                                        bgcolor: 'rgba(196, 255, 13, 0.2)',
+                                        color: '#c4ff0d',
+                                        fontWeight: 'bold',
+                                        border: '1px solid #c4ff0d',
+                                      }}
+                                    />
+                                  ))}
+                                  {plan.comparison.decreases.length > 0 && plan.comparison.decreases.map((dec, idx) => (
+                                    <Chip
+                                      key={`dec-${idx}`}
+                                      icon={<TrendingDownIcon />}
+                                      label={`${dec.exercise}: -${dec.decrease} ${dec.unit}`}
+                                      size="small"
+                                      sx={{
+                                        bgcolor: 'rgba(239, 68, 68, 0.2)',
+                                        color: '#ef4444',
+                                        fontWeight: 'bold',
+                                        border: '1px solid #ef4444',
+                                      }}
+                                    />
+                                  ))}
+                                </Box>
                               )}
                             </Box>
                             

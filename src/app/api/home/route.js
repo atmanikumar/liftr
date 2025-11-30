@@ -270,6 +270,63 @@ export async function GET(request) {
             }
           });
           
+          // Calculate improvements/decreases compared to previous session
+          const improvements = [];
+          const decreases = [];
+          
+          // Get previous session for this training program
+          const previousSessionWorkouts = allRecentSessions.filter(
+            s => s.trainingProgramId === sessionData.trainingProgramId && 
+                 s.completedAt < sessionData.completedAt
+          );
+          
+          if (previousSessionWorkouts.length > 0) {
+            // Get unique previous session dates and use the most recent one
+            const prevSessionDates = [...new Set(previousSessionWorkouts.map(s => s.completedAt))];
+            const mostRecentPrevDate = prevSessionDates.sort((a, b) => new Date(b) - new Date(a))[0];
+            
+            // Group previous session workouts by workoutId
+            const prevWorkoutMaxWeight = {};
+            previousSessionWorkouts
+              .filter(s => s.completedAt === mostRecentPrevDate)
+              .forEach(s => {
+                if (!prevWorkoutMaxWeight[s.workoutId] || s.weight > prevWorkoutMaxWeight[s.workoutId]) {
+                  prevWorkoutMaxWeight[s.workoutId] = s.weight;
+                }
+              });
+            
+            // Group current session workouts by workoutId
+            const currWorkoutMaxWeight = {};
+            sessionWorkouts.forEach(s => {
+              if (!currWorkoutMaxWeight[s.workoutId] || s.weight > currWorkoutMaxWeight[s.workoutId]) {
+                currWorkoutMaxWeight[s.workoutId] = s.weight;
+              }
+            });
+            
+            // Compare
+            for (const [workoutId, currentMax] of Object.entries(currWorkoutMaxWeight)) {
+              const prevMax = prevWorkoutMaxWeight[workoutId];
+              if (prevMax && prevMax !== currentMax) {
+                const workout = workoutMap.get(parseInt(workoutId));
+                if (workout) {
+                  if (currentMax > prevMax) {
+                    improvements.push({
+                      exercise: workout.name,
+                      increase: currentMax - prevMax,
+                      unit: sessionWorkouts.find(s => s.workoutId === parseInt(workoutId))?.unit || 'lbs',
+                    });
+                  } else {
+                    decreases.push({
+                      exercise: workout.name,
+                      decrease: prevMax - currentMax,
+                      unit: sessionWorkouts.find(s => s.workoutId === parseInt(workoutId))?.unit || 'lbs',
+                    });
+                  }
+                }
+              }
+            }
+          }
+          
           recentCompletedPlans.push({
             id: plan.id,
             name: plan.name,
@@ -279,6 +336,11 @@ export async function GET(request) {
             muscleFocusGroups: Object.entries(muscleFocusCount).map(([muscle, count]) => ({ muscle, count })),
             totalSets: sessionData.totalSets,
             calories: Math.round(sessionData.calories),
+            comparison: {
+              hasComparison: improvements.length > 0 || decreases.length > 0,
+              improvements,
+              decreases,
+            },
           });
         }
       }

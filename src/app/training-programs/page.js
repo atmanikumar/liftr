@@ -34,6 +34,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import CircularProgress from '@mui/material/CircularProgress';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import {
@@ -73,6 +74,9 @@ export default function TrainingProgramsPage() {
 
   // Snackbar state
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  
+  // Starting workout state - track which program is being started
+  const [startingWorkoutId, setStartingWorkoutId] = useState(null);
 
   useEffect(() => {
     dispatch(fetchTrainingPrograms());
@@ -138,6 +142,13 @@ export default function TrainingProgramsPage() {
   };
 
   const handleStartWorkout = async (program) => {
+    // Prevent duplicate clicks
+    if (startingWorkoutId) {
+      return;
+    }
+
+    setStartingWorkoutId(program.id);
+    
     try {
       // Initialize workout data
       const initialData = {};
@@ -194,9 +205,11 @@ export default function TrainingProgramsPage() {
       if (response.ok && data.activeWorkoutId) {
         router.push(`/active-workout/${data.activeWorkoutId}`);
       } else {
+        setStartingWorkoutId(null);
         setSnackbar({ open: true, message: 'Failed to start workout', severity: 'error' });
       }
     } catch (error) {
+      setStartingWorkoutId(null);
       setSnackbar({ open: true, message: error.message, severity: 'error' });
     }
   };
@@ -303,10 +316,19 @@ export default function TrainingProgramsPage() {
                 <Button
                   variant="contained"
                   size="small"
-                  startIcon={<PlayCircleOutlineIcon />}
+                  startIcon={startingWorkoutId === program.id ? null : <PlayCircleOutlineIcon />}
                   onClick={() => handleStartWorkout(program)}
+                  disabled={startingWorkoutId !== null}
+                  sx={{
+                    minWidth: '90px',
+                    opacity: startingWorkoutId && startingWorkoutId !== program.id ? 0.5 : 1,
+                  }}
                 >
-                  Start
+                  {startingWorkoutId === program.id ? (
+                    <CircularProgress size={20} color="inherit" />
+                  ) : (
+                    'Start'
+                  )}
                 </Button>
                 <Box>
                   <IconButton

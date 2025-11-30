@@ -168,17 +168,19 @@ export default function RecentWorkoutsPage() {
                       </Typography>
                       <Box sx={{ ml: 2, textAlign: 'right' }}>
                         <Typography variant="caption" color="text.secondary">
-                          {new Date(workout.date).toLocaleDateString('en-US', {
+                          {new Date(workout.date).toLocaleDateString('en-IN', {
                             month: 'short',
                             day: 'numeric',
-                            year: 'numeric'
+                            year: 'numeric',
+                            timeZone: 'Asia/Kolkata'
                           })}
                         </Typography>
                         <Typography variant="caption" display="block" color="text.secondary">
-                          {new Date(workout.date).toLocaleTimeString('en-US', {
+                          {new Date(workout.date).toLocaleTimeString('en-IN', {
                             hour: 'numeric',
                             minute: '2-digit',
-                            hour12: true
+                            hour12: true,
+                            timeZone: 'Asia/Kolkata'
                           })}
                         </Typography>
                       </Box>
