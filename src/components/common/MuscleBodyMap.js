@@ -273,7 +273,7 @@ export default function MuscleBodyMap({
           sx={{ 
             '& .rbh': {
               maxWidth: maxWidth,
-              width: '100%',
+              width: '70%',
             },
             '& .rbh polygon': {
               transition: 'all 0.3s ease',
@@ -294,6 +294,7 @@ export default function MuscleBodyMap({
               width: '100%', 
               maxWidth: maxWidth,
               margin: '0 auto',
+              textAlign: 'center',
             }}
             highlightedColors={highlightedColors}
             type={view}

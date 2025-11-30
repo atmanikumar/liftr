@@ -33,6 +33,7 @@ export default function Navbar({ onMenuClick }) {
   return (
     <AppBar 
       position="fixed" 
+      elevation={0}
       sx={{ 
         zIndex: (theme) => theme.zIndex.drawer + 1,
         top: 0,
@@ -40,7 +41,8 @@ export default function Navbar({ onMenuClick }) {
         right: 0,
         backgroundColor: 'var(--status-bar-color, #0a0a0a)', // Use CSS variable for consistency
         borderRadius: 0,
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.5)',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.3)',
+        borderBottom: 'none',
       }}
     >
       <Toolbar sx={{ 
