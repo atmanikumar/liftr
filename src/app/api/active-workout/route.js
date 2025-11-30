@@ -61,7 +61,16 @@ export async function POST(request) {
       [userId, trainingProgramId, JSON.stringify(workoutData)]
     );
 
-    return NextResponse.json({ success: true });
+    // Get the newly created active workout ID
+    const newActiveWorkout = await query(
+      'SELECT id FROM liftr_active_workouts WHERE userId = ? ORDER BY startedAt DESC LIMIT 1',
+      [userId]
+    );
+
+    return NextResponse.json({ 
+      success: true, 
+      activeWorkoutId: newActiveWorkout[0]?.id 
+    });
   } catch (error) {
     console.error('Error creating active workout:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

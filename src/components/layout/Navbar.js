@@ -35,8 +35,11 @@ export default function Navbar({ onMenuClick }) {
       position="fixed" 
       sx={{ 
         zIndex: (theme) => theme.zIndex.drawer + 1,
-        // iOS PWA safe area
-        paddingTop: 'env(safe-area-inset-top)',
+        top: 0,
+        left: 0,
+        right: 0,
+        // iOS PWA safe area - add padding at top for notch/status bar
+        paddingTop: 'env(safe-area-inset-top, 0px)',
       }}
     >
       <Toolbar sx={{ minHeight: '70px !important', py: 1 }}>
@@ -69,7 +72,7 @@ export default function Navbar({ onMenuClick }) {
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography variant="body2" sx={{ display: { xs: 'none', sm: 'block' } }}>
-            {user?.name || user?.username}
+            {user?.username}
           </Typography>
           <IconButton color="inherit" onClick={handleProfileMenuOpen}>
             <AccountCircleIcon />
@@ -96,13 +99,8 @@ export default function Navbar({ onMenuClick }) {
         >
           <MenuItem disabled sx={{ flexDirection: 'column', alignItems: 'flex-start', opacity: 1 }}>
             <Typography variant="body1" fontWeight={600}>
-              {user?.name || user?.username}
+              {user?.username}
             </Typography>
-            {user?.username && user?.name && (
-              <Typography variant="caption" color="text.secondary">
-                @{user.username}
-              </Typography>
-            )}
             {user?.role && (
               <Typography variant="caption" color="primary.main" sx={{ mt: 0.5 }}>
                 {user.role === 'admin' ? 'Administrator' : 'User'}

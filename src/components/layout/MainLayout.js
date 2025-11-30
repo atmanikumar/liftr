@@ -57,7 +57,7 @@ export default function MainLayout({ children }) {
   }
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       <Navbar onMenuClick={handleSidebarToggle} />
       <Sidebar open={sidebarOpen} onClose={handleSidebarToggle} variant="temporary" />
       <Box
@@ -68,10 +68,12 @@ export default function MainLayout({ children }) {
           width: '100%',
           minHeight: '100vh',
           backgroundColor: 'background.default',
+          // Account for navbar height + safe area
+          paddingTop: 'calc(70px + env(safe-area-inset-top, 0px) + 24px)', // 70px navbar + safe area + default padding
+          // Also add safe area for bottom on iOS devices
+          paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
         }}
       >
-        <Toolbar sx={{ minHeight: '70px !important' }} />
-        <Box sx={{ paddingTop: 'env(safe-area-inset-top, 0px)' }} />
         {children}
       </Box>
     </Box>

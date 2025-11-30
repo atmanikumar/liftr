@@ -19,10 +19,19 @@ export async function GET(request) {
     let whereClause = 'ws.userId = ?';
     const params = [userId];
 
-    // Add date filter if provided
+    // Add free text date filter if provided
+    // Supports: "17", "April", "2025", "Nov 30", "2024-11-30", etc.
     if (searchDate) {
-      whereClause += ' AND DATE(ws.completedAt) = DATE(?)';
-      params.push(searchDate);
+      // Try to match various date formats
+      whereClause += ` AND (
+        DATE(ws.completedAt) LIKE ? 
+        OR strftime('%d', ws.completedAt) = ?
+        OR strftime('%m', ws.completedAt) = ?
+        OR strftime('%Y', ws.completedAt) = ?
+        OR strftime('%Y-%m-%d', ws.completedAt) LIKE ?
+      )`;
+      const searchPattern = `%${searchDate}%`;
+      params.push(searchPattern, searchDate, searchDate, searchDate, searchPattern);
     }
 
     // Get total count of unique sessions (date + programId combinations)
@@ -89,16 +98,51 @@ export async function GET(request) {
       });
     });
 
-    // Convert to array, sort by completed date, and paginate
+    // Helper function to calculate calories (same as home API)
+    const calculateSetCalories = (equipmentName) => {
+      const met = equipmentName?.toLowerCase().includes('cardio') ? 8.0 : 6.0;
+      const userWeight = 70;
+      const durationHours = 2 / 60;
+      return met * userWeight * durationHours;
+    };
+
+    // Convert to array, calculate muscle distribution, and sort
     const allWorkouts = Object.values(allGroupedSessions)
-      .map(session => ({
-        date: session.date,
-        time: session.time,
-        programId: session.programId,
-        programName: session.programName,
-        completedAt: session.completedAt,
-        workouts: Object.values(session.workouts),
-      }))
+      .map(session => {
+        const workoutsArray = Object.values(session.workouts);
+        
+        // Calculate muscle distribution
+        const muscleCount = {};
+        let totalSets = 0;
+        let totalCalories = 0;
+        
+        workoutsArray.forEach(workout => {
+          totalSets += workout.sets.length;
+          totalCalories += workout.sets.length * calculateSetCalories(workout.equipmentName);
+          
+          if (workout.muscleFocus) {
+            muscleCount[workout.muscleFocus] = (muscleCount[workout.muscleFocus] || 0) + workout.sets.length;
+          }
+        });
+        
+        const muscleDistribution = Object.entries(muscleCount).map(([muscle, count]) => ({
+          muscle,
+          count
+        }));
+        
+        return {
+          sessionId: session.completedAt,
+          date: session.date,
+          time: session.time,
+          programId: session.programId,
+          programName: session.programName,
+          completedAt: session.completedAt,
+          workouts: workoutsArray,
+          muscleDistribution,
+          totalSets,
+          totalCalories: Math.round(totalCalories),
+        };
+      })
       .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
 
     // Now paginate the grouped sessions

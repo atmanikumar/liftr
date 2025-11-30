@@ -21,6 +21,9 @@ import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import Loader from '@/components/common/Loader';
+import MuscleBodyMap from '@/components/common/MuscleBodyMap';
+import { Dialog, DialogContent, DialogTitle, IconButton } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 
 export default function WorkoutSummaryPage() {
   const params = useParams();
@@ -28,6 +31,7 @@ export default function WorkoutSummaryPage() {
   const { sessionId } = params;
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [muscleMapOpen, setMuscleMapOpen] = useState(false);
 
   useEffect(() => {
     const fetchSummary = async () => {
@@ -64,6 +68,19 @@ export default function WorkoutSummaryPage() {
 
   const { workout, exercises, totalCalories, comparison } = summary;
 
+  // Calculate muscle distribution from exercises
+  const muscleDistribution = exercises.reduce((acc, exercise) => {
+    if (exercise.muscleFocus) {
+      const existing = acc.find(m => m.muscle === exercise.muscleFocus);
+      if (existing) {
+        existing.count += exercise.sets.length;
+      } else {
+        acc.push({ muscle: exercise.muscleFocus, count: exercise.sets.length });
+      }
+    }
+    return acc;
+  }, []);
+
   return (
     <Box>
       {/* Header */}
@@ -92,20 +109,53 @@ export default function WorkoutSummaryPage() {
         </Box>
       </Paper>
 
-      {/* Calories Burned */}
-      <Paper sx={{ p: 3, mb: 3, bgcolor: 'rgba(196, 255, 13, 0.1)', border: '2px solid #c4ff0d' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <LocalFireDepartmentIcon sx={{ fontSize: 40, color: '#c4ff0d' }} />
-          <Box>
-            <Typography variant="h3" sx={{ color: '#c4ff0d', fontWeight: 'bold' }}>
-              {Math.round(totalCalories)} cal
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        {/* Calories Burned */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, bgcolor: 'rgba(196, 255, 13, 0.1)', border: '2px solid #c4ff0d', height: '100%' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <LocalFireDepartmentIcon sx={{ fontSize: 40, color: '#c4ff0d' }} />
+              <Box>
+                <Typography variant="h3" sx={{ color: '#c4ff0d', fontWeight: 'bold' }}>
+                  {Math.round(totalCalories)} cal
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Total calories burned
+                </Typography>
+              </Box>
+            </Box>
+          </Paper>
+        </Grid>
+
+        {/* Muscle Map - Small, Clickable */}
+        <Grid item xs={12} md={6}>
+          <Paper 
+            sx={{ 
+              p: 2, 
+              height: '100%',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                transform: 'scale(1.02)',
+                boxShadow: '0 4px 12px rgba(196, 255, 13, 0.3)',
+              }
+            }}
+            onClick={() => setMuscleMapOpen(true)}
+          >
+            <Typography variant="subtitle2" gutterBottom sx={{ textAlign: 'center' }}>
+              Muscles Worked (Click to Expand)
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Total calories burned
-            </Typography>
-          </Box>
-        </Box>
-      </Paper>
+            <MuscleBodyMap 
+              muscleDistribution={muscleDistribution}
+              size="small"
+              showToggle={false}
+              showBreakdown={false}
+              showLegend={true}
+              autoRotate={true}
+            />
+          </Paper>
+        </Grid>
+      </Grid>
 
       {/* Comparison with Last Workout */}
       {comparison && comparison.hasComparison && (
@@ -141,7 +191,7 @@ export default function WorkoutSummaryPage() {
                           <Chip
                             label={`+${imp.increase} ${imp.unit}`}
                             size="small"
-                            sx={{ bgcolor: '#c4ff0d', color: '#000000', fontWeight: 'bold' }}
+                            sx={{ bgcolor: 'rgba(196, 255, 13, 0.25)', color: '#c4ff0d', fontWeight: 'bold', border: '1px solid #c4ff0d' }}
                           />
                         </Box>
                       ))}
@@ -245,11 +295,45 @@ export default function WorkoutSummaryPage() {
         <Button
           variant="contained"
           onClick={() => router.push('/')}
-          sx={{ bgcolor: '#c4ff0d', color: '#000000' }}
+          sx={{ 
+            bgcolor: 'rgba(196, 255, 13, 0.15)', 
+            color: '#c4ff0d',
+            border: '1px solid #c4ff0d',
+            '&:hover': {
+              bgcolor: 'rgba(196, 255, 13, 0.25)',
+            }
+          }}
         >
           Done
         </Button>
       </Box>
+
+      {/* Muscle Map Dialog - Medium Size */}
+      <Dialog 
+        open={muscleMapOpen} 
+        onClose={() => setMuscleMapOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            Muscles Worked
+            <IconButton onClick={() => setMuscleMapOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <MuscleBodyMap 
+            muscleDistribution={muscleDistribution}
+            size="medium"
+            showToggle={true}
+            showBreakdown={true}
+            showLegend={true}
+            autoRotate={true}
+          />
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }

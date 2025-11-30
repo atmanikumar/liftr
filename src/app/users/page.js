@@ -30,7 +30,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useDispatch, useSelector } from 'react-redux';
+import { useRouter } from 'next/navigation';
 import {
   fetchUsers,
   createUser,
@@ -43,6 +45,7 @@ import Loader from '@/components/common/Loader';
 
 export default function UsersPage() {
   const dispatch = useDispatch();
+  const router = useRouter();
   const users = useSelector(selectUsers);
   const loading = useSelector(selectUsersLoading);
 
@@ -56,7 +59,6 @@ export default function UsersPage() {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
-    name: '',
     role: 'user',
   });
   const [newPassword, setNewPassword] = useState('');
@@ -73,9 +75,14 @@ export default function UsersPage() {
 
   const handleAddUser = async () => {
     try {
-      await dispatch(createUser(formData)).unwrap();
+      // Add username as name if name is not provided
+      const userData = {
+        ...formData,
+        name: formData.username, // Use username as name
+      };
+      await dispatch(createUser(userData)).unwrap();
       setAddDialogOpen(false);
-      setFormData({ username: '', password: '', name: '', role: 'user' });
+      setFormData({ username: '', password: '', role: 'user' });
       setSnackbar({ open: true, message: 'User created successfully', severity: 'success' });
     } catch (error) {
       setSnackbar({ open: true, message: error, severity: 'error' });
@@ -123,7 +130,16 @@ export default function UsersPage() {
 
   return (
     <Box>
-      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => router.push('/')}
+          sx={{ color: '#c4ff0d' }}
+        >
+          Back
+        </Button>
+      </Box>
+
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">Users Management</Typography>
         <Button
@@ -199,29 +215,28 @@ export default function UsersPage() {
                             <Typography variant="body2">{user.role}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', gap: 1, pt: 1 }}>
-                            <Button
-                              variant="outlined"
+                            <IconButton
+                              color="primary"
                               size="small"
-                              startIcon={<LockResetIcon />}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 openResetDialog(user);
                               }}
+                              title="Reset Password"
                             >
-                              Reset Password
-                            </Button>
-                            <Button
-                              variant="outlined"
+                              <LockResetIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
                               color="error"
                               size="small"
-                              startIcon={<DeleteIcon />}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 openDeleteDialog(user);
                               }}
+                              title="Delete User"
                             >
-                              Delete
-                            </Button>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
                           </Box>
                         </Stack>
                       </Box>
@@ -251,13 +266,7 @@ export default function UsersPage() {
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
               required
               fullWidth
-            />
-            <TextField
-              label="Name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
-              fullWidth
+              autoFocus
             />
             <TextField
               label="Password"
@@ -285,7 +294,7 @@ export default function UsersPage() {
           <Button
             onClick={handleAddUser}
             variant="contained"
-            disabled={!formData.username || !formData.password || !formData.name}
+            disabled={!formData.username || !formData.password}
           >
             Add User
           </Button>

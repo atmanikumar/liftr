@@ -44,21 +44,15 @@ const menuItems = [
     adminOnly: false,
   },
   {
-    title: 'Workouts',
-    path: '/workouts',
-    icon: 'DumbbellIcon',
-    adminOnly: false,
-  },
-  {
     title: 'Workout Plans',
     path: '/training-programs',
     icon: 'CalendarMonthIcon',
     adminOnly: false,
   },
   {
-    title: 'My Progress',
-    path: '/progress',
-    icon: 'TrendingUpIcon',
+    title: 'Workouts',
+    path: '/workouts',
+    icon: 'DumbbellIcon',
     adminOnly: false,
   },
   {
@@ -117,7 +111,6 @@ export default function Sidebar({ open, onClose, variant = 'temporary' }) {
                   sx={{
                     '&.Mui-selected': {
                       backgroundColor: 'rgba(196, 255, 13, 0.12)',
-                      borderLeft: '3px solid #c4ff0d',
                       '&:hover': {
                         backgroundColor: 'rgba(196, 255, 13, 0.15)',
                       },

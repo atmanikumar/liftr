@@ -30,7 +30,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import SearchIcon from '@mui/icons-material/Search';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useDispatch, useSelector } from 'react-redux';
+import { useRouter } from 'next/navigation';
 import {
   fetchWorkouts,
   createWorkout,
@@ -41,11 +43,13 @@ import {
 } from '@/redux/slices/workoutsSlice';
 import { MUSCLE_GROUPS } from '@/constants/app';
 import Loader from '@/components/common/Loader';
+import MuscleBodyMap from '@/components/common/MuscleBodyMap';
 
 const PLACEHOLDER_IMAGE = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="200"%3E%3Crect width="300" height="200" fill="%23333"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E';
 
 export default function WorkoutsPage() {
   const dispatch = useDispatch();
+  const router = useRouter();
   const workouts = useSelector(selectWorkouts);
   const loading = useSelector(selectWorkoutsLoading);
 
@@ -203,7 +207,16 @@ export default function WorkoutsPage() {
 
   return (
     <Box>
-      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => router.push('/')}
+          sx={{ color: '#c4ff0d' }}
+        >
+          Back
+        </Button>
+      </Box>
+
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4">Workouts</Typography>
         <Button
@@ -261,6 +274,21 @@ export default function WorkoutsPage() {
                     Equipment: {workout.equipmentName}
                   </Typography>
                 )}
+                
+                {/* Muscle Map */}
+                {workout.muscleFocus && (
+                  <Box sx={{ my: 2, display: 'flex', justifyContent: 'center' }}>
+                    <MuscleBodyMap 
+                      muscleDistribution={[{ muscle: workout.muscleFocus, count: 1 }]}
+                      size="small"
+                      showToggle={false}
+                      showBreakdown={false}
+                      showLegend={false}
+                      autoRotate={true}
+                    />
+                  </Box>
+                )}
+                
                 {workout.muscleFocus && (
                   <Chip
                     label={workout.muscleFocus}
@@ -407,20 +435,31 @@ export default function WorkoutsPage() {
                 </Box>
               )}
             </Box>
-            <TextField
-              select
-              label="Muscle Focus"
-              value={formData.muscleFocus}
-              onChange={(e) => setFormData({ ...formData, muscleFocus: e.target.value })}
-              fullWidth
-            >
-              <MenuItem value="">None</MenuItem>
-              {MUSCLE_GROUPS.map((muscle) => (
-                <MenuItem key={muscle} value={muscle}>
-                  {muscle}
-                </MenuItem>
-              ))}
-            </TextField>
+            {/* Muscle Focus Selection via Body Map */}
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>
+                Muscle Focus - Click on the muscle group below
+              </Typography>
+              {formData.muscleFocus && (
+                <Chip 
+                  label={`Selected: ${formData.muscleFocus}`}
+                  color="primary"
+                  onDelete={() => setFormData({ ...formData, muscleFocus: '' })}
+                  sx={{ mb: 2 }}
+                />
+              )}
+              <MuscleBodyMap 
+                muscleDistribution={MUSCLE_GROUPS.map(m => ({ muscle: m, count: 1 }))}
+                size="medium"
+                showToggle={true}
+                showBreakdown={true}
+                showLegend={false}
+                autoRotate={false}
+                selectable={true}
+                selectedMuscle={formData.muscleFocus}
+                onMuscleSelect={(muscle) => setFormData({ ...formData, muscleFocus: muscle })}
+              />
+            </Box>
             <TextField
               label="Description"
               value={formData.description}

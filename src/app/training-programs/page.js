@@ -26,11 +26,14 @@ import {
   List,
   ListItem,
   ListItemText,
+  Checkbox,
+  ListItemIcon,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import {
@@ -46,6 +49,7 @@ import {
   selectWorkouts,
 } from '@/redux/slices/workoutsSlice';
 import Loader from '@/components/common/Loader';
+import MuscleBodyMap from '@/components/common/MuscleBodyMap';
 
 export default function TrainingProgramsPage() {
   const dispatch = useDispatch();
@@ -133,9 +137,93 @@ export default function TrainingProgramsPage() {
     setDeleteDialogOpen(true);
   };
 
+  const handleStartWorkout = async (program) => {
+    try {
+      // Initialize workout data
+      const initialData = {};
+      const workoutList = (program.workoutIds || []).map(id => 
+        workouts.find(w => w.id === id)
+      ).filter(Boolean);
+
+      for (const workout of workoutList) {
+        // Fetch last session for this specific exercise
+        let lastExerciseData = null;
+        try {
+          const lastExerciseResponse = await fetch(`/api/last-exercise/${workout.id}`);
+          const lastExerciseResult = await lastExerciseResponse.json();
+          
+          if (lastExerciseResult.lastSession) {
+            lastExerciseData = lastExerciseResult.lastSession;
+          }
+        } catch (e) {
+          // Ignore errors
+        }
+        
+        const defaultSets = [
+          { weight: 0, reps: 12, rir: 0, completed: false, previousWeight: 0 },
+          { weight: 0, reps: 12, rir: 0, completed: false, previousWeight: 0 },
+        ];
+        
+        initialData[workout.id] = {
+          unit: lastExerciseData?.unit || 'lbs',
+          sets: lastExerciseData?.sets?.length > 0 
+            ? lastExerciseData.sets.map(set => ({
+                weight: parseFloat(set.weight) || 0,
+                reps: parseInt(set.reps) || 12,
+                rir: parseInt(set.rir) || 0,
+                completed: false,
+                previousWeight: parseFloat(set.weight) || 0,
+              }))
+            : defaultSets,
+          workoutCompleted: false,
+        };
+      }
+
+      // Create active workout session
+      const response = await fetch('/api/active-workout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trainingProgramId: program.id,
+          workoutData: initialData,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.activeWorkoutId) {
+        router.push(`/active-workout/${data.activeWorkoutId}`);
+      } else {
+        setSnackbar({ open: true, message: 'Failed to start workout', severity: 'error' });
+      }
+    } catch (error) {
+      setSnackbar({ open: true, message: error.message, severity: 'error' });
+    }
+  };
+
   const getWorkoutName = (workoutId) => {
     const workout = workouts.find(w => w.id === workoutId);
     return workout ? workout.name : 'Unknown Workout';
+  };
+
+  // Get muscle distribution for a program
+  const getProgramMuscles = (program) => {
+    if (!program.workoutIds || program.workoutIds.length === 0) return [];
+    
+    const muscleCount = {};
+    
+    program.workoutIds.forEach(workoutId => {
+      const workout = workouts.find(w => w.id === workoutId);
+      if (workout && workout.muscleFocus) {
+        const muscle = workout.muscleFocus;
+        muscleCount[muscle] = (muscleCount[muscle] || 0) + 1;
+      }
+    });
+    
+    return Object.entries(muscleCount).map(([muscle, count]) => ({
+      muscle,
+      count
+    }));
   };
 
   if (loading && programs.length === 0) {
@@ -144,7 +232,16 @@ export default function TrainingProgramsPage() {
 
   return (
     <Box>
-      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => router.push('/')}
+          sx={{ color: '#c4ff0d' }}
+        >
+          Back
+        </Button>
+      </Box>
+
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4" sx={{ flexGrow: 1, minWidth: 'fit-content' }}>
           Workout Plans
@@ -175,6 +272,18 @@ export default function TrainingProgramsPage() {
                   </Typography>
                 )}
 
+                {/* Muscle Map */}
+                <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+                  <MuscleBodyMap 
+                    muscleDistribution={getProgramMuscles(program)}
+                    size="small"
+                    showToggle={false}
+                    showBreakdown={false}
+                    showLegend={true}
+                    autoRotate={true}
+                  />
+                </Box>
+
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
                   Workouts ({program.workoutIds?.length || 0}):
                 </Typography>
@@ -195,7 +304,7 @@ export default function TrainingProgramsPage() {
                   variant="contained"
                   size="small"
                   startIcon={<PlayCircleOutlineIcon />}
-                  onClick={() => router.push(`/active-workout/${program.id}`)}
+                  onClick={() => handleStartWorkout(program)}
                 >
                   Start
                 </Button>
@@ -250,23 +359,45 @@ export default function TrainingProgramsPage() {
             />
 
             <FormControl fullWidth required>
-              <InputLabel>Select Workouts</InputLabel>
+              <InputLabel>Select Workouts *</InputLabel>
               <Select
                 multiple
                 value={formData.workoutIds}
-                onChange={(e) => setFormData({ ...formData, workoutIds: e.target.value })}
-                input={<OutlinedInput label="Select Workouts" />}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFormData({ ...formData, workoutIds: typeof value === 'string' ? value.split(',') : value });
+                }}
+                input={<OutlinedInput label="Select Workouts *" />}
                 renderValue={(selected) => (
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                     {selected.map((value) => (
-                      <Chip key={value} label={getWorkoutName(value)} size="small" />
+                      <Chip 
+                        key={value} 
+                        label={getWorkoutName(value)} 
+                        size="small"
+                        onDelete={(e) => {
+                          e.stopPropagation();
+                          setFormData({ 
+                            ...formData, 
+                            workoutIds: formData.workoutIds.filter(id => id !== value) 
+                          });
+                        }}
+                        deleteIcon={<DeleteIcon onMouseDown={(e) => e.stopPropagation()} />}
+                      />
                     ))}
                   </Box>
                 )}
               >
                 {workouts.map((workout) => (
                   <MenuItem key={workout.id} value={workout.id}>
-                    {workout.name} {workout.muscleFocus && `(${workout.muscleFocus})`}
+                    <Checkbox 
+                      checked={formData.workoutIds.indexOf(workout.id) > -1}
+                      sx={{ mr: 1 }}
+                    />
+                    <ListItemText 
+                      primary={workout.name}
+                      secondary={workout.muscleFocus}
+                    />
                   </MenuItem>
                 ))}
               </Select>

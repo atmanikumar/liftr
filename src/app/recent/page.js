@@ -16,13 +16,23 @@ import {
   AccordionSummary,
   AccordionDetails,
   InputAdornment,
+  IconButton,
+  Button,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { useRouter } from 'next/navigation';
 import Loader from '@/components/common/Loader';
+import MuscleBodyMap from '@/components/common/MuscleBodyMap';
+import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 
 export default function RecentWorkoutsPage() {
+  const router = useRouter();
   const [workouts, setWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -76,31 +86,48 @@ export default function RecentWorkoutsPage() {
 
   return (
     <Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => router.push('/')}
+          sx={{ color: '#c4ff0d' }}
+        >
+          Back
+        </Button>
+      </Box>
+
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4">Recent Workouts</Typography>
         
         <TextField
-          type="date"
+          type="text"
           label="Search by Date"
+          placeholder="e.g., 17, April, 2025, Nov 30..."
           value={searchDate}
           onChange={handleSearchDateChange}
           size="small"
-          InputLabelProps={{ shrink: true }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <CalendarTodayIcon fontSize="small" />
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+            endAdornment: searchDate && (
+              <InputAdornment position="end">
+                <IconButton size="small" onClick={handleClearSearch}>
+                  <ClearIcon fontSize="small" />
+                </IconButton>
               </InputAdornment>
             ),
           }}
-          sx={{ minWidth: 200 }}
+          sx={{ minWidth: 250 }}
         />
       </Box>
 
       {searchDate && (
         <Box sx={{ mb: 2 }}>
           <Chip
-            label={`Showing workouts for: ${new Date(searchDate).toLocaleDateString()}`}
+            label={`Searching: "${searchDate}"`}
             onDelete={handleClearSearch}
             color="primary"
           />
@@ -120,25 +147,99 @@ export default function RecentWorkoutsPage() {
       ) : (
         <Stack spacing={2}>
           {workouts.map((workout, idx) => (
-            <Card key={idx}>
+            <Card 
+              key={idx}
+              sx={{
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: (theme) => `0 6px 20px ${theme.palette.primary.main}40`,
+                },
+              }}
+              onClick={() => router.push(`/workout-summary/${encodeURIComponent(workout.sessionId)}`)}
+            >
               <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-                  <Box>
-                    <Typography variant="h6">{workout.programName}</Typography>
-                    <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start', mb: 2 }}>
+                  <Box sx={{ flexGrow: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                      <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>
+                        {workout.programName}
+                      </Typography>
+                      <Box sx={{ ml: 2, textAlign: 'right' }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {new Date(workout.date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          {new Date(workout.date).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                          })}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    
+                    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                      {workout.totalCalories > 0 && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <LocalFireDepartmentIcon sx={{ fontSize: 20, color: '#c4ff0d' }} />
+                          <Typography variant="body2" fontWeight="bold" sx={{ color: '#c4ff0d' }}>
+                            {Math.round(workout.totalCalories)} cal
+                          </Typography>
+                        </Box>
+                      )}
+                      {workout.totalSets > 0 && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <TrendingUpIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                          <Typography variant="body2" color="text.secondary">
+                            {workout.totalSets} sets
+                          </Typography>
+                        </Box>
+                      )}
                       <Chip
-                        icon={<CalendarTodayIcon />}
-                        label={new Date(workout.date).toLocaleDateString()}
-                        size="small"
-                        variant="outlined"
-                      />
-                      <Chip
+                        icon={<FitnessCenterIcon />}
                         label={`${workout.workouts.length} exercises`}
                         size="small"
-                        color="primary"
+                        sx={{ 
+                          borderColor: 'rgba(196, 255, 13, 0.5)',
+                          color: '#c4ff0d',
+                          bgcolor: 'rgba(196, 255, 13, 0.1)',
+                          border: '1px solid rgba(196, 255, 13, 0.5)'
+                        }}
                       />
                     </Box>
                   </Box>
+                  
+                  {workout.muscleDistribution && workout.muscleDistribution.length > 0 && (
+                    <Box 
+                      sx={{ 
+                        width: '60px',
+                        flexShrink: 0,
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          transform: 'scale(1.1)',
+                        }
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
+                    >
+                      <MuscleBodyMap 
+                        muscleDistribution={workout.muscleDistribution}
+                        size="small"
+                        showToggle={false}
+                        showBreakdown={false}
+                        showLegend={false}
+                        autoRotate={true}
+                      />
+                    </Box>
+                  )}
                 </Box>
 
                 {/* Workout Details */}

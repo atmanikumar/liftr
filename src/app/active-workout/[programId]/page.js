@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -27,11 +27,15 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
+import SkipNextIcon from '@mui/icons-material/SkipNext';
+import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useParams, useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchTrainingPrograms, selectTrainingPrograms } from '@/redux/slices/trainingProgramsSlice';
 import { fetchWorkouts, selectWorkouts } from '@/redux/slices/workoutsSlice';
 import Loader from '@/components/common/Loader';
+import MuscleBodyMap from '@/components/common/MuscleBodyMap';
 
 const WEIGHT_UNITS = ['lbs', 'kg'];
 const RIR_OPTIONS = [0, 1, 2, 3, 4, 5, 6];
@@ -75,7 +79,7 @@ export default function ActiveWorkoutPage() {
   const params = useParams();
   const router = useRouter();
   const dispatch = useDispatch();
-  const programId = parseInt(params.programId);
+  const activeWorkoutId = parseInt(params.programId); // This is actually the active workout ID
   
   const programs = useSelector(selectTrainingPrograms);
   const workouts = useSelector(selectWorkouts);
@@ -85,9 +89,13 @@ export default function ActiveWorkoutPage() {
   const [workoutData, setWorkoutData] = useState({});
   const [expandedWorkout, setExpandedWorkout] = useState(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [addWorkoutDialogOpen, setAddWorkoutDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
+  const [activeWorkoutData, setActiveWorkoutData] = useState(null);
+  
+  const initializedRef = useRef(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -102,89 +110,45 @@ export default function ActiveWorkoutPage() {
 
   useEffect(() => {
     const initializeWorkout = async () => {
-      if (programs.length > 0 && workouts.length > 0) {
-        const selectedProgram = programs.find(p => p.id === programId);
-        if (selectedProgram) {
-          setProgram(selectedProgram);
-          const workoutIds = selectedProgram.workoutIds || [];
-          const workoutList = workoutIds.map(id => 
-            workouts.find(w => w.id === id)
-          ).filter(Boolean);
-          setProgramWorkouts(workoutList);
+      if (workouts.length > 0 && !initializedRef.current) {
+        initializedRef.current = true;
+        
+        try {
+          // Load active workout by ID
+          const response = await fetch(`/api/active-workout/${activeWorkoutId}`);
+          const data = await response.json();
           
-          // Try to load active workout from DB first
-          try {
-            const activeResponse = await fetch('/api/active-workout');
-            const activeData = await activeResponse.json();
+          if (response.ok && data.activeWorkout) {
+            const aw = data.activeWorkout;
+            setActiveWorkoutData(aw);
             
-            if (activeData.activeWorkout && activeData.activeWorkout.trainingProgramId === programId) {
-              setWorkoutData(activeData.activeWorkout.workoutData);
-              return;
-            }
-          } catch (e) {
-            console.error('Failed to load active workout:', e);
-          }
-          
-          // Initialize workout data with 2 sets for each workout (default reps: 12)
-          // Prefill from last session of each individual exercise
-          const initialData = {};
-          
-          for (const workout of workoutList) {
-            // Fetch last session for this specific exercise
-            let lastExerciseData = null;
-            try {
-              const lastExerciseResponse = await fetch(`/api/last-exercise/${workout.id}`);
-              const lastExerciseResult = await lastExerciseResponse.json();
-              
-              if (lastExerciseResult.lastSession) {
-                lastExerciseData = lastExerciseResult.lastSession;
-              }
-            } catch (e) {
-              console.error(`Failed to load last session for workout ${workout.id}:`, e);
-            }
-            
-            // If we have last session data, use it; otherwise default to 2 empty sets
-            const defaultSets = [
-              { weight: 0, reps: 12, rir: 0, completed: false, previousWeight: 0 },
-              { weight: 0, reps: 12, rir: 0, completed: false, previousWeight: 0 },
-            ];
-            
-            initialData[workout.id] = {
-              unit: lastExerciseData?.unit || 'lbs',
-              sets: lastExerciseData?.sets?.length > 0 
-                ? lastExerciseData.sets.map(set => ({
-                    weight: parseFloat(set.weight) || 0,
-                    reps: parseInt(set.reps) || 12,
-                    rir: parseInt(set.rir) || 0,
-                    completed: false,
-                    previousWeight: parseFloat(set.weight) || 0, // Store for comparison
-                  }))
-                : defaultSets,
-              workoutCompleted: false,
-            };
-          }
-          
-          setWorkoutData(initialData);
-          
-          // Save as active workout in DB
-          try {
-            await fetch('/api/active-workout', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                trainingProgramId: programId,
-                workoutData: initialData,
-              }),
+            // Set program info
+            setProgram({
+              id: aw.trainingProgramId,
+              name: aw.programName,
+              workoutIds: aw.workoutIds,
             });
-          } catch (e) {
-            console.error('Failed to save active workout:', e);
+            
+            // Get workout list
+            const workoutList = aw.workoutIds.map(id => 
+              workouts.find(w => w.id === id)
+            ).filter(Boolean);
+            setProgramWorkouts(workoutList);
+            
+            // Set workout data
+            setWorkoutData(aw.workoutData);
+          } else {
+            router.push('/');
           }
+        } catch (e) {
+          console.error('Failed to load active workout:', e);
+          router.push('/');
         }
       }
     };
     
     initializeWorkout();
-  }, [programs, workouts, programId]);
+  }, [workouts, activeWorkoutId, router]);
 
   const updateSet = (workoutId, setIndex, field, value) => {
     setWorkoutData(prev => {
@@ -368,9 +332,93 @@ export default function ActiveWorkoutPage() {
     return totalSets > 0 ? (completedSets / totalSets) * 100 : 0;
   };
 
+  const getMuscleDistribution = () => {
+    const muscleCount = {};
+    programWorkouts.forEach(workout => {
+      if (workout.muscleFocus) {
+        muscleCount[workout.muscleFocus] = (muscleCount[workout.muscleFocus] || 0) + 1;
+      }
+    });
+    return Object.entries(muscleCount).map(([muscle, count]) => ({ muscle, count }));
+  };
+
+  const skipWorkout = (workoutId) => {
+    setProgramWorkouts(prev => prev.filter(w => w.id !== workoutId));
+    setWorkoutData(prev => {
+      const updated = { ...prev };
+      delete updated[workoutId];
+      
+      fetch('/api/active-workout', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workoutData: updated }),
+      }).catch(e => console.error('Failed to save:', e));
+      
+      return updated;
+    });
+  };
+
+  const addWorkoutToSession = async (workoutId) => {
+    const workout = workouts.find(w => w.id === workoutId);
+    if (!workout) return;
+
+    setProgramWorkouts(prev => [...prev, workout]);
+
+    let lastExerciseData = null;
+    try {
+      const lastExerciseResponse = await fetch(`/api/last-exercise/${workout.id}`);
+      const lastExerciseResult = await lastExerciseResponse.json();
+      
+      if (lastExerciseResult.lastSession) {
+        lastExerciseData = lastExerciseResult.lastSession;
+      }
+    } catch (e) {
+      console.error(`Failed to load last session for workout ${workout.id}:`, e);
+    }
+
+    const defaultSets = [
+      { weight: 0, reps: 12, rir: 0, completed: false, previousWeight: 0 },
+      { weight: 0, reps: 12, rir: 0, completed: false, previousWeight: 0 },
+    ];
+
+    const newWorkoutData = {
+      unit: lastExerciseData?.unit || 'lbs',
+      sets: lastExerciseData?.sets?.length > 0 
+        ? lastExerciseData.sets.map(set => ({
+            weight: parseFloat(set.weight) || 0,
+            reps: parseInt(set.reps) || 12,
+            rir: parseInt(set.rir) || 0,
+            completed: false,
+            previousWeight: parseFloat(set.weight) || 0,
+          }))
+        : defaultSets,
+      workoutCompleted: false,
+    };
+
+    setWorkoutData(prev => {
+      const updated = {
+        ...prev,
+        [workout.id]: newWorkoutData,
+      };
+      
+      fetch('/api/active-workout', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workoutData: updated }),
+      }).catch(e => console.error('Failed to save:', e));
+      
+      return updated;
+    });
+
+    setAddWorkoutDialogOpen(false);
+  };
+
   const handleSaveWorkout = async () => {
     try {
-      // Prepare data for API
+      if (!program || !program.id) {
+        throw new Error('Program information not available');
+      }
+
       const sessions = [];
       programWorkouts.forEach(workout => {
         const sets = workoutData[workout.id].sets.filter(set => set.completed);
@@ -378,20 +426,19 @@ export default function ActiveWorkoutPage() {
           const workoutUnit = workoutData[workout.id].unit;
           sessions.push({
             workoutId: workout.id,
-            trainingProgramId: programId,
+            trainingProgramId: program.id, // Use program.id which is the trainingProgramId
             sets: sets.map((s, idx) => ({
               setNumber: idx + 1,
               weight: s.weight,
               reps: s.reps,
               rir: s.rir,
-              previousWeight: s.previousWeight || 0, // Include for weight change calculation
+              previousWeight: s.previousWeight || 0,
             })),
             unit: workoutUnit,
           });
         }
       });
 
-      // Save to database via API
       const response = await fetch('/api/save-workout-session', {
         method: 'POST',
         headers: {
@@ -406,7 +453,6 @@ export default function ActiveWorkoutPage() {
         throw new Error(data.error || 'Failed to save workout');
       }
 
-      // No need to mark in localStorage - it's in the DB now
       router.push('/');
     } catch (error) {
       console.error('Failed to save workout:', error);
@@ -430,26 +476,54 @@ export default function ActiveWorkoutPage() {
   }
 
   const progress = calculateProgress();
+  const muscleDistribution = getMuscleDistribution();
 
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          {program.name}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" gutterBottom>
-          {programWorkouts.length} exercises • {new Date().toLocaleDateString()}
-        </Typography>
-        
-        {/* Progress Bar */}
-        <Box sx={{ mt: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-            <Typography variant="body2">Progress</Typography>
-            <Typography variant="body2">{Math.round(progress)}%</Typography>
+      {/* Back Button */}
+      <Box sx={{ mb: 2 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => router.push('/')}
+          sx={{ color: '#c4ff0d' }}
+        >
+          Back
+        </Button>
+      </Box>
+
+      {/* Header with Muscle Map */}
+      <Box sx={{ mb: 3, display: 'flex', gap: 3, alignItems: 'flex-start' }}>
+        <Box sx={{ flexGrow: 1 }}>
+          <Typography variant="h4" gutterBottom>
+            {program.name}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            {programWorkouts.length} exercises • {new Date().toLocaleDateString()}
+          </Typography>
+          
+          {/* Progress Bar */}
+          <Box sx={{ mt: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="body2">Progress</Typography>
+              <Typography variant="body2">{Math.round(progress)}%</Typography>
+            </Box>
+            <LinearProgress variant="determinate" value={progress} sx={{ height: 8, borderRadius: 4 }} />
           </Box>
-          <LinearProgress variant="determinate" value={progress} sx={{ height: 8, borderRadius: 4 }} />
         </Box>
+        
+        {/* Muscle Map */}
+        {muscleDistribution.length > 0 && (
+          <Box sx={{ width: '200px', flexShrink: 0 }}>
+            <MuscleBodyMap 
+              muscleDistribution={muscleDistribution}
+              size="medium"
+              showToggle={true}
+              showLegend={true}
+              showBreakdown={false}
+              autoRotate={true}
+            />
+          </Box>
+        )}
       </Box>
 
       {/* Workout Exercises */}
@@ -469,35 +543,76 @@ export default function ActiveWorkoutPage() {
                 sx={{
                   border: workoutData[workout.id]?.workoutCompleted ? '2px solid #c4ff0d' : '1px solid rgba(255, 255, 255, 0.05)',
                   bgcolor: 'inherit',
+                  minHeight: '80px',
                   '&:hover': {
                     bgcolor: 'action.hover',
                   },
+                  '& .MuiAccordionSummary-content': {
+                    my: 2,
+                  }
                 }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-                  {workoutData[workout.id]?.workoutCompleted && (
-                    <CheckCircleIcon color="success" />
-                  )}
-                  <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                    {workoutIndex + 1}. {workout.name}
-                  </Typography>
-                  <Chip 
-                    label={`${completedSets}/${workoutSets.length} sets`}
-                    size="small"
-                    sx={{
-                      bgcolor: 'rgba(255, 255, 255, 0.1)',
-                      color: 'white',
-                    }}
-                  />
-                  {workout.muscleFocus && (
-                    <Chip label={workout.muscleFocus} size="small" variant="outlined" />
-                  )}
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', flexDirection: 'column', gap: 1, width: '100%' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                    {workoutData[workout.id]?.workoutCompleted && (
+                      <CheckCircleIcon color="success" />
+                    )}
+                    <Typography variant="h6" sx={{ flexGrow: 1 }}>
+                      {workoutIndex + 1}. {workout.name}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <Chip 
+                      label={`${completedSets}/${workoutSets.length} sets`}
+                      size="small"
+                      sx={{
+                        bgcolor: 'rgba(255, 255, 255, 0.1)',
+                        color: 'white',
+                      }}
+                    />
+                    {workout.muscleFocus && (
+                      <Chip label={workout.muscleFocus} size="small" variant="outlined" />
+                    )}
+                    {workout.equipmentName && (
+                      <Chip 
+                        label={workout.equipmentName}
+                        size="small"
+                        sx={{
+                          bgcolor: 'rgba(255, 255, 255, 0.05)',
+                          color: 'rgba(255, 255, 255, 0.6)',
+                        }}
+                      />
+                    )}
+                  </Box>
                 </Box>
               </AccordionSummary>
               <AccordionDetails>
-                {/* Equipment type info and Unit selector */}
+                {/* Skip and Unit selector row */}
                 <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-                  <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Button
+                      size="small"
+                      variant="text"
+                      startIcon={<SkipNextIcon fontSize="small" />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Skip ${workout.name}? This cannot be undone.`)) {
+                          skipWorkout(workout.id);
+                        }
+                      }}
+                      sx={{ 
+                        color: '#ef4444',
+                        fontSize: '0.75rem',
+                        py: 0.5,
+                        px: 1,
+                        minWidth: 'auto',
+                        '&:hover': { 
+                          bgcolor: 'rgba(239, 68, 68, 0.1)'
+                        }
+                      }}
+                    >
+                      Skip
+                    </Button>
                     {workout.equipmentName && (
                       <Typography variant="caption" color="text.secondary">
                         {workout.equipmentName} • Auto +{getAutoIncrement(workout.equipmentName)}lbs per set
@@ -641,6 +756,23 @@ export default function ActiveWorkoutPage() {
         })}
       </Stack>
 
+      {/* Add Workout Button */}
+      <Box sx={{ mt: 2 }}>
+        <Button
+          variant="outlined"
+          startIcon={<FitnessCenterIcon />}
+          onClick={() => setAddWorkoutDialogOpen(true)}
+          fullWidth
+          sx={{ 
+            borderStyle: 'dashed',
+            color: '#c4ff0d',
+            borderColor: '#c4ff0d',
+          }}
+        >
+          Add Exercise to Today&apos;s Session
+        </Button>
+      </Box>
+
       {/* Action Buttons */}
       <Box sx={{ mt: 4, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
         <Button
@@ -714,6 +846,55 @@ export default function ActiveWorkoutPage() {
           <Button onClick={handleSaveWorkout} variant="contained">
             Save
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Workout Dialog */}
+      <Dialog open={addWorkoutDialogOpen} onClose={() => setAddWorkoutDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Exercise to Session</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select an exercise to add to today&apos;s workout session
+          </Typography>
+          <Stack spacing={1} sx={{ mt: 2 }}>
+            {workouts
+              .filter(w => !programWorkouts.find(pw => pw.id === w.id))
+              .map(workout => (
+                <Card 
+                  key={workout.id}
+                  sx={{ 
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      bgcolor: 'action.hover',
+                      transform: 'translateX(4px)',
+                    }
+                  }}
+                  onClick={() => addWorkoutToSession(workout.id)}
+                >
+                  <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Box>
+                        <Typography variant="body1" fontWeight="medium">
+                          {workout.name}
+                        </Typography>
+                        {workout.equipmentName && (
+                          <Typography variant="caption" color="text.secondary">
+                            {workout.equipmentName}
+                          </Typography>
+                        )}
+                      </Box>
+                      {workout.muscleFocus && (
+                        <Chip label={workout.muscleFocus} size="small" />
+                      )}
+                    </Box>
+                  </CardContent>
+                </Card>
+              ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddWorkoutDialogOpen(false)}>Cancel</Button>
         </DialogActions>
       </Dialog>
     </Box>

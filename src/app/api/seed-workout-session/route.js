@@ -75,7 +75,6 @@ export async function POST() {
       const workoutId = workoutMap[session.workoutName];
       
       if (!workoutId) {
-        console.warn(`Workout not found: ${session.workoutName}`);
         continue;
       }
 

@@ -19,6 +19,9 @@ import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { Button } from '@mui/material';
+import { useRouter } from 'next/navigation';
 import Loader from '@/components/common/Loader';
 import {
   LineChart,
@@ -32,6 +35,7 @@ import {
 } from 'recharts';
 
 export default function ProgressPage() {
+  const router = useRouter();
   const [progressData, setProgressData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -58,6 +62,16 @@ export default function ProgressPage() {
   if (!progressData) {
     return (
       <Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={() => router.push('/')}
+            sx={{ color: '#c4ff0d' }}
+          >
+            Back
+          </Button>
+        </Box>
+        
         <Typography variant="h4" gutterBottom>
           My Progress
         </Typography>
@@ -81,6 +95,16 @@ export default function ProgressPage() {
 
   return (
     <Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => router.push('/')}
+          sx={{ color: '#c4ff0d' }}
+        >
+          Back
+        </Button>
+      </Box>
+
       <Typography variant="h4" gutterBottom>
         My Progress
       </Typography>

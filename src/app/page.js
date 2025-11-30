@@ -11,60 +11,57 @@ import {
   Button,
   Chip,
   Stack,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { selectUser } from '@/redux/slices/authSlice';
-import { fetchTrainingPrograms, selectTrainingPrograms } from '@/redux/slices/trainingProgramsSlice';
 import { useRouter } from 'next/navigation';
-import { getTodayCalories } from '@/lib/caloriesCalculator';
 import Loader from '@/components/common/Loader';
+import MuscleBodyMap from '@/components/common/MuscleBodyMap';
+import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 export default function HomePage() {
   const user = useSelector(selectUser);
-  const dispatch = useDispatch();
   const router = useRouter();
-  const programs = useSelector(selectTrainingPrograms);
+  const [workoutPlans, setWorkoutPlans] = useState([]);
   const [completedSessions, setCompletedSessions] = useState([]);
-  const [activeWorkout, setActiveWorkout] = useState(null);
-  const [loadingActive, setLoadingActive] = useState(true);
+  const [activeWorkouts, setActiveWorkouts] = useState([]);
   const [todayCalories, setTodayCalories] = useState(0);
+  const [progressData, setProgressData] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
+  const [muscleMapOpen, setMuscleMapOpen] = useState(false);
+  const [selectedWorkoutMuscles, setSelectedWorkoutMuscles] = useState([]);
 
   useEffect(() => {
-    dispatch(fetchTrainingPrograms());
-    
     const fetchHomeData = async () => {
       try {
-        // Fetch active workout
-        const activeResponse = await fetch('/api/active-workout');
-        const activeData = await activeResponse.json();
-        if (activeData.activeWorkout) {
-          setActiveWorkout(activeData.activeWorkout);
-        }
+        // Single API call to get all home page data
+        const response = await fetch('/api/home');
+        const data = await response.json();
         
-        // Fetch today's completed workout sessions from DB
-        const completedResponse = await fetch('/api/today-completed');
-        const completedData = await completedResponse.json();
-        if (completedData.completedSessions) {
-          setCompletedSessions(completedData.completedSessions);
+        if (data.workoutPlans) {
+          setWorkoutPlans(data.workoutPlans);
         }
-        
-        // Fetch today's calories
-        const progressResponse = await fetch('/api/progress');
-        const progressData = await progressResponse.json();
-        if (progressData.recentSessions) {
-          const calories = getTodayCalories(progressData.recentSessions);
-          setTodayCalories(calories);
+        if (data.completedSessions) {
+          setCompletedSessions(data.completedSessions);
         }
+        if (data.activeWorkouts) {
+          setActiveWorkouts(data.activeWorkouts);
+        }
+        setTodayCalories(data.todayCalories || 0);
+        setProgressData(data.progress || null);
       } catch (e) {
         console.error('Failed to load home data:', e);
       } finally {
-        setLoadingActive(false);
         setLoadingData(false);
       }
     };
@@ -83,262 +80,375 @@ export default function HomePage() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [dispatch]);
+  }, []);
 
-  // Build list of today's workout items (each session separate) with calories
-  const [workoutItemsWithCalories, setWorkoutItemsWithCalories] = useState([]);
-  
-  useEffect(() => {
-    const fetchCaloriesForSessions = async () => {
-      // Don't process until we have programs and initial data is loaded
-      if (programs.length === 0 || loadingData) return;
-      
-      const items = [];
-      
-      // Add completed sessions with calories
-      for (const session of completedSessions) {
-        const program = programs.find(p => p.id === session.trainingProgramId);
-        if (program) {
-          // Fetch calories for this session
-          let calories = 0;
-          try {
-            const response = await fetch(`/api/session-calories/${encodeURIComponent(session.completedAt)}`);
-            const data = await response.json();
-            calories = data.calories || 0;
-          } catch (e) {
-            console.error('Failed to fetch calories:', e);
-          }
-          
-          items.push({
-            ...program,
-            sessionId: session.completedAt,
-            completedAt: session.completedAt,
-            setCount: session.setCount,
-            calories,
-            isCompleted: true,
-            isActive: false,
-          });
-        }
-      }
-      
-      // Add active workout if exists
-      if (activeWorkout) {
-        const program = programs.find(p => p.id === activeWorkout.trainingProgramId);
-        if (program) {
-          items.push({
-            ...program,
-            sessionId: 'active',
-            isCompleted: false,
-            isActive: true,
-          });
-        }
-      }
-      
-      // Sort by completed time (most recent first), active workout at top
-      items.sort((a, b) => {
-        if (a.isActive) return -1;
-        if (b.isActive) return 1;
-        return new Date(b.completedAt) - new Date(a.completedAt);
-      });
-      
-      setWorkoutItemsWithCalories(items);
-    };
-    
-    fetchCaloriesForSessions();
-  }, [completedSessions, activeWorkout, programs, loadingData]);
-  
-  const todayWorkoutItems = workoutItemsWithCalories;
 
-  // Show loader while initial data is loading OR while fetching calories for completed sessions
-  const isLoadingWorkouts = loadingData || (completedSessions.length > 0 && workoutItemsWithCalories.length === 0 && programs.length > 0);
-  
-  if (isLoadingWorkouts) {
+  if (loadingData) {
     return <Loader fullScreen message="Loading today's workouts..." />;
   }
 
   return (
     <Box>
-      {/* Today's Calories */}
-      {todayCalories > 0 && (
-        <Paper sx={{ p: 2, mb: 3, background: 'linear-gradient(135deg, #c4ff0d 0%, #8b5cf6 100%)', border: 'none' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-            <LocalFireDepartmentIcon sx={{ fontSize: 40, color: '#000000' }} />
-            <Box>
-              <Typography variant="h4" sx={{ color: '#000000', fontWeight: 'bold' }}>
-                {todayCalories} cal
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(0,0,0,0.7)' }}>
-                Calories burned today
-              </Typography>
-            </Box>
-          </Box>
-        </Paper>
-      )}
-
       <Grid container spacing={3}>
-        {/* Show each workout session separately */}
-        {todayWorkoutItems.length > 0 ? (
+        {/* In Progress Workouts */}
+        {activeWorkouts.length > 0 && (
           <Grid item xs={12}>
             <Paper sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-                Today&apos;s Workouts
+                In Progress
               </Typography>
               
               <Stack spacing={2}>
-                {todayWorkoutItems.map((item, index) => {
-                  const completedTime = item.completedAt ? new Date(item.completedAt).toLocaleTimeString('en-US', { 
-                    hour: 'numeric', 
-                    minute: '2-digit',
-                    hour12: true 
-                  }) : null;
-                  
-                  return (
-                    <Card 
-                      key={`${item.id}-${item.sessionId}`}
-                      onClick={() => {
-                        if (item.isCompleted) {
-                          router.push(`/workout-summary/${encodeURIComponent(item.completedAt)}`);
-                        }
-                      }}
-                      sx={{
-                        border: item.isActive ? '2px solid #c4ff0d' : '1px solid rgba(196, 255, 13, 0.3)',
-                        bgcolor: 'background.paper',
-                        transition: 'all 0.3s',
-                        cursor: item.isCompleted ? 'pointer' : 'default',
-                        '&:hover': item.isCompleted ? {
-                          transform: 'translateY(-2px)',
-                          boxShadow: '0 8px 24px rgba(196, 255, 13, 0.2)',
-                        } : {},
-                      }}
-                    >
-                      <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                          <Box sx={{ flexGrow: 1 }}>
-                            <Typography variant="h6" gutterBottom sx={{ mb: 1 }}>
-                              {item.name}
-                            </Typography>
-                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-                              <Chip
-                                icon={<FitnessCenterIcon />}
-                                label={`${item.workoutIds?.length || 0} exercises`}
-                                size="small"
-                                sx={{ 
-                                  borderColor: 'rgba(196, 255, 13, 0.5)',
-                                  color: '#c4ff0d',
-                                  bgcolor: 'rgba(196, 255, 13, 0.1)',
-                                  border: '1px solid rgba(196, 255, 13, 0.5)'
-                                }}
-                              />
-                              {item.isActive && (
-                                <Chip
-                                  icon={<PlayCircleOutlineIcon />}
-                                  label="In Progress"
-                                  size="small"
-                                  sx={{
-                                    bgcolor: 'rgba(251, 191, 36, 0.15)',
-                                    color: '#fbbf24',
-                                    border: '1px solid rgba(251, 191, 36, 0.3)'
-                                  }}
-                                />
-                              )}
-                              {item.isCompleted && (
-                                <>
-                                  <Chip
-                                    icon={<CheckCircleIcon />}
-                                    label="Completed"
-                                    size="small"
-                                    sx={{
-                                      bgcolor: 'rgba(196, 255, 13, 0.15)',
-                                      color: '#c4ff0d',
-                                      border: '1px solid rgba(196, 255, 13, 0.3)'
-                                    }}
-                                  />
-                                  {completedTime && (
-                                    <Chip
-                                      label={completedTime}
-                                      size="small"
-                                      sx={{
-                                        bgcolor: 'rgba(255, 255, 255, 0.05)',
-                                        color: 'rgba(255, 255, 255, 0.6)',
-                                        border: '1px solid rgba(255, 255, 255, 0.1)'
-                                      }}
-                                    />
-                                  )}
-                                </>
-                              )}
-                            </Box>
-                            
-                            {/* Additional Details for Completed Workouts */}
-                            {item.isCompleted && (
-                              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                                {item.calories > 0 && (
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <LocalFireDepartmentIcon sx={{ fontSize: 20, color: '#c4ff0d' }} />
-                                    <Typography variant="body2" fontWeight="bold" sx={{ color: '#c4ff0d' }}>
-                                      {Math.round(item.calories)} cal
-                                    </Typography>
-                                  </Box>
-                                )}
-                                {item.setCount && (
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <TrendingUpIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-                                    <Typography variant="body2" color="text.secondary">
-                                      {item.setCount} sets
-                                    </Typography>
-                                  </Box>
-                                )}
-                                <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>
-                                  Tap to view details →
-                                </Typography>
-                              </Box>
-                            )}
-                          </Box>
-                          {item.isActive && (
-                            <Button
-                              variant="contained"
-                              startIcon={<PlayCircleOutlineIcon />}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/active-workout/${item.id}`);
-                              }}
+                {activeWorkouts.map((workout) => (
+                  <Card 
+                    key={workout.id}
+                    sx={{
+                      border: '2px solid #c4ff0d',
+                      bgcolor: 'background.paper',
+                      transition: 'all 0.3s',
+                      cursor: 'pointer',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 8px 24px rgba(196, 255, 13, 0.3)',
+                      }
+                    }}
+                    onClick={() => router.push(`/active-workout/${workout.id}`)}
+                  >
+                    <CardContent>
+                      <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
+                        <Box sx={{ flexGrow: 1 }}>
+                          <Typography variant="h6" gutterBottom sx={{ mb: 1 }}>
+                            {workout.name}
+                          </Typography>
+                          
+                          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                            <Chip
+                              icon={<PlayCircleOutlineIcon />}
+                              label="In Progress"
+                              size="small"
                               sx={{
-                                bgcolor: '#c4ff0d',
-                                color: '#000000',
-                                '&:hover': {
-                                  bgcolor: '#d4ff4d'
-                                }
+                                bgcolor: 'rgba(251, 191, 36, 0.15)',
+                                color: '#fbbf24',
+                                border: '1px solid rgba(251, 191, 36, 0.3)'
                               }}
-                            >
-                              Continue
-                            </Button>
-                          )}
+                            />
+                            <Chip
+                              label={new Date(workout.startedAt).toLocaleTimeString('en-US', {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                hour12: true
+                              })}
+                              size="small"
+                              sx={{
+                                bgcolor: 'rgba(255, 255, 255, 0.05)',
+                                color: 'rgba(255, 255, 255, 0.6)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)'
+                              }}
+                            />
+                          </Box>
                         </Box>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                        
+                        {workoutPlans.find(p => p.id === workout.trainingProgramId)?.muscleDistribution && (
+                          <Box 
+                            sx={{ 
+                              width: '60px',
+                              flexShrink: 0,
+                              cursor: 'pointer',
+                              transition: 'all 0.3s ease',
+                              '&:hover': {
+                                transform: 'scale(1.1)',
+                              }
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedWorkoutMuscles(workoutPlans.find(p => p.id === workout.trainingProgramId).muscleDistribution);
+                              setMuscleMapOpen(true);
+                            }}
+                          >
+                            <MuscleBodyMap 
+                              muscleDistribution={workoutPlans.find(p => p.id === workout.trainingProgramId).muscleDistribution}
+                              size="small"
+                              showToggle={false}
+                              showBreakdown={false}
+                              showLegend={false}
+                              autoRotate={true}
+                            />
+                          </Box>
+                        )}
+                      </Box>
+                    </CardContent>
+                  </Card>
+                ))}
               </Stack>
             </Paper>
           </Grid>
-        ) : !loadingActive && (
+        )}
+
+        {/* No workouts message */}
+        {activeWorkouts.length === 0 && (!progressData || (progressData.recentActivity && progressData.recentActivity.length === 0)) && (
           <Grid item xs={12}>
             <Paper sx={{ p: 4, textAlign: 'center' }}>
+              <FitnessCenterIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
               <Typography variant="h6" color="text.secondary" gutterBottom>
-                No workouts for today yet!
+                No workouts yet!
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                 Start a workout plan to begin tracking your progress
               </Typography>
               <Button
                 variant="contained"
-                onClick={() => router.push('/workout-plans')}
+                onClick={() => router.push('/training-programs')}
+                sx={{
+                  bgcolor: '#c4ff0d',
+                  color: '#000',
+                  '&:hover': {
+                    bgcolor: '#b0e00b',
+                  }
+                }}
               >
                 View Workout Plans
               </Button>
             </Paper>
           </Grid>
         )}
+
+        {/* Progress Section */}
+        {progressData && (
+          <>
+            {/* Muscle Group Distribution - Body Map */}
+            {progressData.muscleDistribution && progressData.muscleDistribution.length > 0 && (
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Typography variant="h6" gutterBottom sx={{ mb: 2, textAlign: 'center' }}>
+                    Muscle Group Distribution
+                  </Typography>
+                  <MuscleBodyMap muscleDistribution={progressData.muscleDistribution} />
+                </Paper>
+              </Grid>
+            )}
+
+            {/* Calories Burned Per Day Chart */}
+            {progressData.caloriesChart && progressData.caloriesChart.some(day => day.calories > 0) && (
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Typography variant="h6" gutterBottom sx={{ mb: 3, textAlign: 'center' }}>
+                    Calories Burned (Last 30 Days)
+                  </Typography>
+                  <Box sx={{ width: '100%', ml: -2 }}>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <LineChart data={progressData.caloriesChart} margin={{ left: -20 }}>
+                        <XAxis 
+                          dataKey="shortDate" 
+                          stroke="rgba(255, 255, 255, 0.5)"
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis 
+                          stroke="rgba(255, 255, 255, 0.5)"
+                          tick={{ fontSize: 12 }}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                            border: '1px solid rgba(196, 255, 13, 0.3)',
+                            borderRadius: '8px',
+                          }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="calories" 
+                          stroke="#c4ff0d" 
+                          strokeWidth={3}
+                          dot={false}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </Paper>
+              </Grid>
+            )}
+
+            {/* Recent Activity - Last 5 Completed Workout Plans */}
+            {progressData.recentActivity && progressData.recentActivity.length > 0 && (
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+                    Recent Activity
+                  </Typography>
+                  <Stack spacing={2}>
+                    {progressData.recentActivity.map((plan, index) => (
+                      <Card 
+                        key={`${plan.id}-${plan.completedAt}`}
+                        onClick={() => router.push(`/workout-summary/${encodeURIComponent(plan.completedAt)}`)}
+                        sx={{ 
+                          border: '1px solid rgba(196, 255, 13, 0.3)',
+                          bgcolor: 'background.paper',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          '&:hover': {
+                            backgroundColor: 'rgba(196, 255, 13, 0.05)',
+                            border: '1px solid rgba(196, 255, 13, 0.5)',
+                            transform: 'translateY(-2px)',
+                            boxShadow: '0 4px 12px rgba(196, 255, 13, 0.2)',
+                          }
+                        }}
+                      >
+                        <CardContent>
+                          <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
+                            <Box sx={{ flexGrow: 1 }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                                <Typography variant="h6">
+                                  {plan.name}
+                                </Typography>
+                                <Box sx={{ textAlign: 'right' }}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {new Date(plan.completedAt).toLocaleDateString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric'
+                                    })}
+                                  </Typography>
+                                  <Typography variant="caption" display="block" color="text.secondary">
+                                    {new Date(plan.completedAt).toLocaleTimeString('en-US', {
+                                      hour: 'numeric',
+                                      minute: '2-digit',
+                                      hour12: true
+                                    })}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                              
+                              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
+                                <Chip
+                                  icon={<FitnessCenterIcon />}
+                                  label={`${plan.workoutCount || 0} workouts`}
+                                  size="small"
+                                  sx={{ 
+                                    borderColor: 'rgba(196, 255, 13, 0.5)',
+                                    color: '#c4ff0d',
+                                    bgcolor: 'rgba(196, 255, 13, 0.1)',
+                                  }}
+                                  variant="outlined"
+                                />
+                                <Chip
+                                  label={`${plan.totalSets || 0} sets`}
+                                  size="small"
+                                  sx={{ 
+                                    borderColor: 'rgba(196, 255, 13, 0.5)',
+                                    color: '#c4ff0d',
+                                    bgcolor: 'rgba(196, 255, 13, 0.1)',
+                                  }}
+                                  variant="outlined"
+                                />
+                                <Chip
+                                  icon={<LocalFireDepartmentIcon />}
+                                  label={`${plan.calories || 0} cal`}
+                                  size="small"
+                                  sx={{ 
+                                    borderColor: 'rgba(196, 255, 13, 0.5)',
+                                    color: '#c4ff0d',
+                                    bgcolor: 'rgba(196, 255, 13, 0.1)',
+                                  }}
+                                  variant="outlined"
+                                />
+                              </Box>
+                              
+                              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                {plan.workoutNames && plan.workoutNames.length > 0 
+                                  ? plan.workoutNames.join(' • ') 
+                                  : 'No workouts'}
+                              </Typography>
+                              
+                              {plan.muscleFocusGroups && plan.muscleFocusGroups.length > 0 && (
+                                <Typography variant="caption" color="text.secondary">
+                                  Focus: {plan.muscleFocusGroups.map(m => `${m.muscle} (${m.count}x)`).join(', ')}
+                                </Typography>
+                              )}
+                            </Box>
+                            
+                            {plan.muscleFocusGroups && plan.muscleFocusGroups.length > 0 && (
+                              <Box 
+                                sx={{ 
+                                  width: '60px',
+                                  flexShrink: 0,
+                                  cursor: 'pointer',
+                                  transition: 'all 0.3s ease',
+                                  '&:hover': {
+                                    transform: 'scale(1.1)',
+                                  }
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedWorkoutMuscles(plan.muscleFocusGroups);
+                                  setMuscleMapOpen(true);
+                                }}
+                              >
+                                <MuscleBodyMap 
+                                  muscleDistribution={plan.muscleFocusGroups}
+                                  size="small"
+                                  showToggle={false}
+                                  showBreakdown={false}
+                                  showLegend={false}
+                                  autoRotate={true}
+                                />
+                              </Box>
+                            )}
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    ))}
+                    
+                    {progressData.recentActivity.length >= 5 && (
+                      <Box sx={{ textAlign: 'center', mt: 2 }}>
+                        <Button
+                          variant="outlined"
+                          onClick={() => router.push('/recent')}
+                          sx={{
+                            color: '#c4ff0d',
+                            borderColor: 'rgba(196, 255, 13, 0.5)',
+                            '&:hover': {
+                              borderColor: '#c4ff0d',
+                              bgcolor: 'rgba(196, 255, 13, 0.1)',
+                            }
+                          }}
+                        >
+                          More Workouts
+                        </Button>
+                      </Box>
+                    )}
+                  </Stack>
+                </Paper>
+              </Grid>
+            )}
+          </>
+        )}
       </Grid>
+
+      {/* Muscle Map Dialog - Medium Size */}
+      <Dialog 
+        open={muscleMapOpen} 
+        onClose={() => setMuscleMapOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            Muscles Worked
+            <IconButton onClick={() => setMuscleMapOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <MuscleBodyMap 
+            muscleDistribution={selectedWorkoutMuscles}
+            size="medium"
+            showToggle={true}
+            showBreakdown={true}
+            showLegend={true}
+            autoRotate={true}
+          />
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }

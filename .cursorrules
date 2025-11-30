@@ -3,6 +3,15 @@
 ## Project Context
 This is a Next.js fitness tracking application with Turso SQLite database, Redux state management, and Material UI components.
 
+## 🚀 Git & Workflow Rules
+
+### NEVER Auto-commit or Ask for Commits
+- **NEVER commit changes automatically**
+- **NEVER ask the user if they want to commit**
+- **NEVER run git add, git commit, or git push commands**
+- User will handle all git operations manually
+- Only exception: User explicitly asks you to commit
+
 ## 🏗️ Application Structure
 
 ### Directory Organization

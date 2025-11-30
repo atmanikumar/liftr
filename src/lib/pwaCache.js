@@ -13,23 +13,14 @@ export async function clearAllCaches() {
   if ('caches' in window) {
     try {
       const cacheNames = await caches.keys();
-      console.log('[PWA Cache] Found caches:', cacheNames);
-      
       await Promise.all(
-        cacheNames.map(cacheName => {
-          console.log('[PWA Cache] Deleting cache:', cacheName);
-          return caches.delete(cacheName);
-        })
+        cacheNames.map(cacheName => caches.delete(cacheName))
       );
-      
-      console.log('[PWA Cache] ✅ All caches cleared!');
       return true;
     } catch (error) {
-      console.error('[PWA Cache] Error clearing caches:', error);
       return false;
     }
   } else {
-    console.log('[PWA Cache] Cache API not supported');
     return false;
   }
 }
@@ -48,16 +39,12 @@ export async function clearAPICaches() {
         name.includes('static-data')
       );
       
-      console.log('[PWA Cache] Clearing API caches:', apiCaches);
-      
       await Promise.all(
         apiCaches.map(cacheName => caches.delete(cacheName))
       );
       
-      console.log('[PWA Cache] ✅ API caches cleared!');
       return true;
     } catch (error) {
-      console.error('[PWA Cache] Error clearing API caches:', error);
       return false;
     }
   }
@@ -80,13 +67,10 @@ export async function resetPWA() {
       await Promise.all(
         registrations.map(registration => registration.unregister())
       );
-      console.log('[PWA Cache] ✅ Service worker unregistered');
     }
     
-    console.log('[PWA Cache] ✅ PWA reset complete! Please reload the page.');
     return true;
   } catch (error) {
-    console.error('[PWA Cache] Error resetting PWA:', error);
     return false;
   }
 }
@@ -101,14 +85,11 @@ export async function updateServiceWorker() {
       const registrations = await navigator.serviceWorker.getRegistrations();
       
       for (const registration of registrations) {
-        console.log('[PWA Cache] Checking for service worker updates...');
         await registration.update();
         
         if (registration.waiting) {
-          console.log('[PWA Cache] New service worker available! Activating...');
           registration.waiting.postMessage({ type: 'SKIP_WAITING' });
           
-          // Reload page after new SW activates
           let refreshing = false;
           navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (!refreshing) {
@@ -121,7 +102,6 @@ export async function updateServiceWorker() {
       
       return true;
     } catch (error) {
-      console.error('[PWA Cache] Error updating service worker:', error);
       return false;
     }
   }
@@ -147,17 +127,14 @@ export async function getCacheStats() {
         stats.caches[name] = keys.length;
       }
       
-      console.log('[PWA Cache] Cache stats:', stats);
       return stats;
     } catch (error) {
-      console.error('[PWA Cache] Error getting cache stats:', error);
       return null;
     }
   }
   return null;
 }
 
-// Export for use in browser console (for debugging)
 if (typeof window !== 'undefined') {
   window.__pwaCache = {
     clearAll: clearAllCaches,
@@ -166,8 +143,5 @@ if (typeof window !== 'undefined') {
     update: updateServiceWorker,
     stats: getCacheStats
   };
-  
-  console.log('[PWA Cache] Utilities available at window.__pwaCache');
-  console.log('[PWA Cache] Try: __pwaCache.clearAll() or __pwaCache.stats()');
 }
 
