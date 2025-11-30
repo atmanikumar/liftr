@@ -27,7 +27,6 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
-import SkipNextIcon from '@mui/icons-material/SkipNext';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useParams, useRouter } from 'next/navigation';
@@ -342,22 +341,6 @@ export default function ActiveWorkoutPage() {
     return Object.entries(muscleCount).map(([muscle, count]) => ({ muscle, count }));
   };
 
-  const skipWorkout = (workoutId) => {
-    setProgramWorkouts(prev => prev.filter(w => w.id !== workoutId));
-    setWorkoutData(prev => {
-      const updated = { ...prev };
-      delete updated[workoutId];
-      
-      fetch('/api/active-workout', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workoutData: updated }),
-      }).catch(e => console.error('Failed to save:', e));
-      
-      return updated;
-    });
-  };
-
   const addWorkoutToSession = async (workoutId) => {
     const workout = workouts.find(w => w.id === workoutId);
     if (!workout) return;
@@ -587,32 +570,9 @@ export default function ActiveWorkoutPage() {
                 </Box>
               </AccordionSummary>
               <AccordionDetails>
-                {/* Skip and Unit selector row */}
+                {/* Equipment info and Unit selector row */}
                 <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Button
-                      size="small"
-                      variant="text"
-                      startIcon={<SkipNextIcon fontSize="small" />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm(`Skip ${workout.name}? This cannot be undone.`)) {
-                          skipWorkout(workout.id);
-                        }
-                      }}
-                      sx={{ 
-                        color: '#ef4444',
-                        fontSize: '0.75rem',
-                        py: 0.5,
-                        px: 1,
-                        minWidth: 'auto',
-                        '&:hover': { 
-                          bgcolor: 'rgba(239, 68, 68, 0.1)'
-                        }
-                      }}
-                    >
-                      Skip
-                    </Button>
+                  <Box>
                     {workout.equipmentName && (
                       <Typography variant="caption" color="text.secondary">
                         {workout.equipmentName} • Auto +{getAutoIncrement(workout.equipmentName)}lbs per set

@@ -52,8 +52,19 @@ export async function POST(request) {
       );
     }
 
-    // Delete any existing active workout for this user
-    await execute('DELETE FROM liftr_active_workouts WHERE userId = ?', [userId]);
+    // Check if user already has an active workout for this program
+    const existingActive = await query(
+      'SELECT COUNT(*) as count FROM liftr_active_workouts WHERE userId = ? AND trainingProgramId = ?',
+      [userId, trainingProgramId]
+    );
+
+    // Delete only the active workout for THIS specific program (if exists)
+    if (existingActive[0].count > 0) {
+      await execute(
+        'DELETE FROM liftr_active_workouts WHERE userId = ? AND trainingProgramId = ?',
+        [userId, trainingProgramId]
+      );
+    }
 
     // Create new active workout
     await execute(

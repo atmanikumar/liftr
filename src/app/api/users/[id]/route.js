@@ -29,7 +29,31 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    // Delete user
+    // Check if user has workout history
+    const sessionCheck = await query(
+      'SELECT COUNT(*) as count FROM liftr_workout_sessions WHERE userId = ?',
+      [id]
+    );
+
+    const activeCheck = await query(
+      'SELECT COUNT(*) as count FROM liftr_active_workouts WHERE userId = ?',
+      [id]
+    );
+
+    const totalData = sessionCheck[0].count + activeCheck[0].count;
+
+    if (totalData > 0) {
+      return NextResponse.json(
+        { 
+          error: `Cannot delete user. They have ${sessionCheck[0].count} completed workout(s) and ${activeCheck[0].count} active workout(s). Deleting would cause permanent data loss. Consider deactivating the account instead.`,
+          sessionCount: sessionCheck[0].count,
+          activeCount: activeCheck[0].count
+        },
+        { status: 400 }
+      );
+    }
+
+    // Safe to delete - no historical data will be lost
     await execute('DELETE FROM liftr_users WHERE id = ?', [id]);
 
     return NextResponse.json({

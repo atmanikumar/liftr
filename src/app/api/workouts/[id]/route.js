@@ -63,7 +63,23 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    // Delete workout
+    // Check if workout has been used in any sessions
+    const usageCheck = await query(
+      'SELECT COUNT(*) as count FROM liftr_workout_sessions WHERE workoutId = ?',
+      [id]
+    );
+
+    if (usageCheck[0].count > 0) {
+      return NextResponse.json(
+        { 
+          error: `Cannot delete workout. It has been used in ${usageCheck[0].count} workout session(s). Deleting it would break your workout history.`,
+          usageCount: usageCheck[0].count
+        },
+        { status: 400 }
+      );
+    }
+
+    // Safe to delete - no historical data will be lost
     await execute('DELETE FROM liftr_workouts WHERE id = ?', [id]);
 
     return NextResponse.json({

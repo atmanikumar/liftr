@@ -68,7 +68,36 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    // Delete program
+    // Check if program has been used in any sessions
+    const usageCheck = await query(
+      'SELECT COUNT(*) as count FROM liftr_workout_sessions WHERE trainingProgramId = ?',
+      [id]
+    );
+
+    if (usageCheck[0].count > 0) {
+      return NextResponse.json(
+        { 
+          error: `Cannot delete workout plan. It has been used in ${usageCheck[0].count} workout session(s). Deleting it would break your workout history.`,
+          usageCount: usageCheck[0].count
+        },
+        { status: 400 }
+      );
+    }
+
+    // Check if program is currently active
+    const activeCheck = await query(
+      'SELECT COUNT(*) as count FROM liftr_active_workouts WHERE trainingProgramId = ?',
+      [id]
+    );
+
+    if (activeCheck[0].count > 0) {
+      return NextResponse.json(
+        { error: 'Cannot delete workout plan. There is an active workout using this plan. Complete or cancel it first.' },
+        { status: 400 }
+      );
+    }
+
+    // Safe to delete - no historical data will be lost
     await execute('DELETE FROM liftr_training_programs WHERE id = ?', [id]);
 
     return NextResponse.json({
