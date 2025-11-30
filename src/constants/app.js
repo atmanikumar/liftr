@@ -78,10 +78,10 @@ export const MENU_ITEMS = [
 
 // Theme Colors
 export const THEME_COLORS = {
-  PRIMARY: '#1976d2',
-  SECONDARY: '#dc004e',
-  DARK_BG: '#121212',
-  DARK_PAPER: '#1e1e1e',
+  PRIMARY: '#c4ff0d', // Neon green
+  SECONDARY: '#8b5cf6', // Purple
+  DARK_BG: '#000000',
+  DARK_PAPER: '#0a0a0a',
 };
 
 // Loading Messages

@@ -23,7 +23,7 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-title" content="Liftr" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="theme-color" content="#3b82f6" />
+        <meta name="theme-color" content="#0a0a0a" />
         
         {/* Icons */}
         <link rel="icon" href="/logo.png" type="image/png" />
