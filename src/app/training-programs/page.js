@@ -30,7 +30,9 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import { useDispatch, useSelector } from 'react-redux';
+import { useRouter } from 'next/navigation';
 import {
   fetchTrainingPrograms,
   createTrainingProgram,
@@ -47,6 +49,7 @@ import Loader from '@/components/common/Loader';
 
 export default function TrainingProgramsPage() {
   const dispatch = useDispatch();
+  const router = useRouter();
   const programs = useSelector(selectTrainingPrograms);
   const workouts = useSelector(selectWorkouts);
   const loading = useSelector(selectTrainingProgramsLoading);
@@ -187,21 +190,31 @@ export default function TrainingProgramsPage() {
                   ))}
                 </Box>
               </CardContent>
-              <CardActions sx={{ justifyContent: 'flex-end' }}>
-                <IconButton
-                  color="primary"
-                  onClick={() => handleOpenDialog(program)}
-                  title="Edit"
+              <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<PlayCircleOutlineIcon />}
+                  onClick={() => router.push(`/active-workout/${program.id}`)}
                 >
-                  <EditIcon />
-                </IconButton>
-                <IconButton
-                  color="error"
-                  onClick={() => openDeleteDialog(program)}
-                  title="Delete"
-                >
-                  <DeleteIcon />
-                </IconButton>
+                  Start
+                </Button>
+                <Box>
+                  <IconButton
+                    color="primary"
+                    onClick={() => handleOpenDialog(program)}
+                    title="Edit"
+                  >
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton
+                    color="error"
+                    onClick={() => openDeleteDialog(program)}
+                    title="Delete"
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </Box>
               </CardActions>
             </Card>
           </Grid>

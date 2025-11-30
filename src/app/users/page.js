@@ -131,7 +131,7 @@ export default function UsersPage() {
           startIcon={<AddIcon />}
           onClick={() => setAddDialogOpen(true)}
         >
-          Add User
+          Add
         </Button>
       </Box>
 

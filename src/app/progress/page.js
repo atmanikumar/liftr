@@ -11,16 +11,25 @@ import {
   List,
   ListItem,
   ListItemText,
-  Chip,
   Divider,
   LinearProgress,
 } from '@mui/material';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import WarningIcon from '@mui/icons-material/Warning';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import Loader from '@/components/common/Loader';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 
 export default function ProgressPage() {
   const [progressData, setProgressData] = useState(null);
@@ -61,8 +70,14 @@ export default function ProgressPage() {
     );
   }
 
-  const { summary, improvements, areasOfImprovement, muscleDistribution, workoutsByDate } =
-    progressData;
+  const { 
+    summary = {}, 
+    chartData = {},
+    muscleDistribution = [], 
+    workoutsByDate = [] 
+  } = progressData || {};
+
+  const { workoutsPerDay = [] } = chartData;
 
   return (
     <Box>
@@ -71,159 +86,120 @@ export default function ProgressPage() {
       </Typography>
 
       <Grid container spacing={3}>
-        {/* Summary Stats */}
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <CalendarTodayIcon color="primary" sx={{ mr: 1 }} />
-                <Typography variant="h4">{summary.totalWorkouts}</Typography>
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                Total Workouts
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <FitnessCenterIcon color="primary" sx={{ mr: 1 }} />
-                <Typography variant="h4">{summary.totalSets}</Typography>
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                Total Sets
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <TrendingUpIcon color="primary" sx={{ mr: 1 }} />
-                <Typography variant="h4">{summary.totalReps}</Typography>
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                Total Reps
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <EmojiEventsIcon color="primary" sx={{ mr: 1 }} />
-                <Typography variant="h4">{summary.totalWeight.toLocaleString()}</Typography>
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                Total Weight Lifted (lbs)
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Improvements */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <TrendingUpIcon color="success" sx={{ mr: 1 }} />
-              <Typography variant="h6">Top Improvements</Typography>
-            </Box>
-            {improvements.length === 0 ? (
-              <Typography color="text.secondary">
-                No improvements yet. Keep training!
-              </Typography>
-            ) : (
-              <List>
-                {improvements.slice(0, 5).map((item, idx) => (
-                  <Box key={idx}>
-                    <ListItem>
-                      <ListItemText
-                        primary={item.exercise}
-                        secondary={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                            <Chip
-                              label={`+${item.improvement} lbs`}
-                              size="small"
-                              color="success"
-                            />
-                            <Chip
-                              label={`Current: ${item.currentWeight} lbs`}
-                              size="small"
-                              variant="outlined"
-                            />
-                            {item.muscleFocus && (
-                              <Chip label={item.muscleFocus} size="small" />
-                            )}
-                          </Box>
-                        }
-                      />
-                    </ListItem>
-                    {idx < improvements.length - 1 && <Divider />}
-                  </Box>
-                ))}
-              </List>
-            )}
-          </Paper>
-        </Grid>
-
-        {/* Areas of Improvement */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <WarningIcon color="warning" sx={{ mr: 1 }} />
-              <Typography variant="h6">Areas to Focus On</Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Exercises you haven&apos;t trained as much
-            </Typography>
-            {areasOfImprovement.length === 0 ? (
-              <Typography color="text.secondary">No data yet</Typography>
-            ) : (
-              <List>
-                {areasOfImprovement.map((item, idx) => (
-                  <Box key={idx}>
-                    <ListItem>
-                      <ListItemText
-                        primary={item.exercise}
-                        secondary={
-                          <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                            <Chip
-                              label={`${item.sessions} session${item.sessions > 1 ? 's' : ''}`}
-                              size="small"
-                              color="warning"
-                              variant="outlined"
-                            />
-                            {item.muscleFocus && (
-                              <Chip label={item.muscleFocus} size="small" />
-                            )}
-                          </Box>
-                        }
-                      />
-                    </ListItem>
-                    {idx < areasOfImprovement.length - 1 && <Divider />}
-                  </Box>
-                ))}
-              </List>
-            )}
-          </Paper>
-        </Grid>
-
-        {/* Muscle Distribution */}
+        {/* Workouts Per Day Chart */}
         <Grid item xs={12}>
-          <Paper sx={{ p: 3 }}>
+          <Paper sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <Typography variant="h6" gutterBottom>
-              Muscle Group Distribution
+              Workouts Per Day (Last 30 Days)
             </Typography>
-            {muscleDistribution.length === 0 ? (
-              <Typography color="text.secondary">No data yet</Typography>
+            {workoutsPerDay.length === 0 ? (
+              <Typography color="text.secondary">No workout data yet</Typography>
             ) : (
+              <Box sx={{ width: '100%', maxWidth: 900, mt: 2, '& .recharts-wrapper': { margin: '0 auto' } }}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart 
+                    data={workoutsPerDay}
+                    margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                  >
+                    <XAxis 
+                      dataKey="shortDate" 
+                      stroke="rgba(255,255,255,0.5)"
+                      style={{ fontSize: '12px' }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis 
+                      stroke="rgba(255,255,255,0.5)"
+                      style={{ fontSize: '12px' }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={30}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'rgba(28, 28, 30, 0.95)',
+                        border: 'none',
+                        borderRadius: '8px',
+                      }}
+                    />
+                    <Legend wrapperStyle={{ outline: 'none' }} />
+                    <Line
+                      type="monotone"
+                      dataKey="workouts"
+                      stroke="#ff6b35"
+                      strokeWidth={3}
+                      dot={false}
+                      activeDot={false}
+                      name="Workouts"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Box>
+            )}
+          </Paper>
+        </Grid>
+
+        {/* Calories Burned Per Day Chart */}
+        <Grid item xs={12}>
+          <Paper sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <LocalFireDepartmentIcon color="error" sx={{ mr: 1 }} />
+              <Typography variant="h6">Calories Burned Per Day (Last 30 Days)</Typography>
+            </Box>
+            {workoutsPerDay.length === 0 ? (
+              <Typography color="text.secondary">No calorie data yet</Typography>
+            ) : (
+              <Box sx={{ width: '100%', maxWidth: 900, mt: 2, '& .recharts-wrapper': { margin: '0 auto' } }}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart 
+                    data={workoutsPerDay}
+                    margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                  >
+                    <XAxis 
+                      dataKey="shortDate" 
+                      stroke="rgba(255,255,255,0.5)"
+                      style={{ fontSize: '12px' }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis 
+                      stroke="rgba(255,255,255,0.5)"
+                      style={{ fontSize: '12px' }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={30}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'rgba(28, 28, 30, 0.95)',
+                        border: 'none',
+                        borderRadius: '8px',
+                      }}
+                    />
+                    <Legend wrapperStyle={{ outline: 'none' }} />
+                    <Line
+                      type="monotone"
+                      dataKey="calories"
+                      stroke="#10b981"
+                      strokeWidth={3}
+                      dot={false}
+                      activeDot={false}
+                      name="Calories"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Box>
+            )}
+          </Paper>
+        </Grid>
+
+        {/* Muscle Distribution - Only show if there's data */}
+        {muscleDistribution.length > 0 && (
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Muscle Group Distribution
+              </Typography>
               <Box sx={{ mt: 2 }}>
                 {muscleDistribution.map((item, idx) => (
                   <Box key={idx} sx={{ mb: 2 }}>
@@ -241,9 +217,9 @@ export default function ProgressPage() {
                   </Box>
                 ))}
               </Box>
-            )}
-          </Paper>
-        </Grid>
+            </Paper>
+          </Grid>
+        )}
 
         {/* Recent Activity */}
         <Grid item xs={12}>

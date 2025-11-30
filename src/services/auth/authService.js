@@ -78,11 +78,8 @@ export function verifyToken(token) {
     const decoded = jwt.verify(token, secret);
     return decoded;
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      console.log('Token expired');
-    } else if (error.name === 'JsonWebTokenError') {
-      console.log('Invalid token');
-    } else {
+    // Token verification failed
+    if (error.name !== 'TokenExpiredError' && error.name !== 'JsonWebTokenError') {
       console.error('Token verification error:', error);
     }
     return null;

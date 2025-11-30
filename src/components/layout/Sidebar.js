@@ -116,19 +116,19 @@ export default function Sidebar({ open, onClose, variant = 'temporary' }) {
                   selected={isActive}
                   sx={{
                     '&.Mui-selected': {
-                      backgroundColor: 'rgba(255, 107, 53, 0.12)',
-                      borderLeft: '3px solid #ff6b35',
+                      backgroundColor: 'rgba(196, 255, 13, 0.12)',
+                      borderLeft: '3px solid #c4ff0d',
                       '&:hover': {
-                        backgroundColor: 'rgba(255, 107, 53, 0.15)',
+                        backgroundColor: 'rgba(196, 255, 13, 0.15)',
                       },
                     },
                   }}
                 >
-                  <ListItemIcon sx={{ color: isActive ? '#ff6b35' : 'rgba(255, 255, 255, 0.6)' }}>
+                  <ListItemIcon sx={{ color: isActive ? '#c4ff0d' : 'rgba(255, 255, 255, 0.6)' }}>
                     {item.icon === 'DumbbellIcon' ? (
                       <DumbbellIcon 
                         size={24} 
-                        color={isActive ? '#ff6b35' : 'rgba(255, 255, 255, 0.6)'} 
+                        color={isActive ? '#c4ff0d' : 'rgba(255, 255, 255, 0.6)'} 
                       />
                     ) : (
                       <IconComponent />
@@ -138,7 +138,7 @@ export default function Sidebar({ open, onClose, variant = 'temporary' }) {
                     primary={item.title}
                     primaryTypographyProps={{
                       sx: { 
-                        color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.8)',
+                        color: isActive ? '#c4ff0d' : 'rgba(255, 255, 255, 0.8)',
                         fontWeight: isActive ? 600 : 400,
                       }
                     }}

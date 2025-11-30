@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { query, execute } from '@/services/database/dbService';
-import { verifyToken } from '@/lib/authMiddleware';
+import { verifyAuth } from '@/lib/authMiddleware';
 
 // GET - Get active workout for current user
 export async function GET(request) {
   try {
-    const authResult = await verifyToken(request);
+    const authResult = await verifyAuth(request);
     if (!authResult.authenticated) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -37,7 +37,7 @@ export async function GET(request) {
 // POST - Start a new active workout
 export async function POST(request) {
   try {
-    const authResult = await verifyToken(request);
+    const authResult = await verifyAuth(request);
     if (!authResult.authenticated) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -71,7 +71,7 @@ export async function POST(request) {
 // PUT - Update active workout
 export async function PUT(request) {
   try {
-    const authResult = await verifyToken(request);
+    const authResult = await verifyAuth(request);
     if (!authResult.authenticated) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -101,7 +101,7 @@ export async function PUT(request) {
 // DELETE - Remove active workout (on completion)
 export async function DELETE(request) {
   try {
-    const authResult = await verifyToken(request);
+    const authResult = await verifyAuth(request);
     if (!authResult.authenticated) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

@@ -88,7 +88,6 @@ export default function ActiveWorkoutPage() {
   const [loading, setLoading] = useState(true);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
-  const [lastSessionData, setLastSessionData] = useState(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -126,39 +125,44 @@ export default function ActiveWorkoutPage() {
             console.error('Failed to load active workout:', e);
           }
           
-          // Try to load last session for prefilling
-          try {
-            const lastSessionResponse = await fetch(`/api/last-session/${programId}`);
-            const lastSessionResult = await lastSessionResponse.json();
-            
-            if (lastSessionResult.lastSession) {
-              setLastSessionData(lastSessionResult.lastSession);
-            }
-          } catch (e) {
-            console.error('Failed to load last session:', e);
-          }
-          
           // Initialize workout data with 2 sets for each workout (default reps: 12)
-          // Prefill from last session if available
+          // Prefill from last session of each individual exercise
           const initialData = {};
-          workoutList.forEach(workout => {
-            const lastSession = lastSessionData?.[workout.id];
+          
+          for (const workout of workoutList) {
+            // Fetch last session for this specific exercise
+            let lastExerciseData = null;
+            try {
+              const lastExerciseResponse = await fetch(`/api/last-exercise/${workout.id}`);
+              const lastExerciseResult = await lastExerciseResponse.json();
+              
+              if (lastExerciseResult.lastSession) {
+                lastExerciseData = lastExerciseResult.lastSession;
+              }
+            } catch (e) {
+              console.error(`Failed to load last session for workout ${workout.id}:`, e);
+            }
+            
+            // If we have last session data, use it; otherwise default to 2 empty sets
+            const defaultSets = [
+              { weight: 0, reps: 12, rir: 0, completed: false, previousWeight: 0 },
+              { weight: 0, reps: 12, rir: 0, completed: false, previousWeight: 0 },
+            ];
             
             initialData[workout.id] = {
-              unit: lastSession?.unit || 'lbs',
-              sets: lastSession?.sets.map(set => ({
-                weight: set.weight || 0,
-                reps: set.reps || 12,
-                rir: set.rir || 0,
-                completed: false,
-                previousWeight: set.weight || 0, // Store for comparison
-              })) || [
-                { weight: 0, reps: 12, rir: 0, completed: false, previousWeight: 0 },
-                { weight: 0, reps: 12, rir: 0, completed: false, previousWeight: 0 },
-              ],
+              unit: lastExerciseData?.unit || 'lbs',
+              sets: lastExerciseData?.sets?.length > 0 
+                ? lastExerciseData.sets.map(set => ({
+                    weight: parseFloat(set.weight) || 0,
+                    reps: parseInt(set.reps) || 12,
+                    rir: parseInt(set.rir) || 0,
+                    completed: false,
+                    previousWeight: parseFloat(set.weight) || 0, // Store for comparison
+                  }))
+                : defaultSets,
               workoutCompleted: false,
             };
-          });
+          }
           
           setWorkoutData(initialData);
           
@@ -180,7 +184,7 @@ export default function ActiveWorkoutPage() {
     };
     
     initializeWorkout();
-  }, [programs, workouts, programId, lastSessionData]);
+  }, [programs, workouts, programId]);
 
   const updateSet = (workoutId, setIndex, field, value) => {
     setWorkoutData(prev => {
@@ -375,11 +379,14 @@ export default function ActiveWorkoutPage() {
           sessions.push({
             workoutId: workout.id,
             trainingProgramId: programId,
-            sets: sets.length,
-            reps: sets.map(s => s.reps),
-            weight: sets.map(s => `${s.weight}${workoutUnit}`),
-            rir: sets.map(s => s.rir),
-            completedAt: new Date().toISOString(),
+            sets: sets.map((s, idx) => ({
+              setNumber: idx + 1,
+              weight: s.weight,
+              reps: s.reps,
+              rir: s.rir,
+              previousWeight: s.previousWeight || 0, // Include for weight change calculation
+            })),
+            unit: workoutUnit,
           });
         }
       });
@@ -398,16 +405,8 @@ export default function ActiveWorkoutPage() {
       if (!response.ok) {
         throw new Error(data.error || 'Failed to save workout');
       }
-      
-      // Mark as completed in localStorage
-      const today = new Date().toDateString();
-      const completed = JSON.parse(localStorage.getItem(`completed_${today}`) || '[]');
-      completed.push(programId);
-      localStorage.setItem(`completed_${today}`, JSON.stringify(completed));
 
-      // Clear active workout data
-      localStorage.removeItem('activeWorkout');
-
+      // No need to mark in localStorage - it's in the DB now
       router.push('/');
     } catch (error) {
       console.error('Failed to save workout:', error);
@@ -468,9 +467,10 @@ export default function ActiveWorkoutPage() {
               <AccordionSummary 
                 expandIcon={<ExpandMoreIcon />}
                 sx={{
-                  bgcolor: workoutData[workout.id]?.workoutCompleted ? 'success.dark' : 'inherit',
+                  border: workoutData[workout.id]?.workoutCompleted ? '2px solid #c4ff0d' : '1px solid rgba(255, 255, 255, 0.05)',
+                  bgcolor: 'inherit',
                   '&:hover': {
-                    bgcolor: workoutData[workout.id]?.workoutCompleted ? 'success.dark' : 'action.hover',
+                    bgcolor: 'action.hover',
                   },
                 }}
               >
@@ -569,17 +569,20 @@ export default function ActiveWorkoutPage() {
                                   <MenuItem key={w} value={w}>{w}</MenuItem>
                                 ))}
                               </TextField>
-                              {set.previousWeight && set.weight > set.previousWeight && (
+                              {set.previousWeight && set.weight !== set.previousWeight && (
                                 <Chip
-                                  label={`+${set.weight - set.previousWeight}`}
+                                  label={`${set.weight > set.previousWeight ? '+' : ''}${set.weight - set.previousWeight} ${workoutData[workout.id]?.unit || 'lbs'}`}
                                   size="small"
-                                  color="success"
                                   sx={{
                                     position: 'absolute',
                                     top: -8,
                                     right: -8,
                                     height: 20,
                                     fontSize: '0.7rem',
+                                    fontWeight: 'bold',
+                                    bgcolor: set.weight > set.previousWeight ? '#c4ff0d' : '#ef4444',
+                                    color: set.weight > set.previousWeight ? '#000000' : '#ffffff',
+                                    border: 'none'
                                   }}
                                 />
                               )}
@@ -657,12 +660,54 @@ export default function ActiveWorkoutPage() {
       </Box>
 
       {/* Save Confirmation Dialog */}
-      <Dialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)}>
+      <Dialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Save Workout?</DialogTitle>
         <DialogContent>
-          <Typography>
-            You&apos;ve completed {Math.round(progress)}% of this workout. Save your progress?
+          <Typography gutterBottom>
+            You&apos;ve completed {Math.round(progress)}% of this workout.
           </Typography>
+          
+          {/* Show weight improvements */}
+          {programWorkouts.some(w => {
+            const data = workoutData[w.id];
+            if (!data) return false;
+            const completedSets = data.sets.filter(s => s.completed);
+            return completedSets.some(s => s.previousWeight && s.weight > s.previousWeight);
+          }) && (
+            <Box sx={{ mt: 2, p: 2, border: '2px solid #c4ff0d', bgcolor: 'rgba(196, 255, 13, 0.1)', borderRadius: 1 }}>
+              <Typography variant="subtitle2" gutterBottom fontWeight="bold" sx={{ color: '#c4ff0d' }}>
+                🎉 Weight Increases:
+              </Typography>
+              <Stack spacing={1}>
+                {programWorkouts.map(workout => {
+                  const data = workoutData[workout.id];
+                  if (!data) return null;
+                  
+                  const completedSets = data.sets.filter(s => s.completed);
+                  const weightIncreases = completedSets.filter(s => s.previousWeight && s.weight > s.previousWeight);
+                  
+                  if (weightIncreases.length === 0) return null;
+                  
+                  const maxIncrease = Math.max(...weightIncreases.map(s => s.weight - s.previousWeight));
+                  
+                  return (
+                    <Box key={workout.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="body2">{workout.name}</Typography>
+                      <Chip
+                        label={`+${maxIncrease} ${data.unit}`}
+                        size="small"
+                        sx={{ 
+                          fontWeight: 'bold',
+                          bgcolor: '#c4ff0d',
+                          color: '#000000'
+                        }}
+                      />
+                    </Box>
+                  );
+                }).filter(Boolean)}
+              </Stack>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSaveDialogOpen(false)}>Cancel</Button>

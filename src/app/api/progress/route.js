@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/services/database/dbService';
-import { verifyToken } from '@/lib/authMiddleware';
+import { verifyAuth } from '@/lib/authMiddleware';
 
 export async function GET(request) {
   try {
-    const authResult = await verifyToken(request);
+    const authResult = await verifyAuth(request);
     if (!authResult.authenticated) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -81,32 +81,37 @@ export async function GET(request) {
       totalWeight += (session.weight || 0) * (session.reps || 0);
     });
 
-    // Calculate improvements
-    const improvements = Object.entries(workoutsByExercise).map(([name, data]) => {
-      const weights = data.recentWeight.sort((a, b) => 
-        new Date(b.date) - new Date(a.date)
-      );
-      const improvement = weights.length > 1 ? 
-        weights[0].weight - weights[weights.length - 1].weight : 0;
-      
-      return {
-        exercise: name,
-        muscleFocus: data.muscleFocus,
-        improvement: improvement,
-        currentWeight: weights[0]?.weight || 0,
-        sessions: data.count,
-      };
-    }).filter(i => i.improvement > 0).sort((a, b) => b.improvement - a.improvement);
+    // Prepare chart data - workouts per day (last 30 days)
+    const last30Days = [];
+    const today = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toLocaleDateString();
+      last30Days.push({
+        date: dateStr,
+        shortDate: `${date.getMonth() + 1}/${date.getDate()}`,
+        workouts: workoutsByDate[dateStr] ? 1 : 0,
+        sets: workoutsByDate[dateStr]?.totalSets || 0,
+      });
+    }
 
-    // Areas needing work (exercises done infrequently)
-    const areasOfImprovement = Object.entries(workoutsByExercise)
-      .map(([name, data]) => ({
-        exercise: name,
-        muscleFocus: data.muscleFocus,
-        sessions: data.count,
-      }))
-      .sort((a, b) => a.sessions - b.sessions)
-      .slice(0, 5);
+    // Calculate calories per day
+    const caloriesByDay = {};
+    sessions.forEach(session => {
+      const date = new Date(session.completedAt).toLocaleDateString();
+      if (!caloriesByDay[date]) {
+        caloriesByDay[date] = 0;
+      }
+      // Simple calorie calculation: (weight * reps * 0.1)
+      const calories = (session.weight || 0) * (session.reps || 0) * 0.1;
+      caloriesByDay[date] += calories;
+    });
+
+    // Add calories to last 30 days data
+    last30Days.forEach(day => {
+      day.calories = Math.round(caloriesByDay[day.date] || 0);
+    });
 
     return NextResponse.json({
       summary: {
@@ -116,15 +121,15 @@ export async function GET(request) {
         totalWeight: Math.round(totalWeight),
         exercisesCompleted: Object.keys(workoutsByExercise).length,
       },
-      recentSessions: sessions.slice(0, 20),
+      chartData: {
+        workoutsPerDay: last30Days,
+      },
       workoutsByDate: Object.entries(workoutsByDate).map(([date, data]) => ({
         date,
         programs: Array.from(data.programs),
         sets: data.totalSets,
         exercises: Array.from(data.exercises),
-      })).slice(0, 30),
-      improvements,
-      areasOfImprovement,
+      })).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 30),
       muscleDistribution: Object.entries(workoutsByMuscle).map(([muscle, count]) => ({
         muscle,
         sets: count,

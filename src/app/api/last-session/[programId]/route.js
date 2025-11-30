@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/services/database/dbService';
-import { verifyToken } from '@/lib/authMiddleware';
+import { verifyAuth } from '@/lib/authMiddleware';
 
 // GET - Get last completed session for a specific program
 export async function GET(request, { params }) {
   try {
-    const authResult = await verifyToken(request);
+    const authResult = await verifyAuth(request);
     if (!authResult.authenticated) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

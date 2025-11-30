@@ -38,6 +38,25 @@ const estimateDuration = (totalSets) => {
 
 /**
  * Calculate calories burned for a single set
+ * @param {number} weight - Weight lifted in lbs or kg
+ * @param {number} reps - Number of reps
+ * @param {number} rir - Reps in reserve (0-6)
+ * @param {string} unit - 'lbs' or 'kg'
+ * @param {number} userWeightKg - User's body weight in kg (default: 75kg / 165lbs)
+ * @returns {number} - Estimated calories burned
+ */
+export const calculateCalories = (weight, reps, rir, unit = 'lbs', userWeightKg = 75) => {
+  // Convert weight to kg if needed
+  const weightKg = unit === 'lbs' ? weight * 0.453592 : weight;
+  
+  const met = getMET(weightKg, reps, rir);
+  const durationHours = estimateDuration(1); // Duration for 1 set
+  
+  return met * userWeightKg * durationHours;
+};
+
+/**
+ * Calculate calories burned for a single set (alias for backward compatibility)
  * @param {number} weight - Weight lifted in lbs
  * @param {number} reps - Number of reps
  * @param {number} rir - Reps in reserve (0-6)
@@ -45,10 +64,7 @@ const estimateDuration = (totalSets) => {
  * @returns {number} - Estimated calories burned
  */
 export const calculateSetCalories = (weight, reps, rir, userWeightKg = 75) => {
-  const met = getMET(weight, reps, rir);
-  const durationHours = estimateDuration(1); // Duration for 1 set
-  
-  return met * userWeightKg * durationHours;
+  return calculateCalories(weight, reps, rir, 'lbs', userWeightKg);
 };
 
 /**

@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout, selectUser } from '@/redux/slices/authSlice';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function Navbar({ onMenuClick }) {
   const dispatch = useDispatch();
@@ -49,9 +50,22 @@ export default function Navbar({ onMenuClick }) {
           <MenuIcon />
         </IconButton>
 
-        <Typography variant="h5" noWrap component="div" sx={{ flexGrow: 1, fontWeight: 700 }}>
-          Liftr
-        </Typography>
+        <Link href="/" passHref style={{ textDecoration: 'none', color: 'inherit', flexGrow: 1 }}>
+          <Typography 
+            variant="h5" 
+            noWrap 
+            component="div" 
+            sx={{ 
+              fontWeight: 700,
+              cursor: 'pointer',
+              '&:hover': {
+                opacity: 0.8,
+              },
+            }}
+          >
+            Liftr
+          </Typography>
+        </Link>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography variant="body2" sx={{ display: { xs: 'none', sm: 'block' } }}>
@@ -74,11 +88,26 @@ export default function Navbar({ onMenuClick }) {
             vertical: 'top',
             horizontal: 'right',
           }}
+          sx={{
+            '& .MuiPaper-root': {
+              minWidth: 200,
+            }
+          }}
         >
-          <MenuItem disabled>
-            <Typography variant="body2" color="text.secondary">
+          <MenuItem disabled sx={{ flexDirection: 'column', alignItems: 'flex-start', opacity: 1 }}>
+            <Typography variant="body1" fontWeight={600}>
               {user?.name || user?.username}
             </Typography>
+            {user?.username && user?.name && (
+              <Typography variant="caption" color="text.secondary">
+                @{user.username}
+              </Typography>
+            )}
+            {user?.role && (
+              <Typography variant="caption" color="primary.main" sx={{ mt: 0.5 }}>
+                {user.role === 'admin' ? 'Administrator' : 'User'}
+              </Typography>
+            )}
           </MenuItem>
           <MenuItem onClick={handleLogout}>
             <LogoutIcon sx={{ mr: 1 }} fontSize="small" />

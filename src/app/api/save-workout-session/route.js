@@ -18,32 +18,32 @@ export async function POST(request) {
 
     const userId = authResult.user.id;
     let totalSetsInserted = 0;
+    const completedAt = new Date().toISOString();
 
     // Insert each set as a separate row
     for (const session of sessions) {
-      const { workoutId, trainingProgramId, sets, completedAt } = session;
-      
-      // Extract unit from weight strings (e.g., "50lbs" -> "lbs")
-      const unit = session.weight[0]?.match(/(lbs|kg)/)?.[0] || 'lbs';
+      const { workoutId, trainingProgramId, sets, unit } = session;
       
       // Insert each set as a separate row
-      for (let i = 0; i < sets.length; i++) {
-        // Extract numeric weight value
-        const weightStr = session.weight[i] || '0';
-        const weight = parseFloat(weightStr.replace(/[^\d.]/g, '')) || 0;
+      for (const set of sets) {
+        // Calculate weight change (current weight - previous weight)
+        const weightChange = set.previousWeight !== undefined 
+          ? set.weight - set.previousWeight 
+          : 0;
         
         await execute(
           `INSERT INTO liftr_workout_sessions 
-           (userId, workoutId, trainingProgramId, setNumber, reps, weight, rir, unit, completedAt)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (userId, workoutId, trainingProgramId, setNumber, reps, weight, weightChange, rir, unit, completedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             userId,
             workoutId,
             trainingProgramId,
-            i + 1, // Set number (1-indexed)
-            session.reps[i] || 0,
-            weight,
-            session.rir[i] || 0,
+            set.setNumber,
+            set.reps,
+            set.weight,
+            weightChange,
+            set.rir,
             unit,
             completedAt,
           ]

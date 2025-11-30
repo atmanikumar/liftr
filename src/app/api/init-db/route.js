@@ -45,17 +45,18 @@ export async function GET() {
       )
     `);
 
-    // Create liftr_workout_sessions table
+    // Create liftr_workout_sessions table (individual sets, not JSON arrays)
     await execute(`
       CREATE TABLE IF NOT EXISTS liftr_workout_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         userId INTEGER NOT NULL,
-        workoutId INTEGER,
+        workoutId INTEGER NOT NULL,
         trainingProgramId INTEGER,
-        setNumber INTEGER,
-        reps INTEGER,
-        weight REAL,
-        rir INTEGER,
+        setNumber INTEGER NOT NULL,
+        reps INTEGER NOT NULL,
+        weight REAL NOT NULL,
+        weightChange REAL DEFAULT 0,
+        rir INTEGER DEFAULT 0,
         unit TEXT DEFAULT 'lbs',
         duration INTEGER,
         notes TEXT,
@@ -88,7 +89,6 @@ export async function GET() {
       );
     } catch (error) {
       // User might already exist, ignore error
-      console.log('Admin user already exists');
     }
 
     return NextResponse.json({
