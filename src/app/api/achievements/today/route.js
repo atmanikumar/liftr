@@ -9,25 +9,49 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = authResult.user.id;
+    const authenticatedUserId = authResult.user.id;
+    const userRole = authResult.user.role;
     
-    // Get today's date range
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStart = today.toISOString();
+    // Check if viewing as another user (for trainers)
+    const { searchParams } = new URL(request.url);
+    const viewAsUserId = searchParams.get('viewAs');
     
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStart = tomorrow.toISOString();
+    let userId = authenticatedUserId;
+    
+    // If viewAs is specified, verify the trainer has permission
+    if (viewAsUserId) {
+      if (userRole !== 'trainer' && userRole !== 'admin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      
+      // Verify the trainee belongs to this trainer
+      if (userRole === 'trainer') {
+        const traineeCheck = await query(
+          'SELECT id FROM liftr_users WHERE id = ? AND trainerId = ?',
+          [parseInt(viewAsUserId), authenticatedUserId]
+        );
+        
+        if (traineeCheck.length === 0) {
+          return NextResponse.json({ error: 'Not authorized to view this user' }, { status: 403 });
+        }
+      }
+      
+      userId = parseInt(viewAsUserId);
+    }
+    
+    // Get achievements from the last 20 hours
+    // This ensures achievements disappear 20 hours after they were earned
+    const twentyHoursAgo = new Date();
+    twentyHoursAgo.setHours(twentyHoursAgo.getHours() - 20);
+    const cutoffTime = twentyHoursAgo.toISOString();
 
-    // Get achievements from today
+    // Get achievements from the last 20 hours
     const achievements = await query(
       `SELECT * FROM liftr_achievements 
        WHERE userId = ? 
-       AND achievedAt >= ? 
-       AND achievedAt < ?
+       AND achievedAt >= ?
        ORDER BY achievedAt DESC`,
-      [userId, todayStart, tomorrowStart]
+      [userId, cutoffTime]
     );
 
     return NextResponse.json({

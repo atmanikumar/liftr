@@ -10,7 +10,36 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = authResult.user.id;
+    const authenticatedUserId = authResult.user.id;
+    const userRole = authResult.user.role;
+    
+    // Check if viewing as another user (for trainers)
+    const { searchParams } = new URL(request.url);
+    const viewAsUserId = searchParams.get('viewAs');
+    
+    let userId = authenticatedUserId;
+    
+    // If viewAs is specified, verify the trainer has permission
+    if (viewAsUserId) {
+      if (userRole !== 'trainer' && userRole !== 'admin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      
+      // Verify the trainee belongs to this trainer
+      if (userRole === 'trainer') {
+        const traineeCheck = await query(
+          'SELECT id FROM liftr_users WHERE id = ? AND trainerId = ?',
+          [parseInt(viewAsUserId), authenticatedUserId]
+        );
+        
+        if (traineeCheck.length === 0) {
+          return NextResponse.json({ error: 'Not authorized to view this user' }, { status: 403 });
+        }
+      }
+      
+      userId = parseInt(viewAsUserId);
+    }
+    
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
     // 1. Get all active workouts (in-progress)

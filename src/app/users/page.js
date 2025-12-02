@@ -41,6 +41,7 @@ import {
   selectUsers,
   selectUsersLoading,
 } from '@/redux/slices/usersSlice';
+import { selectUser } from '@/redux/slices/authSlice';
 import Loader from '@/components/common/Loader';
 
 export default function UsersPage() {
@@ -48,6 +49,9 @@ export default function UsersPage() {
   const router = useRouter();
   const users = useSelector(selectUsers);
   const loading = useSelector(selectUsersLoading);
+  const currentUser = useSelector(selectUser);
+  const isAdmin = currentUser?.role === 'admin';
+  const isTrainer = currentUser?.role === 'trainer';
 
   // Dialog states
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -60,6 +64,7 @@ export default function UsersPage() {
     username: '',
     password: '',
     role: 'user',
+    trainerId: null,
   });
   const [newPassword, setNewPassword] = useState('');
 
@@ -80,9 +85,15 @@ export default function UsersPage() {
         ...formData,
         name: formData.username, // Use username as name
       };
+      
+      // If trainer is creating a user, auto-assign themselves as the trainer
+      if (isTrainer && formData.role === 'user') {
+        userData.trainerId = currentUser.id;
+      }
+      
       await dispatch(createUser(userData)).unwrap();
       setAddDialogOpen(false);
-      setFormData({ username: '', password: '', role: 'user' });
+      setFormData({ username: '', password: '', role: 'user', trainerId: null });
       setSnackbar({ open: true, message: 'User created successfully', severity: 'success' });
     } catch (error) {
       setSnackbar({ open: true, message: error, severity: 'error' });
@@ -176,6 +187,9 @@ export default function UsersPage() {
                       {user.role === 'admin' && (
                         <Chip label="Admin" color="secondary" size="small" />
                       )}
+                      {user.role === 'trainer' && (
+                        <Chip label="Trainer" sx={{ bgcolor: '#c4ff0d', color: '#000' }} size="small" />
+                      )}
                     </Box>
                   </TableCell>
                   <TableCell>
@@ -214,30 +228,42 @@ export default function UsersPage() {
                             </Typography>
                             <Typography variant="body2">{user.role}</Typography>
                           </Box>
-                          <Box sx={{ display: 'flex', gap: 1, pt: 1 }}>
-                            <IconButton
-                              color="primary"
-                              size="small"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openResetDialog(user);
-                              }}
-                              title="Reset Password"
-                            >
-                              <LockResetIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
-                              color="error"
-                              size="small"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openDeleteDialog(user);
-                              }}
-                              title="Delete User"
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Box>
+                          {user.trainerId && (
+                            <Box>
+                              <Typography variant="caption" color="text.secondary">
+                                Trainer
+                              </Typography>
+                              <Typography variant="body2">
+                                {users.find(u => u.id === user.trainerId)?.username || 'N/A'}
+                              </Typography>
+                            </Box>
+                          )}
+                          {isAdmin && (
+                            <Box sx={{ display: 'flex', gap: 1, pt: 1 }}>
+                              <IconButton
+                                color="primary"
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openResetDialog(user);
+                                }}
+                                title="Reset Password"
+                              >
+                                <LockResetIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                color="error"
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openDeleteDialog(user);
+                                }}
+                                title="Delete User"
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Box>
+                          )}
                         </Stack>
                       </Box>
                     </Collapse>
@@ -285,8 +311,14 @@ export default function UsersPage() {
               fullWidth
             >
               <MenuItem value="user">User</MenuItem>
-              <MenuItem value="admin">Admin</MenuItem>
+              {isAdmin && <MenuItem value="trainer">Trainer</MenuItem>}
+              {isAdmin && <MenuItem value="admin">Admin</MenuItem>}
             </TextField>
+            {isTrainer && formData.role === 'user' && (
+              <Alert severity="info" sx={{ mt: 1 }}>
+                This user will be automatically assigned to you as their trainer.
+              </Alert>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>

@@ -65,7 +65,8 @@ const menuItems = [
     title: 'Users',
     path: '/users',
     icon: 'PeopleIcon',
-    adminOnly: true,
+    adminOnly: false,
+    trainerOrAdmin: true,
   },
 ];
 
@@ -74,10 +75,17 @@ export default function Sidebar({ open, onClose, variant = 'temporary' }) {
   const router = useRouter();
   const user = useSelector(selectUser);
   const isAdmin = user?.role === 'admin';
+  const isTrainer = user?.role === 'trainer';
 
-  const filteredMenuItems = menuItems.filter(
-    (item) => !item.adminOnly || (item.adminOnly && isAdmin)
-  );
+  const filteredMenuItems = menuItems.filter((item) => {
+    if (item.adminOnly) {
+      return isAdmin;
+    }
+    if (item.trainerOrAdmin) {
+      return isAdmin || isTrainer;
+    }
+    return true;
+  });
 
   // Prefetch all menu pages for instant navigation
   useEffect(() => {

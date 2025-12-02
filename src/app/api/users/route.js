@@ -1,15 +1,27 @@
 import { NextResponse } from 'next/server';
 import { query, execute } from '@/services/database/dbService';
 import { hashPassword, getSafeUserData } from '@/services/auth/authService';
-import { requireAdmin } from '@/lib/authMiddleware';
+import { requireAdmin, requireTrainerOrAdmin } from '@/lib/authMiddleware';
 
-// GET all users (admin only)
+// GET all users (admin and trainer can view)
 export async function GET() {
-  const authResult = await requireAdmin();
+  const authResult = await requireTrainerOrAdmin();
   if (authResult instanceof NextResponse) return authResult;
 
   try {
-    const users = await query('SELECT * FROM liftr_users ORDER BY createdAt DESC');
+    const currentUser = authResult.user;
+    let users;
+    
+    // Admins see all users, trainers only see their trainees
+    if (currentUser.role === 'admin') {
+      users = await query('SELECT * FROM liftr_users ORDER BY createdAt DESC');
+    } else {
+      // Trainers only see their trainees
+      users = await query(
+        'SELECT * FROM liftr_users WHERE trainerId = ? OR id = ? ORDER BY createdAt DESC',
+        [currentUser.id, currentUser.id]
+      );
+    }
     
     // Remove passwords from response
     const safeUsers = users.map(user => getSafeUserData(user));
@@ -27,13 +39,14 @@ export async function GET() {
   }
 }
 
-// POST create new user (admin only)
+// POST create new user (admin and trainer can create)
 export async function POST(request) {
-  const authResult = await requireAdmin();
+  const authResult = await requireTrainerOrAdmin();
   if (authResult instanceof NextResponse) return authResult;
 
   try {
-    const { username, password, name, role = 'user' } = await request.json();
+    const currentUser = authResult.user;
+    const { username, password, name, role = 'user', trainerId } = await request.json();
 
     // Validate input
     if (!username || !password || !name) {
@@ -56,13 +69,24 @@ export async function POST(request) {
       );
     }
 
+    // Trainers can only create 'user' role, admins can create any role
+    let finalRole = role;
+    let finalTrainerId = trainerId;
+    
+    if (currentUser.role === 'trainer') {
+      // Trainers can only create regular users
+      finalRole = 'user';
+      // Auto-assign trainer
+      finalTrainerId = currentUser.id;
+    }
+
     // Hash password
     const hashedPassword = await hashPassword(password);
 
-    // Create user
+    // Create user with trainerId if provided
     const result = await execute(
-      'INSERT INTO liftr_users (username, password, name, role) VALUES (?, ?, ?, ?)',
-      [username, hashedPassword, name, role]
+      'INSERT INTO liftr_users (username, password, name, role, trainerId) VALUES (?, ?, ?, ?, ?)',
+      [username, hashedPassword, name, finalRole, finalTrainerId || null]
     );
 
     // Fetch created user

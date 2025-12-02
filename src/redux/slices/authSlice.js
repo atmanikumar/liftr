@@ -8,6 +8,7 @@ const initialState = {
   isAuthenticated: false,
   loading: false,
   error: null,
+  viewingAs: null, // For trainers viewing trainee progress
 };
 
 // Async thunks
@@ -55,6 +56,34 @@ const authSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+    setViewingAs: (state, action) => {
+      state.viewingAs = action.payload;
+      // Persist to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('liftr_viewingAs', JSON.stringify(action.payload));
+      }
+    },
+    clearViewingAs: (state) => {
+      state.viewingAs = null;
+      // Clear from localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('liftr_viewingAs');
+      }
+    },
+    loadViewingAs: (state) => {
+      // Load from localStorage on app init
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('liftr_viewingAs');
+        if (stored) {
+          try {
+            state.viewingAs = JSON.parse(stored);
+          } catch (e) {
+            // Invalid data, clear it
+            localStorage.removeItem('liftr_viewingAs');
+          }
+        }
+      }
+    },
   },
   extraReducers: (builder) => {
     // Login
@@ -97,15 +126,23 @@ const authSlice = createSlice({
         state.user = null;
         state.loading = false;
         state.error = null;
+        state.viewingAs = null;
+        // Clear viewingAs from localStorage on logout
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('liftr_viewingAs');
+        }
       });
   },
 });
 
-export const { clearError } = authSlice.actions;
+export const { clearError, setViewingAs, clearViewingAs, loadViewingAs } = authSlice.actions;
 export default authSlice.reducer;
 
 // Selectors
 export const selectAuth = (state) => state.auth;
 export const selectUser = (state) => state.auth.user;
+export const selectViewingAs = (state) => state.auth.viewingAs;
+export const selectEffectiveUser = (state) => state.auth.viewingAs || state.auth.user;
 export const selectIsAdmin = (state) => state.auth.user?.role === 'admin';
+export const selectIsTrainer = (state) => state.auth.user?.role === 'trainer';
 

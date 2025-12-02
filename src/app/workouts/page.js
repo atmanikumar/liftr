@@ -9,7 +9,6 @@ import {
   Card,
   CardContent,
   CardActions,
-  CardMedia,
   IconButton,
   Dialog,
   DialogTitle,
@@ -27,8 +26,6 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import SearchIcon from '@mui/icons-material/Search';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useDispatch, useSelector } from 'react-redux';
@@ -44,8 +41,6 @@ import {
 import { MUSCLE_GROUPS } from '@/constants/app';
 import Loader from '@/components/common/Loader';
 import MuscleBodyMap from '@/components/common/MuscleBodyMap';
-
-const PLACEHOLDER_IMAGE = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="200"%3E%3Crect width="300" height="200" fill="%23333"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E';
 
 export default function WorkoutsPage() {
   const dispatch = useDispatch();
@@ -63,14 +58,9 @@ export default function WorkoutsPage() {
   const [formData, setFormData] = useState({
     name: '',
     equipmentName: '',
-    equipmentPhoto: '',
     muscleFocus: '',
     description: '',
   });
-
-  // Image upload state
-  const [uploading, setUploading] = useState(false);
-  const [imagePreview, setImagePreview] = useState(null);
 
   // Search and pagination state
   const [searchQuery, setSearchQuery] = useState('');
@@ -91,63 +81,22 @@ export default function WorkoutsPage() {
       setFormData({
         name: workout.name,
         equipmentName: workout.equipmentName || '',
-        equipmentPhoto: workout.equipmentPhoto || '',
         muscleFocus: workout.muscleFocus || '',
         description: workout.description || '',
       });
-      setImagePreview(workout.equipmentPhoto || null);
     } else {
       setEditMode(false);
       setSelectedWorkout(null);
       setFormData({
         name: '',
         equipmentName: '',
-        equipmentPhoto: '',
         muscleFocus: '',
         description: '',
       });
-      setImagePreview(null);
     }
     setDialogOpen(true);
   };
 
-  const handleImageUpload = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Show preview immediately
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result);
-    };
-    reader.readAsDataURL(file);
-
-    // Upload to ImageKit
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('image', file);
-
-      const response = await fetch('/api/upload-image', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setFormData(prev => ({ ...prev, equipmentPhoto: data.url }));
-        setSnackbar({ open: true, message: 'Image uploaded successfully', severity: 'success' });
-      } else {
-        throw new Error(data.error);
-      }
-    } catch (error) {
-      setSnackbar({ open: true, message: 'Failed to upload image', severity: 'error' });
-      setImagePreview(null);
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const handleCloseDialog = () => {
     setDialogOpen(false);
@@ -253,22 +202,40 @@ export default function WorkoutsPage() {
         Showing {paginatedWorkouts.length} of {filteredWorkouts.length} workouts
       </Typography>
 
-      {/* Workouts Grid */}
+      {/* Workouts Grid - 2 columns per row on all devices */}
       <Grid container spacing={3}>
         {paginatedWorkouts.map((workout) => (
-          <Grid item xs={12} sm={6} md={4} key={workout.id}>
-            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <CardMedia
-                component="img"
-                height="200"
-                image={workout.equipmentPhoto || PLACEHOLDER_IMAGE}
-                alt={workout.name}
-                sx={{ objectFit: 'cover' }}
-              />
+          <Grid item xs={6} sm={6} key={workout.id}>
+            <Card 
+              sx={{ 
+                height: '100%', 
+                display: 'flex', 
+                flexDirection: 'column',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: '0 8px 24px rgba(196, 255, 13, 0.15)',
+                }
+              }}
+            >
               <CardContent sx={{ flexGrow: 1 }}>
-                <Typography variant="h6" gutterBottom>
+                <Typography 
+                  variant="h6" 
+                  gutterBottom 
+                  sx={{ 
+                    fontWeight: 600,
+                    minHeight: '3.6em', // Reserve space for 2 lines
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    lineHeight: 1.4
+                  }}
+                >
                   {workout.name}
                 </Typography>
+                
                 {workout.equipmentName && (
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     Equipment: {workout.equipmentName}
@@ -292,31 +259,55 @@ export default function WorkoutsPage() {
                 {workout.muscleFocus && (
                   <Chip
                     label={workout.muscleFocus}
-                    color="primary"
                     size="small"
-                    sx={{ mt: 1 }}
+                    sx={{ 
+                      mt: 1,
+                      bgcolor: 'rgba(196, 255, 13, 0.15)',
+                      color: '#c4ff0d',
+                      border: '1px solid rgba(196, 255, 13, 0.3)'
+                    }}
                   />
                 )}
+                
                 {workout.description && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                  <Typography 
+                    variant="body2" 
+                    color="text.secondary" 
+                    sx={{ 
+                      mt: 2,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}
+                  >
                     {workout.description}
                   </Typography>
                 )}
               </CardContent>
-              <CardActions sx={{ justifyContent: 'flex-end' }}>
+              <CardActions sx={{ justifyContent: 'flex-end', pt: 0 }}>
                 <IconButton
-                  color="primary"
+                  size="small"
                   onClick={() => handleOpenDialog(workout)}
                   title="Edit"
+                  sx={{ 
+                    color: '#c4ff0d',
+                    '&:hover': { bgcolor: 'rgba(196, 255, 13, 0.1)' }
+                  }}
                 >
-                  <EditIcon />
+                  <EditIcon fontSize="small" />
                 </IconButton>
                 <IconButton
+                  size="small"
                   color="error"
                   onClick={() => openDeleteDialog(workout)}
                   title="Delete"
+                  sx={{ 
+                    '&:hover': { bgcolor: 'rgba(244, 67, 54, 0.1)' }
+                  }}
                 >
-                  <DeleteIcon />
+                  <DeleteIcon fontSize="small" />
                 </IconButton>
               </CardActions>
             </Card>
@@ -383,58 +374,6 @@ export default function WorkoutsPage() {
               fullWidth
             />
             
-            {/* Image Upload Section */}
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                Equipment Photo
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-                <Button
-                  variant="outlined"
-                  component="label"
-                  startIcon={<CloudUploadIcon />}
-                  disabled={uploading}
-                >
-                  {uploading ? 'Uploading...' : 'Upload Image'}
-                  <input
-                    type="file"
-                    hidden
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                  />
-                </Button>
-                <Button
-                  variant="outlined"
-                  component="label"
-                  startIcon={<PhotoCameraIcon />}
-                  disabled={uploading}
-                >
-                  Capture Photo
-                  <input
-                    type="file"
-                    hidden
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleImageUpload}
-                  />
-                </Button>
-              </Box>
-              {imagePreview && (
-                <Box sx={{ mt: 2, position: 'relative' }}>
-                  <img 
-                    src={imagePreview} 
-                    alt="Preview" 
-                    style={{ 
-                      width: '100%', 
-                      maxHeight: '300px', 
-                      objectFit: 'contain',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(255, 255, 255, 0.1)'
-                    }} 
-                  />
-                </Box>
-              )}
-            </Box>
             {/* Muscle Focus Selection via Body Map */}
             <Box>
               <Typography variant="subtitle2" gutterBottom>

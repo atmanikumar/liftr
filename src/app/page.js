@@ -24,7 +24,7 @@ import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import { useSelector } from 'react-redux';
-import { selectUser } from '@/redux/slices/authSlice';
+import { selectUser, selectViewingAs } from '@/redux/slices/authSlice';
 import { useRouter } from 'next/navigation';
 import Loader from '@/components/common/Loader';
 import MuscleBodyMap from '@/components/common/MuscleBodyMap';
@@ -32,6 +32,8 @@ import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'rec
 
 export default function HomePage() {
   const user = useSelector(selectUser);
+  const viewingAs = useSelector(selectViewingAs);
+  const effectiveUser = viewingAs || user;
   const router = useRouter();
   const [workoutPlans, setWorkoutPlans] = useState([]);
   const [completedSessions, setCompletedSessions] = useState([]);
@@ -49,13 +51,19 @@ export default function HomePage() {
     
     const fetchTodayAchievements = async () => {
       try {
-        const response = await fetch(`/api/achievements/today`, {
+        const url = viewingAs 
+          ? `/api/achievements/today?viewAs=${viewingAs.id}` 
+          : `/api/achievements/today`;
+        
+        const response = await fetch(url, {
           signal: abortController.signal
         });
         const data = await response.json();
         
         if (data.achievements && data.achievements.length > 0) {
           setTodayAchievements(data.achievements);
+        } else {
+          setTodayAchievements([]);
         }
       } catch (e) {
         if (e.name === 'AbortError') {
@@ -71,7 +79,7 @@ export default function HomePage() {
     return () => {
       abortController.abort();
     };
-  }, []);
+  }, [viewingAs]);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -79,7 +87,10 @@ export default function HomePage() {
     const fetchHomeData = async (signal) => {
       try {
         // Single API call to get all home page data
-        const response = await fetch('/api/home', { signal });
+        const url = viewingAs 
+          ? `/api/home?viewAs=${viewingAs.id}` 
+          : `/api/home`;
+        const response = await fetch(url, { signal });
         const data = await response.json();
         
         if (data.workoutPlans) {
@@ -119,7 +130,7 @@ export default function HomePage() {
       abortController.abort();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [viewingAs]);
 
 
   if (loadingData) {
@@ -140,14 +151,24 @@ export default function HomePage() {
                     🎉 Today&apos;s Achievements!
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Great job, {user?.name || user?.username}! You improved your strength today.
+                    Great job, {effectiveUser?.name || effectiveUser?.username}! You improved your strength today.
                   </Typography>
                 </Box>
               </Box>
               
               <Stack spacing={2}>
                 {todayAchievements.map((ach, idx) => (
-                  <Card key={idx} sx={{ bgcolor: 'rgba(196, 255, 13, 0.1)', border: '1px solid rgba(196, 255, 13, 0.3)' }}>
+                  <Card 
+                    key={idx} 
+                    sx={{ 
+                      bgcolor: 'rgba(196, 255, 13, 0.03)', 
+                      border: '1px solid rgba(196, 255, 13, 0.2)',
+                      transition: 'none',
+                      '&:hover': {
+                        bgcolor: 'rgba(196, 255, 13, 0.05)',
+                      }
+                    }}
+                  >
                     <CardContent>
                       <Typography variant="h6" gutterBottom>
                         {ach.exerciseName}
@@ -317,7 +338,7 @@ export default function HomePage() {
               <Grid item xs={12}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom sx={{ mb: 2, textAlign: 'center' }}>
-                    {user?.username ? `${user.username}'s ` : ''}Muscle Distribution
+                    {effectiveUser?.username ? `${effectiveUser.username}'s ` : ''}Muscle Distribution
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mb: 2 }}>
                     Last 7 days • Auto-resets after 1 week of rest

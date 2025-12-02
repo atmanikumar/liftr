@@ -7,7 +7,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
 import Loader from '../common/Loader';
-import { checkAuth, selectAuth } from '@/redux/slices/authSlice';
+import { checkAuth, selectAuth, loadViewingAs } from '@/redux/slices/authSlice';
 
 export default function MainLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -21,6 +21,8 @@ export default function MainLayout({ children }) {
     // Check authentication on mount
     const checkAuthStatus = async () => {
       await dispatch(checkAuth());
+      // Load viewingAs from localStorage after auth check
+      dispatch(loadViewingAs());
       setInitializing(false);
     };
     checkAuthStatus();

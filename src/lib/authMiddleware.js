@@ -69,6 +69,27 @@ export async function requireAdmin() {
 }
 
 /**
+ * Verify trainer or admin role
+ * @returns {Promise<{user: Object} | NextResponse>}
+ */
+export async function requireTrainerOrAdmin() {
+  const authResult = await requireAuth();
+
+  if (authResult instanceof NextResponse) {
+    return authResult;
+  }
+
+  if (authResult.user.role !== 'trainer' && authResult.user.role !== 'admin') {
+    return NextResponse.json(
+      { error: 'Trainer or Admin access required' },
+      { status: 403 }
+    );
+  }
+
+  return authResult;
+}
+
+/**
  * Verify authentication from request (supports both cookies and Authorization header)
  * @param {Request} request - The incoming request
  * @returns {Promise<{authenticated: boolean, user: Object}>}
