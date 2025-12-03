@@ -19,16 +19,17 @@ export async function GET(request) {
     const userStats = [];
 
     for (const user of users) {
-      // Get all workout sessions for this user
-      const sessions = await query(
-        `SELECT DISTINCT DATE(completedAt) as workoutDate
-         FROM liftr_workout_sessions
-         WHERE userId = ?
-         ORDER BY workoutDate ASC`,
+      // Get all workout sessions for this user (with details)
+      const allSessions = await query(
+        `SELECT ws.*, w.equipmentName, w.name as workoutName
+         FROM liftr_workout_sessions ws
+         JOIN liftr_workouts w ON ws.workoutId = w.id
+         WHERE ws.userId = ?
+         ORDER BY ws.completedAt ASC`,
         [user.id]
       );
 
-      if (sessions.length === 0) {
+      if (allSessions.length === 0) {
         userStats.push({
           userId: user.id,
           username: user.username,
@@ -38,9 +39,25 @@ export async function GET(request) {
           consistency: 0,
           longestBreak: 0,
           currentStreak: 0,
+          mostCaloriesBurned: { calories: 0, date: null },
+          mostWorkoutsDone: { count: 0, date: null },
+          highestWeightLifted: { weight: 0, exercise: null, unit: 'lbs' },
+          highestTotalVolume: { volume: 0, date: null },
         });
         continue;
       }
+
+      // Group sessions by date for workout dates
+      const sessionsByDate = {};
+      allSessions.forEach(session => {
+        const date = new Date(session.completedAt).toLocaleDateString();
+        if (!sessionsByDate[date]) {
+          sessionsByDate[date] = [];
+        }
+        sessionsByDate[date].push(session);
+      });
+
+      const sessions = Object.keys(sessionsByDate).map(date => ({ workoutDate: date }));
 
       const workoutDates = sessions.map(s => new Date(s.workoutDate));
       const totalWorkoutDays = workoutDates.length;
@@ -134,6 +151,68 @@ export async function GET(request) {
         }
       }
 
+      // Calculate calories burned per day (simple formula)
+      const caloriesByDay = {};
+      const workoutsByDay = {};
+      const totalVolumeByDay = {};
+      
+      allSessions.forEach(session => {
+        const date = new Date(session.completedAt).toLocaleDateString();
+        
+        // Calories calculation
+        const met = session.equipmentName?.toLowerCase().includes('cardio') ? 8.0 : 6.0;
+        const userWeight = 70; // kg
+        const durationHours = 2 / 60; // 2 minutes per set
+        const calories = met * userWeight * durationHours;
+        caloriesByDay[date] = (caloriesByDay[date] || 0) + calories;
+        
+        // Workouts per day
+        if (!workoutsByDay[date]) {
+          workoutsByDay[date] = new Set();
+        }
+        workoutsByDay[date].add(session.workoutName);
+        
+        // Total volume per day (weight * reps)
+        const volume = (session.weight || 0) * (session.reps || 0);
+        totalVolumeByDay[date] = (totalVolumeByDay[date] || 0) + volume;
+      });
+
+      // Find most calories burned per day
+      let mostCaloriesBurned = { calories: 0, date: null };
+      Object.entries(caloriesByDay).forEach(([date, calories]) => {
+        if (calories > mostCaloriesBurned.calories) {
+          mostCaloriesBurned = { calories: Math.round(calories), date };
+        }
+      });
+
+      // Find most workouts done per day
+      let mostWorkoutsDone = { count: 0, date: null };
+      Object.entries(workoutsByDay).forEach(([date, workouts]) => {
+        if (workouts.size > mostWorkoutsDone.count) {
+          mostWorkoutsDone = { count: workouts.size, date };
+        }
+      });
+
+      // Find highest weight lifted
+      let highestWeightLifted = { weight: 0, exercise: null, unit: 'lbs' };
+      allSessions.forEach(session => {
+        if ((session.weight || 0) > highestWeightLifted.weight) {
+          highestWeightLifted = {
+            weight: session.weight,
+            exercise: session.workoutName,
+            unit: session.unit || 'lbs',
+          };
+        }
+      });
+
+      // Find highest total volume per day
+      let highestTotalVolume = { volume: 0, date: null };
+      Object.entries(totalVolumeByDay).forEach(([date, volume]) => {
+        if (volume > highestTotalVolume.volume) {
+          highestTotalVolume = { volume: Math.round(volume), date };
+        }
+      });
+
       userStats.push({
         userId: user.id,
         username: user.username,
@@ -143,6 +222,10 @@ export async function GET(request) {
         consistency: consistencyDays,
         longestBreak,
         currentStreak,
+        mostCaloriesBurned,
+        mostWorkoutsDone,
+        highestWeightLifted,
+        highestTotalVolume,
       });
     }
 

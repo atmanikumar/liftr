@@ -22,6 +22,7 @@ import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import EventBusyIcon from '@mui/icons-material/EventBusy';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import Loader from '@/components/common/Loader';
 
 export default function StatsPage() {
@@ -65,14 +66,36 @@ export default function StatsPage() {
 
   const { userStats, mostConsistent, isAdmin } = statsData;
 
+  // Find winners for each category
+  const winners = {
+    streak: userStats.reduce((max, user) => user.currentStreak > (max?.currentStreak || 0) ? user : max, userStats[0]),
+    workouts: userStats.reduce((max, user) => (user.mostWorkoutsDone?.count || 0) > (max?.mostWorkoutsDone?.count || 0) ? user : max, userStats[0]),
+    weight: userStats.reduce((max, user) => (user.highestWeightLifted?.weight || 0) > (max?.highestWeightLifted?.weight || 0) ? user : max, userStats[0]),
+  };
+
+  // Count wins per user
+  const winCounts = {};
+  Object.values(winners).forEach(winner => {
+    if (winner) {
+      const key = winner.userId;
+      winCounts[key] = (winCounts[key] || 0) + 1;
+    }
+  });
+
+  // Find user with most wins
+  const championUserId = Object.entries(winCounts).reduce((max, [userId, count]) => 
+    count > (max.count || 0) ? { userId: parseInt(userId), count } : max, { count: 0 }
+  ).userId;
+  const champion = userStats.find(u => u.userId === championUserId);
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
         {isAdmin ? 'Workout Statistics' : 'My Statistics'}
       </Typography>
 
-      {/* Most Consistent User - Hero Card */}
-      {mostConsistent && mostConsistent.consistency > 0 && (
+      {/* Champion - User with Most Wins */}
+      {champion && winCounts[champion.userId] > 0 && (
         <Paper 
           sx={{ 
             p: 4, 
@@ -96,29 +119,18 @@ export default function StatsPage() {
             </Avatar>
             <Box sx={{ flexGrow: 1 }}>
               <Typography variant="h5" sx={{ mb: 1, color: '#c4ff0d', fontWeight: 600 }}>
-                🏆 Most Consistent {isAdmin ? 'Member' : 'You!'}
+                🏆 Overall Champion {!isAdmin && '(You!)'}
               </Typography>
               <Typography variant="h4" sx={{ mb: 1 }}>
-                {mostConsistent.name || mostConsistent.username}
+                {champion.name || champion.username}
               </Typography>
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 2 }}>
                 <Chip 
-                  icon={<LocalFireDepartmentIcon />}
-                  label={`${mostConsistent.consistency} days consistent (last 7 days)`}
+                  icon={<EmojiEventsIcon />}
+                  label={`${winCounts[champion.userId]} category ${winCounts[champion.userId] === 1 ? 'win' : 'wins'}`}
                   sx={{ 
                     bgcolor: 'rgba(196, 255, 13, 0.2)', 
                     color: '#c4ff0d',
-                    fontWeight: 600,
-                    fontSize: '1rem',
-                    px: 1,
-                  }}
-                />
-                <Chip 
-                  icon={<TrendingUpIcon />}
-                  label={`${mostConsistent.currentStreak} day current streak`}
-                  sx={{ 
-                    bgcolor: 'rgba(139, 92, 246, 0.2)', 
-                    color: '#8b5cf6',
                     fontWeight: 600,
                     fontSize: '1rem',
                     px: 1,
@@ -130,188 +142,104 @@ export default function StatsPage() {
         </Paper>
       )}
 
-      {/* Stats Grid */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* Total Users Working Out */}
-        {isAdmin && (
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Avatar sx={{ bgcolor: 'rgba(196, 255, 13, 0.2)' }}>
-                    <CalendarTodayIcon sx={{ color: '#c4ff0d' }} />
-                  </Avatar>
-                  <Box>
-                    <Typography variant="h4" sx={{ color: '#c4ff0d' }}>
-                      {userStats.filter(u => u.totalWorkoutDays > 0).length}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Active Members
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
-
-        {/* Longest Break */}
-        <Grid item xs={12} sm={6} md={isAdmin ? 4 : 6}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Avatar sx={{ bgcolor: 'rgba(244, 67, 54, 0.2)' }}>
-                  <EventBusyIcon sx={{ color: '#f44336' }} />
-                </Avatar>
-                <Box>
-                  <Typography variant="h4" sx={{ color: '#f44336' }}>
-                    {userStats.length > 0 
-                      ? Math.max(...userStats.map(u => u.longestBreak))
-                      : 0}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Longest Break (days)
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
+      {/* Records with Winners - 2 Columns */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
         {/* Best Streak */}
-        <Grid item xs={12} sm={6} md={isAdmin ? 4 : 6}>
-          <Card>
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%' }}>
             <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Avatar sx={{ bgcolor: 'rgba(255, 152, 0, 0.2)' }}>
-                  <TrendingUpIcon sx={{ color: '#ff9800' }} />
+              <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                <Avatar sx={{ bgcolor: 'rgba(255, 152, 0, 0.2)', width: 60, height: 60 }}>
+                  <TrendingUpIcon sx={{ color: '#ff9800', fontSize: '2rem' }} />
                 </Avatar>
-                <Box>
-                  <Typography variant="h4" sx={{ color: '#ff9800' }}>
-                    {userStats.length > 0 
-                      ? Math.max(...userStats.map(u => u.currentStreak))
-                      : 0}
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="h4" sx={{ color: '#ff9800', fontWeight: 700, mb: 0.5 }}>
+                    {winners.streak?.currentStreak || 0} days
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Best Current Streak
+                  <Typography variant="h6" sx={{ mb: 1 }}>
+                    Longest Current Streak
                   </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.4 }}>
+                    Consecutive workout days without breaking the chain.
+                    One rest day allowed between sessions.
+                  </Typography>
+                  <Chip 
+                    icon={<EmojiEventsIcon />}
+                    label={winners.streak?.username || 'N/A'} 
+                    size="small"
+                    sx={{ bgcolor: 'rgba(255, 152, 0, 0.15)', color: '#ff9800', fontWeight: 600 }}
+                  />
                 </Box>
               </Box>
             </CardContent>
           </Card>
         </Grid>
+
+        {/* Most Workouts Done */}
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                <Avatar sx={{ bgcolor: 'rgba(33, 150, 243, 0.2)', width: 60, height: 60 }}>
+                  <FitnessCenterIcon sx={{ color: '#2196f3', fontSize: '2rem' }} />
+                </Avatar>
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="h4" sx={{ color: '#2196f3', fontWeight: 700, mb: 0.5 }}>
+                    {winners.workouts?.mostWorkoutsDone?.count || 0} workouts
+                  </Typography>
+                  <Typography variant="h6" sx={{ mb: 1 }}>
+                    Most Workouts in One Day
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.4 }}>
+                    The highest number of different exercises completed
+                    in a single day session.
+                  </Typography>
+                  <Chip 
+                    icon={<EmojiEventsIcon />}
+                    label={winners.workouts?.username || 'N/A'} 
+                    size="small"
+                    sx={{ bgcolor: 'rgba(33, 150, 243, 0.15)', color: '#2196f3', fontWeight: 600 }}
+                  />
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Highest Weight Lifted */}
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                <Avatar sx={{ bgcolor: 'rgba(156, 39, 176, 0.2)', width: 60, height: 60 }}>
+                  <TrendingUpIcon sx={{ color: '#9c27b0', fontSize: '2rem' }} />
+                </Avatar>
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="h4" sx={{ color: '#9c27b0', fontWeight: 700, mb: 0.5 }}>
+                    {winners.weight?.highestWeightLifted?.weight || 0} {winners.weight?.highestWeightLifted?.unit || 'lbs'}
+                  </Typography>
+                  <Typography variant="h6" sx={{ mb: 1 }}>
+                    Heaviest Single Lift
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.4 }}>
+                    The maximum weight lifted in a single rep across
+                    all exercises. Pure strength record.
+                  </Typography>
+                  <Chip 
+                    icon={<EmojiEventsIcon />}
+                    label={winners.weight?.username || 'N/A'} 
+                    size="small"
+                    sx={{ bgcolor: 'rgba(156, 39, 176, 0.15)', color: '#9c27b0', fontWeight: 600 }}
+                  />
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
       </Grid>
 
-      {/* User Stats Table */}
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-          {isAdmin ? 'Member Statistics' : 'Your Statistics'}
-        </Typography>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell><strong>Rank</strong></TableCell>
-                <TableCell><strong>Name</strong></TableCell>
-                <TableCell align="center"><strong>Consistency (7d)</strong></TableCell>
-                <TableCell align="center"><strong>Current Streak</strong></TableCell>
-                <TableCell align="center"><strong>Total Days</strong></TableCell>
-                <TableCell align="center"><strong>Longest Break</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {userStats.map((user, index) => (
-                <TableRow 
-                  key={user.userId}
-                  sx={{ 
-                    bgcolor: index === 0 && user.consistency > 0 
-                      ? 'rgba(196, 255, 13, 0.03)' 
-                      : 'transparent',
-                  }}
-                >
-                  <TableCell>
-                    {index === 0 && user.consistency > 0 ? (
-                      <Chip 
-                        label="1st" 
-                        icon={<EmojiEventsIcon />}
-                        size="small"
-                        sx={{ 
-                          bgcolor: 'rgba(196, 255, 13, 0.2)', 
-                          color: '#c4ff0d',
-                          border: '1px solid rgba(196, 255, 13, 0.4)',
-                          fontWeight: 600,
-                        }} 
-                      />
-                    ) : (
-                      <Typography>{index + 1}</Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Box>
-                      <Typography variant="body1" fontWeight={600}>
-                        {user.name || user.username}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        @{user.username}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell align="center">
-                    <Chip 
-                      label={`${user.consistency} days`}
-                      icon={<LocalFireDepartmentIcon />}
-                      size="small"
-                      sx={{
-                        bgcolor: user.consistency >= 6 
-                          ? 'rgba(196, 255, 13, 0.2)' 
-                          : user.consistency >= 4
-                          ? 'rgba(255, 152, 0, 0.2)'
-                          : 'rgba(128, 128, 128, 0.2)',
-                        color: user.consistency >= 6 
-                          ? '#c4ff0d' 
-                          : user.consistency >= 4
-                          ? '#ff9800'
-                          : '#9e9e9e',
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell align="center">
-                    <Typography fontWeight={600}>
-                      {user.currentStreak} days
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="center">
-                    <Typography>
-                      {user.totalWorkoutDays}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="center">
-                    <Typography color={user.longestBreak > 7 ? 'error' : 'text.primary'}>
-                      {user.longestBreak} days
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
 
-      {/* Legend */}
-      <Paper sx={{ p: 2, mt: 3, bgcolor: 'rgba(255, 255, 255, 0.02)' }}>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-          <strong>Note:</strong>
-        </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-          • <strong>Consistency:</strong> Number of workout days in the last 7 days. One rest day is allowed without breaking consistency, but 2 consecutive rest days break the streak.
-        </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-          • <strong>Current Streak:</strong> Consecutive days of working out (with 1 rest day allowed).
-        </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-          • <strong>Longest Break:</strong> Maximum number of days between any two workouts.
-        </Typography>
-      </Paper>
     </Box>
   );
 }

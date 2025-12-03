@@ -98,7 +98,7 @@ export async function GET(request) {
       last30Days.push({
         date: dateStr,
         shortDate: `${date.getMonth() + 1}/${date.getDate()}`,
-        workouts: workoutSessionsByDate[dateStr] ? workoutSessionsByDate[dateStr].size : 0,
+        workouts: workoutsByDate[dateStr] ? workoutsByDate[dateStr].exercises.size : 0,
         sets: workoutsByDate[dateStr]?.totalSets || 0,
       });
     }
