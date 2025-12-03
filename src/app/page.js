@@ -143,7 +143,11 @@ export default function HomePage() {
         {/* Today's Achievements */}
         {todayAchievements.length > 0 && (
           <Grid item xs={12}>
-            <Paper sx={{ p: 3, bgcolor: 'rgba(196, 255, 13, 0.05)', border: '2px solid #c4ff0d' }}>
+            <Paper sx={{ 
+              p: 3, 
+              bgcolor: 'rgba(196, 255, 13, 0.08)', 
+              border: '1px solid rgba(196, 255, 13, 0.3)',
+            }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
                 <CheckCircleIcon sx={{ fontSize: 40, color: '#c4ff0d' }} />
                 <Box sx={{ flexGrow: 1 }}>
@@ -161,11 +165,13 @@ export default function HomePage() {
                   <Card 
                     key={idx} 
                     sx={{ 
-                      bgcolor: 'rgba(196, 255, 13, 0.03)', 
+                      bgcolor: 'rgba(255, 255, 255, 0.05)', 
                       border: '1px solid rgba(196, 255, 13, 0.2)',
-                      transition: 'none',
+                      transition: 'all 0.2s',
                       '&:hover': {
-                        bgcolor: 'rgba(196, 255, 13, 0.05)',
+                        bgcolor: 'rgba(255, 255, 255, 0.08)',
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 4px 12px rgba(196, 255, 13, 0.2)',
                       }
                     }}
                   >
@@ -185,7 +191,13 @@ export default function HomePage() {
                           label={`+${ach.improvement} ${ach.unit}`}
                           size="small"
                           icon={<TrendingUpIcon />}
-                          sx={{ ml: 'auto', bgcolor: '#c4ff0d', color: '#000', fontWeight: 'bold' }}
+                          sx={{ 
+                            ml: 'auto', 
+                            bgcolor: 'rgba(196, 255, 13, 0.2)', 
+                            color: '#c4ff0d', 
+                            fontWeight: 'bold',
+                            border: '1px solid rgba(196, 255, 13, 0.4)',
+                          }}
                         />
                       </Box>
                     </CardContent>
@@ -196,7 +208,15 @@ export default function HomePage() {
               <Button
                 variant="outlined"
                 onClick={() => router.push('/progress')}
-                sx={{ mt: 3, borderColor: '#c4ff0d', color: '#c4ff0d' }}
+                sx={{ 
+                  mt: 3, 
+                  borderColor: '#c4ff0d', 
+                  color: '#c4ff0d',
+                  '&:hover': {
+                    borderColor: '#c4ff0d',
+                    bgcolor: 'rgba(196, 255, 13, 0.1)',
+                  }
+                }}
                 fullWidth
               >
                 View All Progress →
