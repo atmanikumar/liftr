@@ -1,7 +1,6 @@
 'use client';
 
-import { Box, Typography } from '@mui/material';
-import Image from 'next/image';
+import { Box, Typography, CircularProgress } from '@mui/material';
 import { keyframes } from '@mui/material/styles';
 
 const pulse = keyframes`
@@ -13,8 +12,8 @@ const pulse = keyframes`
   }
 `;
 
-export default function Loader({ message = 'Loading...', fullScreen = false }) {
-  const size = fullScreen ? 120 : 80;
+export default function Loader({ message = 'Loading...', fullScreen = false, size }) {
+  const loaderSize = size || (fullScreen ? 60 : 40);
   
   const content = (
     <Box
@@ -23,27 +22,29 @@ export default function Loader({ message = 'Loading...', fullScreen = false }) {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 3,
-        padding: 4,
+        gap: 2,
+        padding: 3,
       }}
     >
-      <Image 
-        src="/loader.gif" 
-        alt="Loading..." 
-        width={size} 
-        height={size}
-        unoptimized
-        priority
+      {/* Themed Circular Progress */}
+      <CircularProgress
+        size={loaderSize}
+        thickness={4}
+        sx={{
+          color: '#c4ff0d',
+          animationDuration: '1.5s',
+        }}
       />
 
       {message && (
         <Typography 
-          variant={fullScreen ? "h6" : "body1"}
+          variant={fullScreen ? "body1" : "body2"}
           sx={{ 
             color: '#c4ff0d',
             fontWeight: 500,
             textAlign: 'center',
-            animation: `${pulse} 2s ease-in-out infinite`
+            animation: `${pulse} 2s ease-in-out infinite`,
+            mt: 1,
           }}
         >
           {message}
@@ -66,6 +67,7 @@ export default function Loader({ message = 'Loading...', fullScreen = false }) {
           justifyContent: 'center',
           background: '#000000',
           zIndex: 9999,
+          backdropFilter: 'blur(8px)',
         }}
       >
         {content}

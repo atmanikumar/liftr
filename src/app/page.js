@@ -290,6 +290,7 @@ export default function HomePage() {
                               showBreakdown={false}
                               showLegend={false}
                               autoRotate={true}
+                              useGradient={false}
                             />
                           </Box>
                         )}
@@ -343,7 +344,7 @@ export default function HomePage() {
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mb: 2 }}>
                     Last 7 days • Auto-resets after 1 week of rest
                   </Typography>
-                  <MuscleBodyMap muscleDistribution={progressData.muscleDistribution} />
+                  <MuscleBodyMap muscleDistribution={progressData.muscleDistribution} useGradient={true} />
                 </Paper>
               </Grid>
             )}
@@ -544,6 +545,7 @@ export default function HomePage() {
                                   showBreakdown={false}
                                   showLegend={false}
                                   autoRotate={true}
+                                  useGradient={false}
                                 />
                               </Box>
                             )}
@@ -601,6 +603,7 @@ export default function HomePage() {
             showBreakdown={true}
             showLegend={true}
             autoRotate={true}
+            useGradient={true}
           />
         </DialogContent>
       </Dialog>

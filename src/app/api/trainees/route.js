@@ -17,14 +17,26 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Get all users where trainerId matches the current user
-    const trainees = await query(
-      `SELECT id, username, name, role, lastLogin, createdAt
-       FROM liftr_users
-       WHERE trainerId = ?
-       ORDER BY username ASC`,
-      [userId]
-    );
+    let trainees;
+    
+    // Admins can see all users, trainers only see their trainees
+    if (userRole === 'admin') {
+      trainees = await query(
+        `SELECT id, username, name, role, lastLogin, createdAt, trainerId
+         FROM liftr_users
+         WHERE role = 'user'
+         ORDER BY username ASC`
+      );
+    } else {
+      // Get all users where trainerId matches the current user
+      trainees = await query(
+        `SELECT id, username, name, role, lastLogin, createdAt, trainerId
+         FROM liftr_users
+         WHERE trainerId = ?
+         ORDER BY username ASC`,
+        [userId]
+      );
+    }
 
     return NextResponse.json({
       trainees,
@@ -34,4 +46,5 @@ export async function GET(request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
 

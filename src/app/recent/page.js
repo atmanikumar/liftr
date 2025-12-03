@@ -86,16 +86,6 @@ export default function RecentWorkoutsPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => router.push('/')}
-          sx={{ color: '#c4ff0d' }}
-        >
-          Back
-        </Button>
-      </Box>
-
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4">Recent Workouts</Typography>
         
@@ -239,6 +229,7 @@ export default function RecentWorkoutsPage() {
                         showBreakdown={false}
                         showLegend={false}
                         autoRotate={true}
+                        useGradient={false}
                       />
                     </Box>
                   )}

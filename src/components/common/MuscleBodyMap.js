@@ -4,6 +4,41 @@ import { Box, Typography, ToggleButton, ToggleButtonGroup } from '@mui/material'
 import { useState, useMemo } from 'react';
 import Model from 'react-body-highlighter';
 
+// Valid muscle names that the library accepts (from DEFAULT_MUSCLE_DATA)
+const VALID_LIBRARY_MUSCLES = [
+  'trapezius', 'upper-back', 'lower-back', 'chest', 'biceps', 'triceps', 
+  'forearm', 'back-deltoids', 'front-deltoids', 'abs', 'obliques', 
+  'adductor', 'hamstring', 'quadriceps', 'abductors', 'calves', 'gluteal',
+  'head', 'neck', 'knees', 'left-soleus', 'right-soleus'
+];
+
+// Map our muscle names to the library's muscle names
+const muscleMapping = {
+  'Chest': 'chest',
+  'Shoulders': ['front-deltoids', 'back-deltoids'],
+  'Back': ['trapezius', 'upper-back', 'lower-back'],
+  'Biceps': 'biceps',
+  'Triceps': 'triceps',
+  'Forearms': 'forearm',
+  'Forearm': 'forearm',
+  'Abs': 'abs',
+  'Obliques': 'obliques',
+  'Quads': 'quadriceps',
+  'Quadriceps': 'quadriceps',
+  'Hamstrings': 'hamstring',
+  'Hamstring': 'hamstring',
+  'Calves': 'calves',
+  'Glutes': 'gluteal',
+  'Gluteal': 'gluteal',
+  'Lats': 'upper-back',
+  'Traps': 'trapezius',
+  'Trapezius': 'trapezius',
+  'Lower Back': 'lower-back',
+  'Adductors': 'adductor',
+  'Adductor': 'adductor',
+  'Legs': ['quadriceps', 'hamstring', 'calves'],
+};
+
 export default function MuscleBodyMap({ 
   muscleDistribution = [], 
   size = 'large', // 'small', 'medium', or 'large'
@@ -14,6 +49,7 @@ export default function MuscleBodyMap({
   selectable = false, // Allow clicking to select muscles
   onMuscleSelect = null, // Callback when muscle is selected
   selectedMuscle = null, // Currently selected muscle
+  useGradient = true, // Use 5-shade gradient (home page) vs direct max highlight (other pages)
 }) {
   const [hoveredMuscle, setHoveredMuscle] = useState(null);
 
@@ -47,41 +83,6 @@ export default function MuscleBodyMap({
 
   // Calculate max count for normalization
   const maxCount = Math.max(...validMuscleDistribution.map(m => m.count), 1);
-
-  // Valid muscle names that the library accepts (from DEFAULT_MUSCLE_DATA)
-  const VALID_LIBRARY_MUSCLES = [
-    'trapezius', 'upper-back', 'lower-back', 'chest', 'biceps', 'triceps', 
-    'forearm', 'back-deltoids', 'front-deltoids', 'abs', 'obliques', 
-    'adductor', 'hamstring', 'quadriceps', 'abductors', 'calves', 'gluteal',
-    'head', 'neck', 'knees', 'left-soleus', 'right-soleus'
-  ];
-
-  // Map our muscle names to the library's muscle names
-  const muscleMapping = {
-    'Chest': 'chest',
-    'Shoulders': ['front-deltoids', 'back-deltoids'],
-    'Back': ['trapezius', 'upper-back', 'lower-back'],
-    'Biceps': 'biceps',
-    'Triceps': 'triceps',
-    'Forearms': 'forearm',
-    'Forearm': 'forearm',
-    'Abs': 'abs',
-    'Obliques': 'obliques',
-    'Quads': 'quadriceps',
-    'Quadriceps': 'quadriceps',
-    'Hamstrings': 'hamstring',
-    'Hamstring': 'hamstring',
-    'Calves': 'calves',
-    'Glutes': 'gluteal',
-    'Gluteal': 'gluteal',
-    'Lats': 'upper-back',
-    'Traps': 'trapezius',
-    'Trapezius': 'trapezius',
-    'Lower Back': 'lower-back',
-    'Adductors': 'adductor',
-    'Adductor': 'adductor',
-    'Legs': ['quadriceps', 'hamstring', 'calves'],
-  };
 
   const exerciseData = useMemo(() => {
     if (!validMuscleDistribution || validMuscleDistribution.length === 0) {
@@ -128,7 +129,11 @@ export default function MuscleBodyMap({
       
       // IMPORTANT: Only add exercises if we have valid muscles array
       if (Array.isArray(uniqueMuscles) && uniqueMuscles.length > 0 && muscle.count > 0) {
-        for (let i = 0; i < muscle.count; i++) {
+        // If useGradient is false, add only 1 exercise per muscle (no intensity)
+        // If useGradient is true, add exercises based on count (for intensity shading)
+        const countToAdd = useGradient ? muscle.count : 1;
+        
+        for (let i = 0; i < countToAdd; i++) {
           const exercise = {
             name: `${muscleName} Exercise ${i + 1}`,
             muscles: uniqueMuscles  // Must be a valid array of library-recognized muscles
@@ -155,20 +160,26 @@ export default function MuscleBodyMap({
     } catch (error) {
       return [];
     }
-  }, [validMuscleDistribution]);
+  }, [validMuscleDistribution, useGradient]);
 
   const highlightedColors = useMemo(() => {
     if (!validMuscleDistribution || validMuscleDistribution.length === 0) {
       return ['#c4ff0d'];
     }
 
-    // 5 fixed shades from lightest to darkest (#c4ff0d is the base)
+    const baseColor = { r: 196, g: 255, b: 13 }; // #c4ff0d
+    
+    // If useGradient is false, use full bright color for all muscles
+    if (!useGradient) {
+      return [`rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, 1.0)`]; // Full brightness
+    }
+
+    // For gradient mode: 5 fixed shades from lightest to darkest
     // Level 1 (lightest): 20% opacity
     // Level 2: 40% opacity
     // Level 3: 60% opacity
     // Level 4: 80% opacity
     // Level 5 (darkest): 100% opacity (pure #c4ff0d)
-    const baseColor = { r: 196, g: 255, b: 13 }; // #c4ff0d
     const shades = [
       `rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, 0.2)`,  // Level 1 - lightest
       `rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, 0.4)`,  // Level 2
@@ -188,7 +199,7 @@ export default function MuscleBodyMap({
     }
     
     return colors.length > 0 ? colors : [shades[4]]; // Default to darkest shade
-  }, [validMuscleDistribution]);
+  }, [validMuscleDistribution, useGradient]);
 
   // Don't render if no valid data
   if (!validMuscleDistribution || validMuscleDistribution.length === 0) {

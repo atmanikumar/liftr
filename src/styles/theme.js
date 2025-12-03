@@ -46,31 +46,31 @@ export const darkTheme = createTheme({
   typography: {
     fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
     h1: {
-      fontSize: '2.5rem',
+      fontSize: 'clamp(1.75rem, 5vw, 2.5rem)',
       fontWeight: 700,
       letterSpacing: '-0.02em',
     },
     h2: {
-      fontSize: '2rem',
+      fontSize: 'clamp(1.5rem, 4vw, 2rem)',
       fontWeight: 700,
       letterSpacing: '-0.01em',
     },
     h3: {
-      fontSize: '1.75rem',
+      fontSize: 'clamp(1.25rem, 3.5vw, 1.75rem)',
       fontWeight: 600,
       letterSpacing: '-0.01em',
     },
     h4: {
-      fontSize: '1.5rem',
+      fontSize: 'clamp(1.125rem, 3vw, 1.5rem)',
       fontWeight: 600,
       letterSpacing: '-0.01em',
     },
     h5: {
-      fontSize: '1.25rem',
+      fontSize: 'clamp(1rem, 2.5vw, 1.25rem)',
       fontWeight: 600,
     },
     h6: {
-      fontSize: '1rem',
+      fontSize: 'clamp(0.875rem, 2vw, 1rem)',
       fontWeight: 600,
     },
     button: {
@@ -81,6 +81,15 @@ export const darkTheme = createTheme({
   },
   shape: {
     borderRadius: 12,
+  },
+  breakpoints: {
+    values: {
+      xs: 0,
+      sm: 600,
+      md: 960,
+      lg: 1280,
+      xl: 1920,
+    },
   },
   components: {
     MuiCssBaseline: {
@@ -95,15 +104,19 @@ export const darkTheme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 12,
-          padding: '12px 24px',
+          padding: 'clamp(8px, 2vw, 12px) clamp(16px, 4vw, 24px)',
           fontWeight: 600,
           boxShadow: 'none',
           textTransform: 'none',
-          fontSize: '1rem',
-          transition: 'all 0.3s ease',
+          fontSize: 'clamp(0.875rem, 2vw, 1rem)',
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          willChange: 'transform, box-shadow',
           '&:hover': {
             boxShadow: 'none',
             transform: 'translateY(-2px)',
+          },
+          '&:active': {
+            transform: 'translateY(0)',
           },
         },
         contained: {

@@ -27,7 +27,6 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SearchIcon from '@mui/icons-material/Search';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import {
@@ -156,16 +155,6 @@ export default function WorkoutsPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => router.push('/')}
-          sx={{ color: '#c4ff0d' }}
-        >
-          Back
-        </Button>
-      </Box>
-
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4">Workouts</Typography>
         <Button
@@ -252,6 +241,7 @@ export default function WorkoutsPage() {
                       showBreakdown={false}
                       showLegend={false}
                       autoRotate={true}
+                      useGradient={false}
                     />
                   </Box>
                 )}
@@ -397,6 +387,7 @@ export default function WorkoutsPage() {
                 selectable={true}
                 selectedMuscle={formData.muscleFocus}
                 onMuscleSelect={(muscle) => setFormData({ ...formData, muscleFocus: muscle })}
+                useGradient={false}
               />
             </Box>
             <TextField

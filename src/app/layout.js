@@ -14,7 +14,7 @@ export default function RootLayout({ children }) {
       <head>
         <title>Liftr - Fitness Tracking App</title>
         <meta name="description" content="Track your fitness journey with Liftr" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover" />
         
         {/* PWA Meta Tags */}
         <meta name="application-name" content="Liftr" />

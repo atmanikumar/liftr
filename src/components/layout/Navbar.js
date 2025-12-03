@@ -2,6 +2,7 @@
 
 import { AppBar, Toolbar, IconButton, Typography, Box, Avatar, Menu, MenuItem, Divider, ListItemIcon, ListItemText, Chip } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SwitchAccountIcon from '@mui/icons-material/SwitchAccount';
@@ -10,18 +11,22 @@ import CheckIcon from '@mui/icons-material/Check';
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout, selectUser, selectViewingAs, selectIsTrainer, setViewingAs, clearViewingAs } from '@/redux/slices/authSlice';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 
 export default function Navbar({ onMenuClick }) {
   const dispatch = useDispatch();
   const router = useRouter();
+  const pathname = usePathname();
   const user = useSelector(selectUser);
   const viewingAs = useSelector(selectViewingAs);
   const isTrainer = useSelector(selectIsTrainer);
   const [profileAnchorEl, setProfileAnchorEl] = useState(null);
   const [viewAsAnchorEl, setViewAsAnchorEl] = useState(null);
   const [trainees, setTrainees] = useState([]);
+
+  // Determine if we should show back button (not on home page)
+  const showBackButton = pathname !== '/';
 
   // Fetch trainees if user is a trainer
   useEffect(() => {
@@ -99,15 +104,40 @@ export default function Navbar({ onMenuClick }) {
         paddingLeft: 'calc(16px + env(safe-area-inset-left, 0px))',
         paddingRight: 'calc(16px + env(safe-area-inset-right, 0px))',
       }}>
+        {/* Left side: Hamburger menu (always visible) */}
         <IconButton
           color="inherit"
           aria-label="open drawer"
           edge="start"
           onClick={onMenuClick}
-          sx={{ mr: 2 }}
+          sx={{ 
+            mr: 1,
+            color: '#c4ff0d',
+            '&:hover': {
+              backgroundColor: 'rgba(196, 255, 13, 0.1)',
+            }
+          }}
         >
           <MenuIcon />
         </IconButton>
+
+        {/* Back button (shown when not on home page) */}
+        {showBackButton && (
+          <IconButton
+            color="inherit"
+            aria-label="back"
+            onClick={() => router.back()}
+            sx={{ 
+              mr: 1,
+              color: '#c4ff0d',
+              '&:hover': {
+                backgroundColor: 'rgba(196, 255, 13, 0.1)',
+              }
+            }}
+          >
+            <ArrowBackIcon />
+          </IconButton>
+        )}
 
         <Link href="/" passHref style={{ textDecoration: 'none', color: 'inherit', flexGrow: 1 }}>
           <Typography 

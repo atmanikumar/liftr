@@ -27,6 +27,7 @@ export async function GET(request) {
     const workoutsByExercise = {};
     const workoutsByDate = {};
     const workoutsByMuscle = {};
+    const workoutSessionsByDate = {}; // Track unique workout sessions by date
     let totalSets = 0;
     let totalReps = 0;
     let totalWeight = 0;
@@ -66,6 +67,12 @@ export async function GET(request) {
       workoutsByDate[date].programs.add(session.programName);
       workoutsByDate[date].totalSets++;
       workoutsByDate[date].exercises.add(session.workoutName);
+      
+      // Track unique workout sessions per date
+      if (!workoutSessionsByDate[date]) {
+        workoutSessionsByDate[date] = new Set();
+      }
+      workoutSessionsByDate[date].add(session.completedAt);
 
       // By muscle group
       if (session.muscleFocus) {
@@ -91,7 +98,7 @@ export async function GET(request) {
       last30Days.push({
         date: dateStr,
         shortDate: `${date.getMonth() + 1}/${date.getDate()}`,
-        workouts: workoutsByDate[dateStr] ? 1 : 0,
+        workouts: workoutSessionsByDate[dateStr] ? workoutSessionsByDate[dateStr].size : 0,
         sets: workoutsByDate[dateStr]?.totalSets || 0,
       });
     }

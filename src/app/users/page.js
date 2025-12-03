@@ -30,7 +30,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import {
@@ -41,8 +41,9 @@ import {
   selectUsers,
   selectUsersLoading,
 } from '@/redux/slices/usersSlice';
-import { selectUser } from '@/redux/slices/authSlice';
+import { selectUser, selectViewingAs, setViewingAs, clearViewingAs } from '@/redux/slices/authSlice';
 import Loader from '@/components/common/Loader';
+import { formatDateTimeIST } from '@/lib/timezone';
 
 export default function UsersPage() {
   const dispatch = useDispatch();
@@ -50,6 +51,7 @@ export default function UsersPage() {
   const users = useSelector(selectUsers);
   const loading = useSelector(selectUsersLoading);
   const currentUser = useSelector(selectUser);
+  const viewingAs = useSelector(selectViewingAs);
   const isAdmin = currentUser?.role === 'admin';
   const isTrainer = currentUser?.role === 'trainer';
 
@@ -135,31 +137,60 @@ export default function UsersPage() {
     setDeleteDialogOpen(true);
   };
 
+  const handleViewAs = (user) => {
+    dispatch(setViewingAs(user));
+    setSnackbar({ 
+      open: true, 
+      message: `Now viewing as ${user.username}`, 
+      severity: 'info' 
+    });
+    // Navigate to home page to see the user's view
+    router.push('/');
+  };
+
+  const handleViewAsMyself = () => {
+    dispatch(clearViewingAs());
+    setSnackbar({ 
+      open: true, 
+      message: `Viewing as yourself (${currentUser?.username})`, 
+      severity: 'success' 
+    });
+    router.push('/');
+  };
+
   if (loading && users.length === 0) {
     return <Loader fullScreen message="Loading users..." />;
   }
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => router.push('/')}
-          sx={{ color: '#c4ff0d' }}
-        >
-          Back
-        </Button>
-      </Box>
-
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4">Users Management</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setAddDialogOpen(true)}
-        >
-          Add
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          {isAdmin && viewingAs && (
+            <Button
+              variant="outlined"
+              onClick={handleViewAsMyself}
+              sx={{
+                color: '#c4ff0d',
+                borderColor: '#c4ff0d',
+                '&:hover': {
+                  borderColor: '#c4ff0d',
+                  bgcolor: 'rgba(196, 255, 13, 0.1)',
+                }
+              }}
+            >
+              View As Myself
+            </Button>
+          )}
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setAddDialogOpen(true)}
+          >
+            Add
+          </Button>
+        </Box>
       </Box>
 
       {/* Users Table - Simplified with Collapsible Details */}
@@ -194,13 +225,33 @@ export default function UsersPage() {
                   </TableCell>
                   <TableCell>
                     {user.lastLogin 
-                      ? new Date(user.lastLogin).toLocaleString()
+                      ? formatDateTimeIST(user.lastLogin)
                       : 'Never'}
                   </TableCell>
                   <TableCell>
-                    <IconButton size="small">
-                      {expandedUser === user.id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                    </IconButton>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {isAdmin && user.role !== 'admin' && (
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewAs(user);
+                          }}
+                          title="View As This User"
+                          sx={{ 
+                            color: '#c4ff0d',
+                            '&:hover': {
+                              bgcolor: 'rgba(196, 255, 13, 0.1)',
+                            }
+                          }}
+                        >
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                      <IconButton size="small">
+                        {expandedUser === user.id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                      </IconButton>
+                    </Box>
                   </TableCell>
                 </TableRow>
                 <TableRow key={`${user.id}-details`}>
@@ -219,7 +270,7 @@ export default function UsersPage() {
                               Created At
                             </Typography>
                             <Typography variant="body2">
-                              {user.createdAt ? new Date(user.createdAt).toLocaleString() : 'N/A'}
+                              {user.createdAt ? formatDateTimeIST(user.createdAt) : 'N/A'}
                             </Typography>
                           </Box>
                           <Box>
@@ -240,6 +291,24 @@ export default function UsersPage() {
                           )}
                           {isAdmin && (
                             <Box sx={{ display: 'flex', gap: 1, pt: 1 }}>
+                              {user.role !== 'admin' && (
+                                <IconButton
+                                  sx={{ 
+                                    color: '#c4ff0d',
+                                    '&:hover': {
+                                      bgcolor: 'rgba(196, 255, 13, 0.1)',
+                                    }
+                                  }}
+                                  size="small"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewAs(user);
+                                  }}
+                                  title="View As This User"
+                                >
+                                  <VisibilityIcon fontSize="small" />
+                                </IconButton>
+                              )}
                               <IconButton
                                 color="primary"
                                 size="small"

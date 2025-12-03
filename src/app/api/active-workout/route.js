@@ -10,7 +10,35 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = authResult.user.id;
+    const authenticatedUserId = authResult.user.id;
+    const userRole = authResult.user.role;
+    
+    // Check if viewing as another user (for trainers/admins)
+    const { searchParams } = new URL(request.url);
+    const viewAsUserId = searchParams.get('viewAs');
+    
+    let userId = authenticatedUserId;
+    
+    // If viewAs is specified, verify the trainer has permission
+    if (viewAsUserId) {
+      if (userRole !== 'trainer' && userRole !== 'admin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      
+      // Verify the trainee belongs to this trainer (skip for admin)
+      if (userRole === 'trainer') {
+        const traineeCheck = await query(
+          'SELECT id FROM liftr_users WHERE id = ? AND trainerId = ?',
+          [parseInt(viewAsUserId), authenticatedUserId]
+        );
+        
+        if (traineeCheck.length === 0) {
+          return NextResponse.json({ error: 'Not authorized to view this user' }, { status: 403 });
+        }
+      }
+      
+      userId = parseInt(viewAsUserId);
+    }
 
     const activeWorkouts = await query(
       'SELECT * FROM liftr_active_workouts WHERE userId = ? ORDER BY startedAt DESC LIMIT 1',

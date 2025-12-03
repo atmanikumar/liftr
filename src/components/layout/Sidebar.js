@@ -10,6 +10,8 @@ import {
   Toolbar,
   Box,
   Divider,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
@@ -17,11 +19,14 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import HistoryIcon from '@mui/icons-material/History';
 import PeopleIcon from '@mui/icons-material/People';
 import HomeIcon from '@mui/icons-material/Home';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { selectUser } from '@/redux/slices/authSlice';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import DumbbellIcon from '@/components/common/DumbbellIcon';
 
@@ -34,6 +39,8 @@ const iconMap = {
   HistoryIcon: HistoryIcon,
   PeopleIcon: PeopleIcon,
   HomeIcon: HomeIcon,
+  BarChartIcon: BarChartIcon,
+  EmojiEventsIcon: EmojiEventsIcon,
 };
 
 const menuItems = [
@@ -56,9 +63,21 @@ const menuItems = [
     adminOnly: false,
   },
   {
+    title: 'My Total Progress',
+    path: '/progress',
+    icon: 'TrendingUpIcon',
+    adminOnly: false,
+  },
+  {
     title: 'Recent Workouts',
     path: '/recent',
     icon: 'HistoryIcon',
+    adminOnly: false,
+  },
+  {
+    title: 'Statistics',
+    path: '/stats',
+    icon: 'BarChartIcon',
     adminOnly: false,
   },
   {
@@ -76,6 +95,13 @@ export default function Sidebar({ open, onClose, variant = 'temporary' }) {
   const user = useSelector(selectUser);
   const isAdmin = user?.role === 'admin';
   const isTrainer = user?.role === 'trainer';
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    router.refresh();
+    window.location.reload();
+  };
 
   const filteredMenuItems = menuItems.filter((item) => {
     if (item.adminOnly) {
@@ -101,10 +127,11 @@ export default function Sidebar({ open, onClose, variant = 'temporary' }) {
   };
 
   const drawerContent = (
-    <Box>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Toolbar />
       <Divider />
-      <List>
+      
+      <List sx={{ flexGrow: 1 }}>
         {filteredMenuItems.map((item, index) => {
           const IconComponent = iconMap[item.icon];
           const isActive = pathname === item.path;
@@ -154,6 +181,49 @@ export default function Sidebar({ open, onClose, variant = 'temporary' }) {
           );
         })}
       </List>
+      
+      {/* Refresh Button at Bottom */}
+      <Box sx={{ p: 2, mt: 'auto' }}>
+        <Divider sx={{ mb: 2 }} />
+        <Tooltip title="Refresh Page" placement="right">
+          <ListItemButton
+            onClick={handleRefresh}
+            disabled={refreshing}
+            sx={{
+              color: '#c4ff0d',
+              borderRadius: 2,
+              border: '1px solid rgba(196, 255, 13, 0.3)',
+              justifyContent: 'center',
+              py: 1.5,
+              '&:hover': {
+                backgroundColor: 'rgba(196, 255, 13, 0.1)',
+                border: '1px solid rgba(196, 255, 13, 0.5)',
+              },
+              '&:disabled': {
+                color: 'rgba(196, 255, 13, 0.5)',
+              },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 'auto', mr: 1, color: 'inherit' }}>
+              <RefreshIcon 
+                sx={{ 
+                  animation: refreshing ? 'spin 1s linear infinite' : 'none',
+                  '@keyframes spin': {
+                    '0%': { transform: 'rotate(0deg)' },
+                    '100%': { transform: 'rotate(360deg)' },
+                  },
+                }} 
+              />
+            </ListItemIcon>
+            <ListItemText 
+              primary="Refresh" 
+              primaryTypographyProps={{
+                sx: { color: 'inherit', fontWeight: 600 }
+              }}
+            />
+          </ListItemButton>
+        </Tooltip>
+      </Box>
     </Box>
   );
 

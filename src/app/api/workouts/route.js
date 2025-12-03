@@ -2,14 +2,34 @@ import { NextResponse } from 'next/server';
 import { query, execute } from '@/services/database/dbService';
 import { requireAuth } from '@/lib/authMiddleware';
 
-// GET all workouts
-export async function GET() {
+// GET all workouts with optional pagination
+export async function GET(request) {
   try {
-    const workouts = await query('SELECT * FROM liftr_workouts ORDER BY createdAt DESC');
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page')) || 1;
+    const limit = parseInt(searchParams.get('limit')) || 1000; // Default to large number for backward compatibility
+    const offset = (page - 1) * limit;
+
+    // Get total count
+    const countResult = await query('SELECT COUNT(*) as total FROM liftr_workouts');
+    const total = countResult[0].total;
+
+    // Get paginated workouts
+    const workouts = await query(
+      'SELECT * FROM liftr_workouts ORDER BY createdAt DESC LIMIT ? OFFSET ?',
+      [limit, offset]
+    );
 
     return NextResponse.json({
       success: true,
       workouts,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: offset + workouts.length < total,
+      },
     });
   } catch (error) {
     console.error('Fetch workouts error:', error);

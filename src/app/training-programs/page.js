@@ -33,7 +33,6 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CircularProgress from '@mui/material/CircularProgress';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
@@ -245,16 +244,6 @@ export default function TrainingProgramsPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => router.push('/')}
-          sx={{ color: '#c4ff0d' }}
-        >
-          Back
-        </Button>
-      </Box>
-
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4" sx={{ flexGrow: 1, minWidth: 'fit-content' }}>
           Workout Plans
@@ -292,8 +281,9 @@ export default function TrainingProgramsPage() {
                     size="small"
                     showToggle={false}
                     showBreakdown={false}
-                    showLegend={true}
+                    showLegend={false}
                     autoRotate={true}
+                    useGradient={false}
                   />
                 </Box>
 

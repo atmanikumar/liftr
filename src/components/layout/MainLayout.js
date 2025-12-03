@@ -68,12 +68,30 @@ export default function MainLayout({ children }) {
           flexGrow: 1,
           width: '100%',
           minHeight: '100vh',
+          maxWidth: '100vw',
+          overflow: 'hidden',
           backgroundColor: 'background.default',
-          // Account for navbar height (70px) + safe area inset + padding
-          paddingTop: 'calc(70px + env(safe-area-inset-top, 0px) + 24px)',
-          paddingLeft: 'calc(24px + env(safe-area-inset-left, 0px))',
-          paddingRight: 'calc(24px + env(safe-area-inset-right, 0px))',
-          paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
+          // Responsive padding with safe area insets
+          paddingTop: {
+            xs: 'calc(64px + env(safe-area-inset-top, 0px) + 16px)',
+            sm: 'calc(70px + env(safe-area-inset-top, 0px) + 20px)',
+            md: 'calc(70px + env(safe-area-inset-top, 0px) + 24px)',
+          },
+          paddingLeft: {
+            xs: 'calc(16px + env(safe-area-inset-left, 0px))',
+            sm: 'calc(20px + env(safe-area-inset-left, 0px))',
+            md: 'calc(24px + env(safe-area-inset-left, 0px))',
+          },
+          paddingRight: {
+            xs: 'calc(16px + env(safe-area-inset-right, 0px))',
+            sm: 'calc(20px + env(safe-area-inset-right, 0px))',
+            md: 'calc(24px + env(safe-area-inset-right, 0px))',
+          },
+          paddingBottom: {
+            xs: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+            sm: 'calc(20px + env(safe-area-inset-bottom, 0px))',
+            md: 'calc(24px + env(safe-area-inset-bottom, 0px))',
+          },
         }}
       >
         {children}

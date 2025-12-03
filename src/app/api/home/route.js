@@ -203,11 +203,12 @@ export async function GET(request) {
     });
 
     // 6. Get muscle distribution from last 7 days ONLY (muscles recover after 1 week)
+    // Count by SETS, not by workout sessions
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
     const last7DaysSessions = await query(
-      `SELECT w.muscleFocus
+      `SELECT ws.*, w.muscleFocus
        FROM liftr_workout_sessions ws
        JOIN liftr_workouts w ON ws.workoutId = w.id
        WHERE ws.userId = ? 
@@ -215,13 +216,14 @@ export async function GET(request) {
       [userId, sevenDaysAgo.toISOString()]
     );
 
-    // Count muscle workouts (each workout = 1 shade level)
+    // Count muscle sets (each set = 1 count for proper intensity distribution)
     const workoutsByMuscle = {};
     for (const session of last7DaysSessions) {
       if (session.muscleFocus) {
         if (!workoutsByMuscle[session.muscleFocus]) {
           workoutsByMuscle[session.muscleFocus] = 0;
         }
+        // Count this as 1 set (each session row is one set)
         workoutsByMuscle[session.muscleFocus]++;
       }
     }

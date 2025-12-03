@@ -497,17 +497,6 @@ export default function ActiveWorkoutPage() {
 
   return (
     <Box>
-      {/* Back Button */}
-      <Box sx={{ mb: 2 }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => router.push('/')}
-          sx={{ color: '#c4ff0d' }}
-        >
-          Back
-        </Button>
-      </Box>
-
       {/* Header with Muscle Map */}
       <Box sx={{ mb: 3, display: 'flex', gap: 3, alignItems: 'flex-start' }}>
         <Box sx={{ flexGrow: 1 }}>
@@ -538,6 +527,7 @@ export default function ActiveWorkoutPage() {
               showLegend={true}
               showBreakdown={false}
               autoRotate={true}
+              useGradient={false}
             />
           </Box>
         )}

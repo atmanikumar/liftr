@@ -83,17 +83,6 @@ export default function WorkoutSummaryPage() {
 
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => router.push('/')}
-          sx={{ color: '#c4ff0d' }}
-        >
-          Back
-        </Button>
-      </Box>
-
       {/* Workout Title */}
       <Paper sx={{ p: 3, mb: 3, background: 'linear-gradient(135deg, #c4ff0d 0%, #8b5cf6 100%)', border: 'none' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -152,6 +141,7 @@ export default function WorkoutSummaryPage() {
               showBreakdown={false}
               showLegend={true}
               autoRotate={true}
+              useGradient={false}
             />
           </Paper>
         </Grid>
@@ -331,6 +321,7 @@ export default function WorkoutSummaryPage() {
             showBreakdown={true}
             showLegend={true}
             autoRotate={true}
+            useGradient={false}
           />
         </DialogContent>
       </Dialog>

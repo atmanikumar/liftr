@@ -2,10 +2,23 @@ import { NextResponse } from 'next/server';
 import { query, execute } from '@/services/database/dbService';
 import { requireAuth } from '@/lib/authMiddleware';
 
-// GET all training programs
-export async function GET() {
+// GET all training programs with optional pagination
+export async function GET(request) {
   try {
-    const programs = await query('SELECT * FROM liftr_training_programs ORDER BY createdAt DESC');
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page')) || 1;
+    const limit = parseInt(searchParams.get('limit')) || 1000; // Default to large number for backward compatibility
+    const offset = (page - 1) * limit;
+
+    // Get total count
+    const countResult = await query('SELECT COUNT(*) as total FROM liftr_training_programs');
+    const total = countResult[0].total;
+
+    // Get paginated programs
+    const programs = await query(
+      'SELECT * FROM liftr_training_programs ORDER BY createdAt DESC LIMIT ? OFFSET ?',
+      [limit, offset]
+    );
 
     // Parse workoutIds JSON for each program
     const parsedPrograms = programs.map(program => ({
@@ -16,6 +29,13 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       programs: parsedPrograms,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: offset + programs.length < total,
+      },
     });
   } catch (error) {
     console.error('Fetch training programs error:', error);
