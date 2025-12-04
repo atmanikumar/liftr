@@ -45,6 +45,14 @@ export async function POST(request) {
   const authResult = await requireAuth();
   if (authResult instanceof NextResponse) return authResult;
 
+  // Only admin and trainer can create workouts
+  if (authResult.user.role !== 'admin' && authResult.user.role !== 'trainer') {
+    return NextResponse.json(
+      { error: 'Only admins and trainers can create workouts' },
+      { status: 403 }
+    );
+  }
+
   try {
     const { name, equipmentName, equipmentPhoto, muscleFocus, description } = await request.json();
 

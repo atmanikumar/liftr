@@ -61,7 +61,23 @@ export default function MainLayout({ children }) {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', width: '100%' }}>
       <Navbar onMenuClick={handleSidebarToggle} />
-      <Sidebar open={sidebarOpen} onClose={handleSidebarToggle} variant="temporary" />
+      
+      {/* Mobile Sidebar - Temporary Drawer */}
+      <Sidebar 
+        open={sidebarOpen} 
+        onClose={handleSidebarToggle} 
+        variant="temporary"
+        sx={{ display: { xs: 'block', md: 'none' } }}
+      />
+      
+      {/* Desktop Sidebar - Permanent Drawer */}
+      <Sidebar 
+        open={true} 
+        onClose={() => {}} 
+        variant="permanent"
+        sx={{ display: { xs: 'none', md: 'block' } }}
+      />
+      
       <Box
         component="main"
         sx={{
@@ -71,7 +87,7 @@ export default function MainLayout({ children }) {
           maxWidth: '100vw',
           overflow: 'hidden',
           backgroundColor: 'background.default',
-          // Responsive padding with safe area insets
+          // Responsive padding with safe area insets and sidebar offset
           paddingTop: {
             xs: 'calc(64px + env(safe-area-inset-top, 0px) + 16px)',
             sm: 'calc(70px + env(safe-area-inset-top, 0px) + 20px)',

@@ -49,8 +49,10 @@ export default function WorkoutsPage() {
   const loading = useSelector(selectWorkoutsLoading);
   const user = useSelector(selectUser);
 
-  // Check if user can delete (admin or trainer)
-  const canDelete = user?.role === 'admin' || user?.role === 'trainer';
+  // Permission checks
+  const canAdd = user?.role === 'admin' || user?.role === 'trainer';
+  const canEdit = user?.role === 'admin';
+  const canDelete = user?.role === 'admin';
 
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -162,13 +164,15 @@ export default function WorkoutsPage() {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4">Workouts</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Add Workout
-        </Button>
+        {canAdd && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+          >
+            Add Workout
+          </Button>
+        )}
       </Box>
 
       {/* Search Bar */}
@@ -282,17 +286,19 @@ export default function WorkoutsPage() {
                 )}
               </CardContent>
               <CardActions sx={{ justifyContent: 'flex-end', pt: 0 }}>
-                <IconButton
-                  size="small"
-                  onClick={() => handleOpenDialog(workout)}
-                  title="Edit"
-                  sx={{ 
-                    color: '#c4ff0d',
-                    '&:hover': { bgcolor: 'rgba(196, 255, 13, 0.1)' }
-                  }}
-                >
-                  <EditIcon fontSize="small" />
-                </IconButton>
+                {canEdit && (
+                  <IconButton
+                    size="small"
+                    onClick={() => handleOpenDialog(workout)}
+                    title="Edit"
+                    sx={{ 
+                      color: '#c4ff0d',
+                      '&:hover': { bgcolor: 'rgba(196, 255, 13, 0.1)' }
+                    }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                )}
                 {canDelete && (
                   <IconButton
                     size="small"
@@ -344,11 +350,13 @@ export default function WorkoutsPage() {
             No workouts yet
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Create your first workout to get started
+            {canAdd ? 'Create your first workout to get started' : 'No workouts available yet'}
           </Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
-            Add Workout
-          </Button>
+          {canAdd && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
+              Add Workout
+            </Button>
+          )}
         </Box>
       )}
 

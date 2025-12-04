@@ -104,7 +104,7 @@ export default function Navbar({ onMenuClick }) {
         paddingLeft: 'calc(16px + env(safe-area-inset-left, 0px))',
         paddingRight: 'calc(16px + env(safe-area-inset-right, 0px))',
       }}>
-        {/* Left side: Hamburger menu (always visible) */}
+        {/* Left side: Hamburger menu (only on mobile) */}
         <IconButton
           color="inherit"
           aria-label="open drawer"
@@ -112,6 +112,7 @@ export default function Navbar({ onMenuClick }) {
           onClick={onMenuClick}
           sx={{ 
             mr: 1,
+            display: { xs: 'flex', md: 'none' }, // Hide on desktop
             color: '#c4ff0d',
             '&:hover': {
               backgroundColor: 'rgba(196, 255, 13, 0.1)',

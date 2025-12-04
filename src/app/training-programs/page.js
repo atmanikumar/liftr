@@ -91,8 +91,10 @@ export default function TrainingProgramsPage() {
   // Starting workout state - track which program is being started
   const [startingWorkoutId, setStartingWorkoutId] = useState(null);
 
-  // Check if user can delete (admin or trainer)
-  const canDelete = user?.role === 'admin' || user?.role === 'trainer';
+  // Permission checks
+  const canAdd = user?.role === 'admin' || user?.role === 'trainer';
+  const canEdit = user?.role === 'admin';
+  const canDelete = user?.role === 'admin';
 
   useEffect(() => {
     dispatch(fetchTrainingPrograms());
@@ -292,14 +294,16 @@ export default function TrainingProgramsPage() {
         <Typography variant="h4" sx={{ flexGrow: 1, minWidth: 'fit-content' }}>
           Workout Plans
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-          sx={{ whiteSpace: 'nowrap' }}
-        >
-          Create
-        </Button>
+        {canAdd && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+            sx={{ whiteSpace: 'nowrap' }}
+          >
+            Create
+          </Button>
+        )}
       </Box>
 
       {/* Search Bar */}
@@ -407,13 +411,15 @@ export default function TrainingProgramsPage() {
                   )}
                 </Button>
                 <Box>
-                  <IconButton
-                    color="primary"
-                    onClick={() => handleOpenDialog(program)}
-                    title="Edit"
-                  >
-                    <EditIcon />
-                  </IconButton>
+                  {canEdit && (
+                    <IconButton
+                      color="primary"
+                      onClick={() => handleOpenDialog(program)}
+                      title="Edit"
+                    >
+                      <EditIcon />
+                    </IconButton>
+                  )}
                   {canDelete && (
                     <IconButton
                       color="error"
@@ -462,11 +468,15 @@ export default function TrainingProgramsPage() {
             No workout plans yet
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Create a plan to group your workouts (e.g., Leg Day Quad, Upper Body Circuit)
+            {canAdd 
+              ? 'Create a plan to group your workouts (e.g., Leg Day Quad, Upper Body Circuit)' 
+              : 'No workout plans available yet'}
           </Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
-            Create
-          </Button>
+          {canAdd && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
+              Create
+            </Button>
+          )}
         </Box>
       )}
 

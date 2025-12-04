@@ -33,6 +33,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  height: 100%;
 }
 
 html {
@@ -225,4 +226,23 @@ a:focus-visible {
 .recharts-wrapper:focus,
 .recharts-surface:focus {
   outline: none !important;
+}
+
+/* Desktop Optimizations */
+@media (min-width: 960px) {
+  /* Add max-width for better readability on large screens */
+  main {
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+  
+  /* Ensure sidebar doesn't overlap content */
+  body {
+    overflow-y: auto;
+  }
+  
+  /* Better card layouts on desktop */
+  .MuiGrid-container {
+    justify-content: flex-start;
+  }
 }

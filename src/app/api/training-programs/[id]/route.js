@@ -7,6 +7,14 @@ export async function PUT(request, { params }) {
   const authResult = await requireAuth();
   if (authResult instanceof NextResponse) return authResult;
 
+  // Only admin can edit workout plans
+  if (authResult.user.role !== 'admin') {
+    return NextResponse.json(
+      { error: 'Only admins can edit workout plans' },
+      { status: 403 }
+    );
+  }
+
   try {
     const { id } = params;
     const { name, workoutIds, description } = await request.json();
@@ -55,10 +63,10 @@ export async function DELETE(request, { params }) {
   const authResult = await requireAuth();
   if (authResult instanceof NextResponse) return authResult;
 
-  // Check if user is admin or trainer
-  if (authResult.user.role !== 'admin' && authResult.user.role !== 'trainer') {
+  // Only admin can delete workout plans
+  if (authResult.user.role !== 'admin') {
     return NextResponse.json(
-      { error: 'Only admins and trainers can delete workout plans' },
+      { error: 'Only admins can delete workout plans' },
       { status: 403 }
     );
   }
