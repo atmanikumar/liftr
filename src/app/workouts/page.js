@@ -37,6 +37,7 @@ import {
   selectWorkouts,
   selectWorkoutsLoading,
 } from '@/redux/slices/workoutsSlice';
+import { selectUser } from '@/redux/slices/authSlice';
 import { MUSCLE_GROUPS } from '@/constants/app';
 import Loader from '@/components/common/Loader';
 import MuscleBodyMap from '@/components/common/MuscleBodyMap';
@@ -46,6 +47,10 @@ export default function WorkoutsPage() {
   const router = useRouter();
   const workouts = useSelector(selectWorkouts);
   const loading = useSelector(selectWorkoutsLoading);
+  const user = useSelector(selectUser);
+
+  // Check if user can delete (admin or trainer)
+  const canDelete = user?.role === 'admin' || user?.role === 'trainer';
 
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -288,17 +293,19 @@ export default function WorkoutsPage() {
                 >
                   <EditIcon fontSize="small" />
                 </IconButton>
-                <IconButton
-                  size="small"
-                  color="error"
-                  onClick={() => openDeleteDialog(workout)}
-                  title="Delete"
-                  sx={{ 
-                    '&:hover': { bgcolor: 'rgba(244, 67, 54, 0.1)' }
-                  }}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
+                {canDelete && (
+                  <IconButton
+                    size="small"
+                    color="error"
+                    onClick={() => openDeleteDialog(workout)}
+                    title="Delete"
+                    sx={{ 
+                      '&:hover': { bgcolor: 'rgba(244, 67, 54, 0.1)' }
+                    }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                )}
               </CardActions>
             </Card>
           </Grid>

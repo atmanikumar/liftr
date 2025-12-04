@@ -28,11 +28,15 @@ import {
   ListItemText,
   Checkbox,
   ListItemIcon,
+  InputAdornment,
+  Pagination,
+  Stack,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
+import SearchIcon from '@mui/icons-material/Search';
 import CircularProgress from '@mui/material/CircularProgress';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
@@ -48,6 +52,7 @@ import {
   fetchWorkouts,
   selectWorkouts,
 } from '@/redux/slices/workoutsSlice';
+import { selectUser } from '@/redux/slices/authSlice';
 import Loader from '@/components/common/Loader';
 import MuscleBodyMap from '@/components/common/MuscleBodyMap';
 
@@ -57,6 +62,7 @@ export default function TrainingProgramsPage() {
   const programs = useSelector(selectTrainingPrograms);
   const workouts = useSelector(selectWorkouts);
   const loading = useSelector(selectTrainingProgramsLoading);
+  const user = useSelector(selectUser);
 
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -71,11 +77,22 @@ export default function TrainingProgramsPage() {
     description: '',
   });
 
+  // Search and pagination state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(12);
+
+  // Workout search in dialog
+  const [workoutSearchQuery, setWorkoutSearchQuery] = useState('');
+
   // Snackbar state
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   
   // Starting workout state - track which program is being started
   const [startingWorkoutId, setStartingWorkoutId] = useState(null);
+
+  // Check if user can delete (admin or trainer)
+  const canDelete = user?.role === 'admin' || user?.role === 'trainer';
 
   useEffect(() => {
     dispatch(fetchTrainingPrograms());
@@ -107,6 +124,7 @@ export default function TrainingProgramsPage() {
     setDialogOpen(false);
     setEditMode(false);
     setSelectedProgram(null);
+    setWorkoutSearchQuery(''); // Reset workout search when closing dialog
   };
 
   const handleSaveProgram = async () => {
@@ -238,6 +256,32 @@ export default function TrainingProgramsPage() {
     }));
   };
 
+  // Filter programs based on search
+  const filteredPrograms = programs.filter(program =>
+    program.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    program.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Paginate programs
+  const paginatedPrograms = filteredPrograms.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  const totalPages = Math.ceil(filteredPrograms.length / rowsPerPage);
+
+  const handlePageChange = (event, newPage) => {
+    setPage(newPage - 1); // MUI Pagination is 1-indexed
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Filter workouts for the dialog based on search
+  const filteredWorkoutsForDialog = workouts.filter(workout =>
+    workout.name.toLowerCase().includes(workoutSearchQuery.toLowerCase()) ||
+    workout.muscleFocus?.toLowerCase().includes(workoutSearchQuery.toLowerCase()) ||
+    workout.equipmentName?.toLowerCase().includes(workoutSearchQuery.toLowerCase())
+  );
+
   if (loading && programs.length === 0) {
     return <Loader fullScreen message="Loading training programs..." />;
   }
@@ -258,9 +302,36 @@ export default function TrainingProgramsPage() {
         </Button>
       </Box>
 
+      {/* Search Bar */}
+      <Box sx={{ mb: 3 }}>
+        <TextField
+          fullWidth
+          placeholder="Search workout plans by name or description..."
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            setPage(0); // Reset to first page on search
+          }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          }}
+        />
+      </Box>
+
+      {/* Results count */}
+      {searchQuery && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Found {filteredPrograms.length} workout plan{filteredPrograms.length !== 1 ? 's' : ''}
+        </Typography>
+      )}
+
       {/* Programs Grid */}
       <Grid container spacing={3}>
-        {programs.map((program) => (
+        {paginatedPrograms.map((program) => (
           <Grid item xs={12} sm={6} md={4} key={program.id}>
             <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <CardContent sx={{ flexGrow: 1 }}>
@@ -328,13 +399,15 @@ export default function TrainingProgramsPage() {
                   >
                     <EditIcon />
                   </IconButton>
-                  <IconButton
-                    color="error"
-                    onClick={() => openDeleteDialog(program)}
-                    title="Delete"
-                  >
-                    <DeleteIcon />
-                  </IconButton>
+                  {canDelete && (
+                    <IconButton
+                      color="error"
+                      onClick={() => openDeleteDialog(program)}
+                      title="Delete"
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  )}
                 </Box>
               </CardActions>
             </Card>
@@ -342,7 +415,33 @@ export default function TrainingProgramsPage() {
         ))}
       </Grid>
 
-      {programs.length === 0 && !loading && (
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <Stack spacing={2} alignItems="center" sx={{ mt: 4 }}>
+          <Pagination
+            count={totalPages}
+            page={page + 1}
+            onChange={handlePageChange}
+            color="primary"
+            size="large"
+            showFirstButton
+            showLastButton
+          />
+        </Stack>
+      )}
+
+      {filteredPrograms.length === 0 && searchQuery && (
+        <Box sx={{ textAlign: 'center', py: 8 }}>
+          <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
+            No workout plans found
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Try adjusting your search query
+          </Typography>
+        </Box>
+      )}
+
+      {programs.length === 0 && !loading && !searchQuery && (
         <Box sx={{ textAlign: 'center', py: 8 }}>
           <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
             No workout plans yet
@@ -368,6 +467,23 @@ export default function TrainingProgramsPage() {
               required
               fullWidth
               placeholder="e.g., Leg Day, Push Day, Full Body"
+            />
+
+            {/* Workout Search Field */}
+            <TextField
+              placeholder="Search workouts by name, muscle, or equipment..."
+              value={workoutSearchQuery}
+              onChange={(e) => setWorkoutSearchQuery(e.target.value)}
+              fullWidth
+              size="small"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ mb: 1 }}
             />
 
             <FormControl fullWidth required>
@@ -399,21 +515,43 @@ export default function TrainingProgramsPage() {
                     ))}
                   </Box>
                 )}
+                MenuProps={{
+                  PaperProps: {
+                    style: {
+                      maxHeight: 400,
+                    },
+                  },
+                }}
               >
-                {workouts.map((workout) => (
-                  <MenuItem key={workout.id} value={workout.id}>
-                    <Checkbox 
-                      checked={formData.workoutIds.indexOf(workout.id) > -1}
-                      sx={{ mr: 1 }}
-                    />
-                    <ListItemText 
-                      primary={workout.name}
-                      secondary={workout.muscleFocus}
-                    />
+                {filteredWorkoutsForDialog.length === 0 ? (
+                  <MenuItem disabled>
+                    <Typography variant="body2" color="text.secondary">
+                      No workouts found
+                    </Typography>
                   </MenuItem>
-                ))}
+                ) : (
+                  filteredWorkoutsForDialog.map((workout) => (
+                    <MenuItem key={workout.id} value={workout.id}>
+                      <Checkbox 
+                        checked={formData.workoutIds.indexOf(workout.id) > -1}
+                        sx={{ mr: 1 }}
+                      />
+                      <ListItemText 
+                        primary={workout.name}
+                        secondary={`${workout.muscleFocus}${workout.equipmentName ? ` • ${workout.equipmentName}` : ''}`}
+                      />
+                    </MenuItem>
+                  ))
+                )}
               </Select>
             </FormControl>
+
+            {/* Show count of filtered workouts */}
+            {workoutSearchQuery && (
+              <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+                Showing {filteredWorkoutsForDialog.length} of {workouts.length} workouts
+              </Typography>
+            )}
 
             <TextField
               label="Description"

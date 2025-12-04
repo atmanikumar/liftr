@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { execute, queryOne } from '@/services/database/dbService';
+import { execute, queryOne, query } from '@/services/database/dbService';
 import { requireAuth } from '@/lib/authMiddleware';
 
 // PUT update workout
@@ -49,6 +49,14 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
   const authResult = await requireAuth();
   if (authResult instanceof NextResponse) return authResult;
+
+  // Check if user is admin or trainer
+  if (authResult.user.role !== 'admin' && authResult.user.role !== 'trainer') {
+    return NextResponse.json(
+      { error: 'Only admins and trainers can delete workouts' },
+      { status: 403 }
+    );
+  }
 
   try {
     const { id } = params;
