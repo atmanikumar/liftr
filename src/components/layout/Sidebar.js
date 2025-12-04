@@ -89,7 +89,7 @@ const menuItems = [
   },
 ];
 
-export default function Sidebar({ open, onClose, variant = 'temporary' }) {
+export default function Sidebar({ open, onClose, variant = 'temporary', sx }) {
   const pathname = usePathname();
   const router = useRouter();
   const user = useSelector(selectUser);
@@ -239,6 +239,7 @@ export default function Sidebar({ open, onClose, variant = 'temporary' }) {
           width: DRAWER_WIDTH,
           boxSizing: 'border-box',
         },
+        ...sx, // Merge custom sx prop
       }}
     >
       {drawerContent}
