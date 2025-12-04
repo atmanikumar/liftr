@@ -44,7 +44,7 @@ export async function GET(request) {
 
     // 1. Get all active workouts (in-progress)
     const activeWorkoutsData = await query(
-      `SELECT aw.*, tp.name as programName
+      `SELECT aw.*, tp.name as programName, tp.workoutIds
        FROM liftr_active_workouts aw
        JOIN liftr_training_programs tp ON aw.trainingProgramId = tp.id
        WHERE aw.userId = ?
@@ -52,12 +52,30 @@ export async function GET(request) {
       [userId]
     );
     
-    const activeWorkouts = activeWorkoutsData.map(aw => ({
-      id: aw.id, // Use active workout session ID
-      trainingProgramId: aw.trainingProgramId,
-      name: aw.programName,
-      startedAt: aw.startedAt,
-      workoutData: JSON.parse(aw.workoutData),
+    const activeWorkouts = await Promise.all(activeWorkoutsData.map(async (aw) => {
+      const workoutIds = JSON.parse(aw.workoutIds || '[]');
+      
+      // Check if all workouts use only dumbbells
+      let isDumbbellOnly = false;
+      if (workoutIds.length > 0) {
+        const workouts = await query(
+          `SELECT equipmentName FROM liftr_workouts WHERE id IN (${workoutIds.map(() => '?').join(',')})`,
+          workoutIds
+        );
+        
+        isDumbbellOnly = workouts.length > 0 && workouts.every(w => 
+          w.equipmentName?.toLowerCase().includes('dumbbell')
+        );
+      }
+      
+      return {
+        id: aw.id,
+        trainingProgramId: aw.trainingProgramId,
+        name: aw.programName,
+        startedAt: aw.startedAt,
+        workoutData: JSON.parse(aw.workoutData),
+        equipmentTag: isDumbbellOnly ? 'Dumbbells (H)' : null,
+      };
     }));
 
     // 2. Get all today's sessions with equipment details for calories calculation

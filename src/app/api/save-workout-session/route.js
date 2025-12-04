@@ -111,32 +111,41 @@ export async function POST(request) {
         totalSetsInserted++;
       }
       
-      // If there's a change in weight, record it
+      // Track achievements for this workout
+      const exerciseName = workoutNames[workoutId] || 'Unknown';
+      
+      // Get previous session data for this specific workout to compare reps/RIR at same weight
+      const previousSession = await query(
+        `SELECT weight, reps, rir, unit
+         FROM liftr_workout_sessions
+         WHERE userId = ? AND workoutId = ? AND completedAt < ?
+         ORDER BY completedAt DESC
+         LIMIT 1`,
+        [userId, workoutId, completedAt]
+      );
+      
+      // Achievement Type 1: Weight increase
       if (currentMaxWeight !== previousMaxWeight && previousMaxWeight > 0 && currentMaxWeight > 0) {
-        const exerciseName = workoutNames[workoutId] || 'Unknown';
-        
         if (currentMaxWeight > previousMaxWeight) {
-          // Improvement
           const improvement = currentMaxWeight - previousMaxWeight;
           
           await execute(
             `INSERT INTO liftr_achievements 
-             (userId, workoutId, exerciseName, previousWeight, newWeight, improvement, unit, achievedAt)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [userId, workoutId, exerciseName, previousMaxWeight, currentMaxWeight, improvement, unit, completedAt]
+             (userId, workoutId, exerciseName, achievementType, previousValue, newValue, improvement, unit, achievedAt)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [userId, workoutId, exerciseName, 'weight', previousMaxWeight, currentMaxWeight, improvement, unit, completedAt]
           );
           
           improvements.push({
             exercise: exerciseName,
+            type: 'weight',
             previousWeight: previousMaxWeight,
             newWeight: currentMaxWeight,
             improvement,
             unit,
           });
         } else {
-          // Decrease
           const decrease = previousMaxWeight - currentMaxWeight;
-          
           decreases.push({
             exercise: exerciseName,
             previousWeight: previousMaxWeight,
@@ -144,6 +153,66 @@ export async function POST(request) {
             decrease,
             unit,
           });
+        }
+      }
+      
+      // Achievement Type 2: Reps increase at same weight
+      if (previousSession.length > 0) {
+        const prevWeight = parseFloat(previousSession[0].weight);
+        const prevReps = parseInt(previousSession[0].reps);
+        const prevRir = parseInt(previousSession[0].rir);
+        
+        // Find current session data at same weight
+        const currentAtSameWeight = workoutData.sets.find(s => parseFloat(s.weight) === prevWeight);
+        
+        if (currentAtSameWeight) {
+          const currentReps = parseInt(currentAtSameWeight.reps);
+          const currentRir = parseInt(currentAtSameWeight.rir);
+          
+          // Reps increase at same weight
+          if (currentReps > prevReps && currentReps > 0 && prevReps > 0) {
+            const repsImprovement = currentReps - prevReps;
+            
+            await execute(
+              `INSERT INTO liftr_achievements 
+               (userId, workoutId, exerciseName, achievementType, previousValue, newValue, improvement, unit, achievedAt)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [userId, workoutId, exerciseName, 'reps', prevReps, currentReps, repsImprovement, `${prevWeight} ${unit}`, completedAt]
+            );
+            
+            improvements.push({
+              exercise: exerciseName,
+              type: 'reps',
+              previousReps: prevReps,
+              newReps: currentReps,
+              improvement: repsImprovement,
+              weight: prevWeight,
+              unit,
+            });
+          }
+          
+          // RIR decrease at same weight and reps (better performance)
+          if (currentRir < prevRir && currentReps === prevReps && currentRir >= 0 && prevRir > 0) {
+            const rirImprovement = prevRir - currentRir;
+            
+            await execute(
+              `INSERT INTO liftr_achievements 
+               (userId, workoutId, exerciseName, achievementType, previousValue, newValue, improvement, unit, achievedAt)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [userId, workoutId, exerciseName, 'rir', prevRir, currentRir, rirImprovement, `${prevWeight} ${unit} × ${currentReps}`, completedAt]
+            );
+            
+            improvements.push({
+              exercise: exerciseName,
+              type: 'rir',
+              previousRir: prevRir,
+              newRir: currentRir,
+              improvement: rirImprovement,
+              weight: prevWeight,
+              reps: currentReps,
+              unit,
+            });
+          }
         }
       }
     }

@@ -161,48 +161,105 @@ export default function HomePage() {
               </Box>
               
               <Stack spacing={2}>
-                {todayAchievements.map((ach, idx) => (
-                  <Card 
-                    key={idx} 
-                    sx={{ 
-                      bgcolor: 'rgba(255, 255, 255, 0.05)', 
-                      border: '1px solid rgba(196, 255, 13, 0.2)',
-                      transition: 'all 0.2s',
-                      '&:hover': {
-                        bgcolor: 'rgba(255, 255, 255, 0.08)',
-                        transform: 'translateY(-2px)',
-                        boxShadow: '0 4px 12px rgba(196, 255, 13, 0.2)',
-                      }
-                    }}
-                  >
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>
-                        {ach.exerciseName}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {ach.previousWeight} {ach.unit}
+                {todayAchievements.map((ach, idx) => {
+                  const achievementType = ach.achievementType || 'weight';
+                  
+                  return (
+                    <Card 
+                      key={idx} 
+                      sx={{ 
+                        bgcolor: '#000', 
+                        border: '2px solid #c4ff0d',
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 8px 24px rgba(196, 255, 13, 0.4)',
+                        }
+                      }}
+                    >
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom sx={{ color: '#fff', fontWeight: 'bold' }}>
+                          {ach.exerciseName}
                         </Typography>
-                        <TrendingUpIcon sx={{ color: '#c4ff0d', fontSize: 20 }} />
-                        <Typography variant="body1" fontWeight="bold" sx={{ color: '#c4ff0d' }}>
-                          {ach.newWeight} {ach.unit}
-                        </Typography>
-                        <Chip 
-                          label={`+${ach.improvement} ${ach.unit}`}
-                          size="small"
-                          icon={<TrendingUpIcon />}
-                          sx={{ 
-                            ml: 'auto', 
-                            bgcolor: 'rgba(196, 255, 13, 0.2)', 
-                            color: '#c4ff0d', 
-                            fontWeight: 'bold',
-                            border: '1px solid rgba(196, 255, 13, 0.4)',
-                          }}
-                        />
-                      </Box>
-                    </CardContent>
-                  </Card>
-                ))}
+                        
+                        {achievementType === 'weight' && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            <Typography variant="body2" sx={{ color: '#fff' }}>
+                              {ach.previousValue} {ach.unit}
+                            </Typography>
+                            <TrendingUpIcon sx={{ color: '#c4ff0d', fontSize: 20 }} />
+                            <Typography variant="body1" fontWeight="bold" sx={{ color: '#fff' }}>
+                              {ach.newValue} {ach.unit}
+                            </Typography>
+                            <Chip 
+                              label={`+${ach.improvement} ${ach.unit}`}
+                              size="small"
+                              icon={<TrendingUpIcon />}
+                              sx={{ 
+                                ml: 'auto', 
+                                bgcolor: '#c4ff0d', 
+                                color: '#000', 
+                                fontWeight: 'bold',
+                              }}
+                            />
+                          </Box>
+                        )}
+                        
+                        {achievementType === 'reps' && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            <Typography variant="body2" sx={{ color: '#fff' }}>
+                              {ach.previousValue} reps
+                            </Typography>
+                            <TrendingUpIcon sx={{ color: '#c4ff0d', fontSize: 20 }} />
+                            <Typography variant="body1" fontWeight="bold" sx={{ color: '#fff' }}>
+                              {ach.newValue} reps
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                              @ {ach.unit}
+                            </Typography>
+                            <Chip 
+                              label={`+${ach.improvement} reps`}
+                              size="small"
+                              icon={<TrendingUpIcon />}
+                              sx={{ 
+                                ml: 'auto', 
+                                bgcolor: '#c4ff0d', 
+                                color: '#000', 
+                                fontWeight: 'bold',
+                              }}
+                            />
+                          </Box>
+                        )}
+                        
+                        {achievementType === 'rir' && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            <Typography variant="body2" sx={{ color: '#fff' }}>
+                              RIR {ach.previousValue}
+                            </Typography>
+                            <TrendingDownIcon sx={{ color: '#c4ff0d', fontSize: 20 }} />
+                            <Typography variant="body1" fontWeight="bold" sx={{ color: '#fff' }}>
+                              RIR {ach.newValue}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                              @ {ach.unit}
+                            </Typography>
+                            <Chip 
+                              label={`-${ach.improvement} RIR`}
+                              size="small"
+                              icon={<TrendingDownIcon />}
+                              sx={{ 
+                                ml: 'auto', 
+                                bgcolor: '#c4ff0d', 
+                                color: '#000', 
+                                fontWeight: 'bold',
+                              }}
+                            />
+                          </Box>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </Stack>
               
               <Button
@@ -252,9 +309,24 @@ export default function HomePage() {
                     <CardContent>
                       <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
                         <Box sx={{ flexGrow: 1 }}>
-                          <Typography variant="h6" gutterBottom sx={{ mb: 1 }}>
-                            {workout.name}
-                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                            <Typography variant="h6">
+                              {workout.name}
+                            </Typography>
+                            {workout.equipmentTag && (
+                              <Chip
+                                label={workout.equipmentTag}
+                                size="small"
+                                sx={{
+                                  bgcolor: 'rgba(196, 255, 13, 0.2)',
+                                  color: '#c4ff0d',
+                                  border: '1px solid rgba(196, 255, 13, 0.4)',
+                                  fontWeight: 'bold',
+                                  fontSize: '0.7rem',
+                                }}
+                              />
+                            )}
+                          </Box>
                           
                           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                             <Chip

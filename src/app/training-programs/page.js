@@ -335,9 +335,24 @@ export default function TrainingProgramsPage() {
           <Grid item xs={12} sm={6} md={4} key={program.id}>
             <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <CardContent sx={{ flexGrow: 1 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  {program.name}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 2 }}>
+                  <Typography variant="h6" sx={{ flexGrow: 1 }}>
+                    {program.name}
+                  </Typography>
+                  {program.equipmentTag && (
+                    <Chip
+                      label={program.equipmentTag}
+                      size="small"
+                      sx={{
+                        bgcolor: 'rgba(196, 255, 13, 0.2)',
+                        color: '#c4ff0d',
+                        border: '1px solid rgba(196, 255, 13, 0.4)',
+                        fontWeight: 'bold',
+                        fontSize: '0.7rem',
+                      }}
+                    />
+                  )}
+                </Box>
                 
                 {program.description && (
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -469,13 +484,28 @@ export default function TrainingProgramsPage() {
               placeholder="e.g., Leg Day, Push Day, Full Body"
             />
 
+            {/* Selected Workouts Count */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="subtitle2" color="text.secondary">
+                Selected Workouts: {formData.workoutIds.length}
+              </Typography>
+              {formData.workoutIds.length > 0 && (
+                <Button
+                  size="small"
+                  onClick={() => setFormData({ ...formData, workoutIds: [] })}
+                  color="error"
+                >
+                  Clear All
+                </Button>
+              )}
+            </Box>
+
             {/* Workout Search Field */}
             <TextField
               placeholder="Search workouts by name, muscle, or equipment..."
               value={workoutSearchQuery}
               onChange={(e) => setWorkoutSearchQuery(e.target.value)}
               fullWidth
-              size="small"
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -483,75 +513,80 @@ export default function TrainingProgramsPage() {
                   </InputAdornment>
                 ),
               }}
-              sx={{ mb: 1 }}
             />
 
-            <FormControl fullWidth required>
-              <InputLabel>Select Workouts *</InputLabel>
-              <Select
-                multiple
-                value={formData.workoutIds}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setFormData({ ...formData, workoutIds: typeof value === 'string' ? value.split(',') : value });
-                }}
-                input={<OutlinedInput label="Select Workouts *" />}
-                renderValue={(selected) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((value) => (
-                      <Chip 
-                        key={value} 
-                        label={getWorkoutName(value)} 
-                        size="small"
-                        onDelete={(e) => {
-                          e.stopPropagation();
-                          setFormData({ 
-                            ...formData, 
-                            workoutIds: formData.workoutIds.filter(id => id !== value) 
+            {/* Workouts List with Checkboxes */}
+            <Box
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                maxHeight: 400,
+                overflow: 'auto',
+                bgcolor: 'background.paper',
+              }}
+            >
+              {filteredWorkoutsForDialog.length === 0 ? (
+                <Box sx={{ p: 3, textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    No workouts found
+                  </Typography>
+                </Box>
+              ) : (
+                <List dense>
+                  {filteredWorkoutsForDialog.map((workout) => (
+                    <ListItem
+                      key={workout.id}
+                      button
+                      onClick={() => {
+                        const isSelected = formData.workoutIds.includes(workout.id);
+                        if (isSelected) {
+                          setFormData({
+                            ...formData,
+                            workoutIds: formData.workoutIds.filter(id => id !== workout.id)
                           });
-                        }}
-                        deleteIcon={<DeleteIcon onMouseDown={(e) => e.stopPropagation()} />}
-                      />
-                    ))}
-                  </Box>
-                )}
-                MenuProps={{
-                  PaperProps: {
-                    style: {
-                      maxHeight: 400,
-                    },
-                  },
-                }}
-              >
-                {filteredWorkoutsForDialog.length === 0 ? (
-                  <MenuItem disabled>
-                    <Typography variant="body2" color="text.secondary">
-                      No workouts found
-                    </Typography>
-                  </MenuItem>
-                ) : (
-                  filteredWorkoutsForDialog.map((workout) => (
-                    <MenuItem key={workout.id} value={workout.id}>
-                      <Checkbox 
-                        checked={formData.workoutIds.indexOf(workout.id) > -1}
-                        sx={{ mr: 1 }}
-                      />
-                      <ListItemText 
+                        } else {
+                          setFormData({
+                            ...formData,
+                            workoutIds: [...formData.workoutIds, workout.id]
+                          });
+                        }
+                      }}
+                      sx={{
+                        '&:hover': {
+                          bgcolor: 'action.hover',
+                        },
+                        bgcolor: formData.workoutIds.includes(workout.id) ? 'action.selected' : 'transparent',
+                      }}
+                    >
+                      <ListItemIcon>
+                        <Checkbox
+                          edge="start"
+                          checked={formData.workoutIds.includes(workout.id)}
+                          tabIndex={-1}
+                          disableRipple
+                        />
+                      </ListItemIcon>
+                      <ListItemText
                         primary={workout.name}
                         secondary={`${workout.muscleFocus}${workout.equipmentName ? ` • ${workout.equipmentName}` : ''}`}
+                        primaryTypographyProps={{
+                          fontWeight: formData.workoutIds.includes(workout.id) ? 600 : 400,
+                        }}
                       />
-                    </MenuItem>
-                  ))
-                )}
-              </Select>
-            </FormControl>
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </Box>
 
             {/* Show count of filtered workouts */}
-            {workoutSearchQuery && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
-                Showing {filteredWorkoutsForDialog.length} of {workouts.length} workouts
-              </Typography>
-            )}
+            <Typography variant="caption" color="text.secondary">
+              {workoutSearchQuery 
+                ? `Showing ${filteredWorkoutsForDialog.length} of ${workouts.length} workouts`
+                : `Total ${workouts.length} workouts available`
+              }
+            </Typography>
 
             <TextField
               label="Description"
