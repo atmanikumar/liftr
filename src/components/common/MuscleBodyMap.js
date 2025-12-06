@@ -1,7 +1,7 @@
 'use client';
 
-import { Box, Typography, ToggleButton, ToggleButtonGroup } from '@mui/material';
-import { useState, useMemo } from 'react';
+import { Box, Typography, ToggleButton, ToggleButtonGroup, Chip } from '@mui/material';
+import { useState, useMemo, memo } from 'react';
 import Model from 'react-body-highlighter';
 
 // Valid muscle names that the library accepts (from DEFAULT_MUSCLE_DATA)
@@ -39,7 +39,7 @@ const muscleMapping = {
   'Legs': ['quadriceps', 'hamstring', 'calves'],
 };
 
-export default function MuscleBodyMap({ 
+const MuscleBodyMap = memo(function MuscleBodyMap({ 
   muscleDistribution = [], 
   size = 'large', // 'small', 'medium', or 'large'
   showToggle = true,
@@ -52,6 +52,7 @@ export default function MuscleBodyMap({
   useGradient = true, // Use 5-shade gradient (home page) vs direct max highlight (other pages)
 }) {
   const [hoveredMuscle, setHoveredMuscle] = useState(null);
+  const [clickedMuscle, setClickedMuscle] = useState(null);
 
   // Auto-detect if back muscles are present
   const hasBackMuscles = useMemo(() => {
@@ -234,8 +235,80 @@ export default function MuscleBodyMap({
     }
   };
 
+  // Handle muscle click on body map to show name
+  const handleBodyMapClick = (e) => {
+    // Get the clicked polygon element
+    const polygon = e.target.closest('polygon');
+    if (!polygon) return;
+
+    // Try to find which muscle was clicked based on the polygon's fill color
+    const fill = polygon.getAttribute('fill');
+    if (!fill || fill === '#B6BDC3') return; // Ignore body color clicks
+
+    // Get the muscle ID from the polygon's data attributes or class
+    const polygonId = polygon.getAttribute('id') || polygon.getAttribute('data-id');
+    
+    // Map polygon IDs to our muscle names
+    let muscleName = null;
+    
+    if (polygonId) {
+      // Try to match the polygon ID with our muscle mapping
+      for (const [key, value] of Object.entries(muscleMapping)) {
+        const mappedMuscles = Array.isArray(value) ? value : [value];
+        if (mappedMuscles.some(m => polygonId.toLowerCase().includes(m))) {
+          muscleName = key;
+          break;
+        }
+      }
+    }
+    
+    // If we couldn't determine from polygon ID, check if the color matches any of our muscles
+    if (!muscleName && validMuscleDistribution.length > 0) {
+      // Find muscle based on color intensity - check if fill color is in our highlighted colors
+      const isHighlighted = highlightedColors.some(color => fill.includes(color.split(',')[0]));
+      if (isHighlighted) {
+        // Use the most prominent muscle (highest count)
+        const sortedMuscles = [...validMuscleDistribution].sort((a, b) => b.count - a.count);
+        muscleName = sortedMuscles[0].muscle;
+      }
+    }
+    
+    if (muscleName) {
+      setClickedMuscle(muscleName);
+      
+      // Clear after 3 seconds
+      setTimeout(() => setClickedMuscle(null), 3000);
+    }
+  };
+
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: size === 'small' ? 1 : 2 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: size === 'small' ? 1 : 2, position: 'relative' }}>
+      {/* Clicked Muscle Label */}
+      {clickedMuscle && (
+        <Chip
+          label={clickedMuscle}
+          sx={{
+            position: 'absolute',
+            top: 10,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            bgcolor: '#c4ff0d',
+            color: '#000',
+            fontWeight: 'bold',
+            fontSize: '1rem',
+            px: 2,
+            py: 1,
+            height: 'auto',
+            zIndex: 1000,
+            animation: 'fadeIn 0.3s ease-in-out',
+            '@keyframes fadeIn': {
+              '0%': { opacity: 0, transform: 'translateX(-50%) translateY(-10px)' },
+              '100%': { opacity: 1, transform: 'translateX(-50%) translateY(0)' },
+            },
+          }}
+        />
+      )}
+
       {/* View Toggle */}
       {showToggle && (
         <ToggleButtonGroup
@@ -281,6 +354,7 @@ export default function MuscleBodyMap({
       {/* Body Model using react-body-highlighter */}
       {exerciseData && Array.isArray(exerciseData) && exerciseData.length > 0 ? (
         <Box 
+          onClick={handleBodyMapClick}
           sx={{ 
             '& .rbh': {
               maxWidth: maxWidth,
@@ -290,9 +364,6 @@ export default function MuscleBodyMap({
               transition: 'all 0.3s ease',
               cursor: 'pointer',
             },
-            '& .rbh polygon:hover': {
-              filter: size === 'large' ? 'drop-shadow(0 0 8px rgba(196, 255, 13, 0.8))' : 'none',
-            }
           }}
         >
           {(() => {
@@ -401,18 +472,12 @@ export default function MuscleBodyMap({
                     borderRadius: 1,
                     backgroundColor: selectedMuscle === muscle.muscle 
                       ? 'rgba(196, 255, 13, 0.2)' 
-                      : hoveredMuscle === muscle.muscle 
-                      ? 'rgba(196, 255, 13, 0.1)' 
                       : 'rgba(255, 255, 255, 0.02)',
                     border: selectedMuscle === muscle.muscle 
                       ? '2px solid #c4ff0d' 
                       : '1px solid rgba(255, 255, 255, 0.05)',
                     transition: 'all 0.3s ease',
                     cursor: selectable ? 'pointer' : 'default',
-                    '&:hover': selectable ? {
-                      transform: 'translateX(4px)',
-                      backgroundColor: 'rgba(196, 255, 13, 0.15)',
-                    } : {},
                   }}
                   onMouseEnter={() => setHoveredMuscle(muscle.muscle)}
                   onMouseLeave={() => setHoveredMuscle(null)}
@@ -450,6 +515,6 @@ export default function MuscleBodyMap({
       )}
     </Box>
   );
-}
+});
 
-
+export default MuscleBodyMap;

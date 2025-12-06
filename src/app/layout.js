@@ -12,15 +12,15 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
-        <title>Liftr - Fitness Tracking App</title>
-        <meta name="description" content="Track your fitness journey with Liftr" />
+        <title>Spartans - Fitness Tracking App</title>
+        <meta name="description" content="Track your fitness journey with Spartans" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover" />
         
         {/* PWA Meta Tags */}
-        <meta name="application-name" content="Liftr" />
+        <meta name="application-name" content="Spartans" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Liftr" />
+        <meta name="apple-mobile-web-app-title" content="Spartans" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="theme-color" content="#0a0a0a" />

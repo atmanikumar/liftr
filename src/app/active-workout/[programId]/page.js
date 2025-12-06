@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -36,6 +36,8 @@ import { fetchTrainingPrograms, selectTrainingPrograms } from '@/redux/slices/tr
 import { fetchWorkouts, selectWorkouts } from '@/redux/slices/workoutsSlice';
 import Loader from '@/components/common/Loader';
 import MuscleBodyMap from '@/components/common/MuscleBodyMap';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { debounce } from '@/lib/debounce';
 
 const WEIGHT_UNITS = ['lbs', 'kgs'];
 const RIR_OPTIONS = [0, 1, 2, 3, 4, 5, 6];
@@ -97,6 +99,7 @@ export default function ActiveWorkoutPage() {
   const [saving, setSaving] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const [addingWorkout, setAddingWorkout] = useState(false);
+  const [workoutHistory, setWorkoutHistory] = useState({});
   
   const initializedRef = useRef(false);
 
@@ -156,7 +159,18 @@ export default function ActiveWorkoutPage() {
     initializeWorkout();
   }, [workouts, activeWorkoutId, router]);
 
-  const updateSet = (workoutId, setIndex, field, value) => {
+  // Debounced save to reduce API calls
+  const debouncedSave = useRef(
+    debounce((data) => {
+      fetch('/api/active-workout', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workoutData: data }),
+      }).catch(e => console.error('Failed to save:', e));
+    }, 500)
+  ).current;
+
+  const updateSet = useCallback((workoutId, setIndex, field, value) => {
     setWorkoutData(prev => {
       const workout = programWorkouts.find(w => w.id === workoutId);
       const autoIncrement = getAutoIncrement(workout?.equipmentName);
@@ -181,18 +195,14 @@ export default function ActiveWorkoutPage() {
         },
       };
       
-      // Save to DB
-      fetch('/api/active-workout', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workoutData: updatedData }),
-      }).catch(e => console.error('Failed to save:', e));
+      // Debounced save to DB
+      debouncedSave(updatedData);
       
       return updatedData;
     });
-  };
+  }, [programWorkouts, debouncedSave]);
 
-  const updateUnit = (workoutId, unit) => {
+  const updateUnit = useCallback((workoutId, unit) => {
     setWorkoutData(prev => {
       const updatedData = {
         ...prev,
@@ -211,9 +221,9 @@ export default function ActiveWorkoutPage() {
       
       return updatedData;
     });
-  };
+  }, []);
 
-  const addSet = (workoutId) => {
+  const addSet = useCallback((workoutId) => {
     setWorkoutData(prev => {
       const currentSets = prev[workoutId].sets;
       const lastSet = currentSets[currentSets.length - 1];
@@ -249,9 +259,9 @@ export default function ActiveWorkoutPage() {
       
       return updatedData;
     });
-  };
+  }, [programWorkouts]);
 
-  const removeSet = (workoutId, setIndex) => {
+  const removeSet = useCallback((workoutId, setIndex) => {
     setWorkoutData(prev => {
       const updatedData = {
         ...prev,
@@ -270,9 +280,9 @@ export default function ActiveWorkoutPage() {
       
       return updatedData;
     });
-  };
+  }, []);
 
-  const toggleSetComplete = (workoutId, setIndex) => {
+  const toggleSetComplete = useCallback((workoutId, setIndex) => {
     setWorkoutData(prev => {
       const newSets = prev[workoutId].sets.map((set, idx) =>
         idx === setIndex ? { ...set, completed: !set.completed } : set
@@ -297,7 +307,7 @@ export default function ActiveWorkoutPage() {
       
       return updatedData;
     });
-  };
+  }, []);
 
   // Swipe handlers for weight adjustment
   const handleTouchStart = (e) => {
@@ -347,6 +357,43 @@ export default function ActiveWorkoutPage() {
     });
     return Object.entries(muscleCount).map(([muscle, count]) => ({ muscle, count }));
   };
+
+  // Fetch workout history when workout is expanded
+  const fetchWorkoutHistory = useCallback(async (workoutId) => {
+    if (workoutHistory[workoutId]) {
+      return; // Already fetched
+    }
+    
+    try {
+      const response = await fetch(`/api/workout-history/${workoutId}`);
+      const data = await response.json();
+      
+      if (response.ok && data.history) {
+        setWorkoutHistory(prev => ({
+          ...prev,
+          [workoutId]: data.history,
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch workout history:', error);
+    }
+  }, [workoutHistory]);
+
+  // Handle workout expansion
+  const handleWorkoutExpand = useCallback((workoutId) => {
+    const isExpanding = !expandedWorkouts.includes(workoutId);
+    
+    setExpandedWorkouts(prev => 
+      prev.includes(workoutId) 
+        ? prev.filter(id => id !== workoutId)
+        : [...prev, workoutId]
+    );
+    
+    // Fetch history when expanding
+    if (isExpanding) {
+      fetchWorkoutHistory(workoutId);
+    }
+  }, [expandedWorkouts, fetchWorkoutHistory]);
 
   const addWorkoutToSession = async (workoutId) => {
     if (addingWorkout) return; // Prevent duplicate clicks
@@ -543,13 +590,7 @@ export default function ActiveWorkoutPage() {
             <Accordion
               key={workout.id}
               expanded={expandedWorkouts.includes(workout.id)}
-              onChange={() => {
-                setExpandedWorkouts(prev => 
-                  prev.includes(workout.id) 
-                    ? prev.filter(id => id !== workout.id) // Collapse if already expanded
-                    : [...prev, workout.id] // Expand and keep others expanded
-                );
-              }}
+              onChange={() => handleWorkoutExpand(workout.id)}
             >
               <AccordionSummary 
                 expandIcon={<ExpandMoreIcon />}
@@ -557,9 +598,6 @@ export default function ActiveWorkoutPage() {
                   border: workoutData[workout.id]?.workoutCompleted ? '2px solid #c4ff0d' : '1px solid rgba(255, 255, 255, 0.05)',
                   bgcolor: 'inherit',
                   minHeight: '80px',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                  },
                   '& .MuiAccordionSummary-content': {
                     my: 2,
                   }
@@ -600,6 +638,71 @@ export default function ActiveWorkoutPage() {
                 </Box>
               </AccordionSummary>
               <AccordionDetails>
+                {/* Last 5 Workouts Progress Graph */}
+                {workoutHistory[workout.id] && workoutHistory[workout.id].length > 0 && (
+                  <Box sx={{ mb: 3, p: 2, bgcolor: 'rgba(196, 255, 13, 0.03)', borderRadius: 2, border: '1px solid rgba(196, 255, 13, 0.2)' }}>
+                    <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, color: '#c4ff0d', fontWeight: 'bold' }}>
+                      Last {workoutHistory[workout.id].length} Workouts Progress
+                    </Typography>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <LineChart data={workoutHistory[workout.id]} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
+                        <XAxis 
+                          dataKey="date" 
+                          stroke="rgba(255, 255, 255, 0.5)"
+                          tick={{ fontSize: 11 }}
+                        />
+                        <YAxis 
+                          yAxisId="weight"
+                          orientation="left"
+                          stroke="#c4ff0d"
+                          tick={{ fontSize: 11 }}
+                          label={{ value: 'Weight', angle: -90, position: 'insideLeft', style: { fill: '#c4ff0d', fontSize: 11 } }}
+                        />
+                        <YAxis 
+                          yAxisId="reps"
+                          orientation="right"
+                          stroke="#8b5cf6"
+                          tick={{ fontSize: 11 }}
+                          label={{ value: 'Reps', angle: 90, position: 'insideRight', style: { fill: '#8b5cf6', fontSize: 11 } }}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                            border: '1px solid rgba(196, 255, 13, 0.3)',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                          }}
+                          formatter={(value, name) => {
+                            if (name === 'Max Weight') return [`${value} ${workoutHistory[workout.id][0]?.unit || 'lbs'}`, name];
+                            return [value, name];
+                          }}
+                        />
+                        <Line 
+                          yAxisId="weight"
+                          type="monotone" 
+                          dataKey="maxWeight" 
+                          stroke="#c4ff0d" 
+                          strokeWidth={3}
+                          name="Max Weight"
+                          dot={{ fill: '#c4ff0d', r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                        <Line 
+                          yAxisId="reps"
+                          type="monotone" 
+                          dataKey="avgReps" 
+                          stroke="#8b5cf6" 
+                          strokeWidth={3}
+                          name="Avg Reps"
+                          dot={{ fill: '#8b5cf6', r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Box>
+                )}
+
                 {/* Equipment info and Unit selector row */}
                 <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
                   <Box>
@@ -634,16 +737,7 @@ export default function ActiveWorkoutPage() {
                             Set {setIndex + 1}
                           </Typography>
                           <Box sx={{ display: 'flex', gap: 1 }}>
-                            {workoutSets.length > 2 && setIndex >= 2 && (
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => removeSet(workout.id, setIndex)}
-                                title="Delete this set"
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            )}
+                            {/* Delete set button disabled for all users */}
                             <IconButton
                               color={set.completed ? 'success' : 'default'}
                               onClick={() => toggleSetComplete(workout.id, setIndex)}
@@ -861,10 +955,6 @@ export default function ActiveWorkoutPage() {
                     cursor: addingWorkout ? 'default' : 'pointer',
                     transition: 'all 0.2s',
                     opacity: addingWorkout ? 0.5 : 1,
-                    '&:hover': {
-                      bgcolor: addingWorkout ? 'inherit' : 'action.hover',
-                      transform: addingWorkout ? 'none' : 'translateX(4px)',
-                    }
                   }}
                   onClick={() => !addingWorkout && addWorkoutToSession(workout.id)}
                 >

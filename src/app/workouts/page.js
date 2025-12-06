@@ -49,10 +49,10 @@ export default function WorkoutsPage() {
   const loading = useSelector(selectWorkoutsLoading);
   const user = useSelector(selectUser);
 
-  // Permission checks
+  // Permission checks - All edit/delete disabled
   const canAdd = user?.role === 'admin' || user?.role === 'trainer';
-  const canEdit = user?.role === 'admin';
-  const canDelete = user?.role === 'admin';
+  const canEdit = false; // Disabled for all users
+  const canDelete = false; // Disabled for all users
 
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);

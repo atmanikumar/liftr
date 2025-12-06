@@ -39,6 +39,10 @@ export default function MainLayout({ children }) {
     setSidebarOpen(!sidebarOpen);
   };
 
+  const handleSidebarClose = () => {
+    setSidebarOpen(false);
+  };
+
   // Show loader while checking auth on initial load
   if (initializing || loading) {
     // Don't show loader on login page
@@ -59,13 +63,32 @@ export default function MainLayout({ children }) {
   }
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', width: '100%' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', width: '100%', position: 'relative' }}>
       <Navbar onMenuClick={handleSidebarToggle} />
+      
+      {/* Overlay backdrop for mobile when sidebar is open */}
+      {sidebarOpen && (
+        <Box
+          onClick={handleSidebarClose}
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 1200, // Below drawer (1300) but above everything else
+            display: { xs: 'block', md: 'none' }, // Only on mobile
+            cursor: 'pointer',
+          }}
+        />
+      )}
       
       {/* Mobile Sidebar - Temporary Drawer */}
       <Sidebar 
         open={sidebarOpen} 
-        onClose={handleSidebarToggle} 
+        onClose={handleSidebarClose} 
         variant="temporary"
         sx={{ display: { xs: 'block', md: 'none' } }}
       />

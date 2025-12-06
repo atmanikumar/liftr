@@ -320,17 +320,7 @@ export default function UsersPage() {
                               >
                                 <LockResetIcon fontSize="small" />
                               </IconButton>
-                              <IconButton
-                                color="error"
-                                size="small"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openDeleteDialog(user);
-                                }}
-                                title="Delete User"
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
+                              {/* Delete button disabled for all users */}
                             </Box>
                           )}
                         </Stack>

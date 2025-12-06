@@ -1,7 +1,7 @@
 {
-  "name": "Liftr - Fitness Tracking App",
-  "short_name": "Liftr",
-  "description": "Track your fitness journey with Liftr",
+  "name": "Spartans - Fitness Tracking App",
+  "short_name": "Spartans",
+  "description": "Track your fitness journey with Spartans",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",

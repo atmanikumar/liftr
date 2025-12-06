@@ -232,9 +232,16 @@ export default function Sidebar({ open, onClose, variant = 'temporary', sx }) {
       variant={variant}
       open={open}
       onClose={onClose}
+      ModalProps={{
+        keepMounted: true, // Better open performance on mobile
+      }}
+      BackdropProps={{
+        invisible: true, // Hide default Material-UI backdrop since we have custom overlay
+      }}
       sx={{
         width: DRAWER_WIDTH,
         flexShrink: 0,
+        zIndex: 1300, // Above our custom overlay (1200)
         '& .MuiDrawer-paper': {
           width: DRAWER_WIDTH,
           boxSizing: 'border-box',

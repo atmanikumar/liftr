@@ -91,10 +91,10 @@ export default function TrainingProgramsPage() {
   // Starting workout state - track which program is being started
   const [startingWorkoutId, setStartingWorkoutId] = useState(null);
 
-  // Permission checks
+  // Permission checks - All edit/delete disabled
   const canAdd = user?.role === 'admin' || user?.role === 'trainer';
-  const canEdit = user?.role === 'admin';
-  const canDelete = user?.role === 'admin';
+  const canEdit = false; // Disabled for all users
+  const canDelete = false; // Disabled for all users
 
   useEffect(() => {
     dispatch(fetchTrainingPrograms());

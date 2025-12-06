@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -45,14 +45,17 @@ export default function HomePage() {
   const [selectedWorkoutMuscles, setSelectedWorkoutMuscles] = useState([]);
   const [todayAchievements, setTodayAchievements] = useState([]);
 
+  // Memoize viewingAs ID to prevent unnecessary effect triggers
+  const viewingAsId = useMemo(() => viewingAs?.id, [viewingAs?.id]);
+
   // Fetch today's achievements
   useEffect(() => {
     const abortController = new AbortController();
     
     const fetchTodayAchievements = async () => {
       try {
-        const url = viewingAs 
-          ? `/api/achievements/today?viewAs=${viewingAs.id}` 
+        const url = viewingAsId 
+          ? `/api/achievements/today?viewAs=${viewingAsId}` 
           : `/api/achievements/today`;
         
         const response = await fetch(url, {
@@ -79,41 +82,42 @@ export default function HomePage() {
     return () => {
       abortController.abort();
     };
-  }, [viewingAs]);
+  }, [viewingAsId]);
+
+  // Memoize fetch function to prevent recreation on every render
+  const fetchHomeData = useCallback(async (signal) => {
+    try {
+      // Single API call to get all home page data
+      const url = viewingAsId 
+        ? `/api/home?viewAs=${viewingAsId}` 
+        : `/api/home`;
+      const response = await fetch(url, { signal });
+      const data = await response.json();
+      
+      if (data.workoutPlans) {
+        setWorkoutPlans(data.workoutPlans);
+      }
+      if (data.completedSessions) {
+        setCompletedSessions(data.completedSessions);
+      }
+      if (data.activeWorkouts) {
+        setActiveWorkouts(data.activeWorkouts);
+      }
+      setTodayCalories(data.todayCalories || 0);
+      setProgressData(data.progress || null);
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.error('Failed to load home data:', e);
+      }
+    } finally {
+      if (!signal.aborted) {
+        setLoadingData(false);
+      }
+    }
+  }, [viewingAsId]);
 
   useEffect(() => {
     const abortController = new AbortController();
-    
-    const fetchHomeData = async (signal) => {
-      try {
-        // Single API call to get all home page data
-        const url = viewingAs 
-          ? `/api/home?viewAs=${viewingAs.id}` 
-          : `/api/home`;
-        const response = await fetch(url, { signal });
-        const data = await response.json();
-        
-        if (data.workoutPlans) {
-          setWorkoutPlans(data.workoutPlans);
-        }
-        if (data.completedSessions) {
-          setCompletedSessions(data.completedSessions);
-        }
-        if (data.activeWorkouts) {
-          setActiveWorkouts(data.activeWorkouts);
-        }
-        setTodayCalories(data.todayCalories || 0);
-        setProgressData(data.progress || null);
-      } catch (e) {
-        if (e.name !== 'AbortError') {
-          console.error('Failed to load home data:', e);
-        }
-      } finally {
-        if (!signal.aborted) {
-          setLoadingData(false);
-        }
-      }
-    };
     
     fetchHomeData(abortController.signal);
     
@@ -130,7 +134,7 @@ export default function HomePage() {
       abortController.abort();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [viewingAs]);
+  }, [fetchHomeData]);
 
 
   if (loadingData) {
@@ -171,10 +175,6 @@ export default function HomePage() {
                         bgcolor: '#000', 
                         border: '2px solid #c4ff0d',
                         transition: 'all 0.2s',
-                        '&:hover': {
-                          transform: 'translateY(-2px)',
-                          boxShadow: '0 8px 24px rgba(196, 255, 13, 0.4)',
-                        }
                       }}
                     >
                       <CardContent>
@@ -299,10 +299,6 @@ export default function HomePage() {
                       bgcolor: 'background.paper',
                       transition: 'all 0.3s',
                       cursor: 'pointer',
-                      '&:hover': {
-                        transform: 'translateY(-2px)',
-                        boxShadow: '0 8px 24px rgba(196, 255, 13, 0.3)',
-                      }
                     }}
                     onClick={() => router.push(`/active-workout/${workout.id}`)}
                   >
@@ -498,12 +494,6 @@ export default function HomePage() {
                           bgcolor: 'background.paper',
                           cursor: 'pointer',
                           transition: 'all 0.2s ease',
-                          '&:hover': {
-                            backgroundColor: 'rgba(196, 255, 13, 0.05)',
-                            border: '1px solid rgba(196, 255, 13, 0.5)',
-                            transform: 'translateY(-2px)',
-                            boxShadow: '0 4px 12px rgba(196, 255, 13, 0.2)',
-                          }
                         }}
                       >
                         <CardContent>
@@ -620,9 +610,6 @@ export default function HomePage() {
                                   flexShrink: 0,
                                   cursor: 'pointer',
                                   transition: 'all 0.3s ease',
-                                  '&:hover': {
-                                    transform: 'scale(1.1)',
-                                  }
                                 }}
                                 onClick={(e) => {
                                   e.stopPropagation();

@@ -153,7 +153,7 @@ export default function Navbar({ onMenuClick }) {
               },
             }}
           >
-            Liftr
+            Spartans
           </Typography>
         </Link>
 

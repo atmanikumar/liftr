@@ -221,6 +221,11 @@ export default function StatsPage() {
                   <Typography variant="h6" sx={{ mb: 1 }}>
                     Heaviest Single Lift
                   </Typography>
+                  {winners.weight?.highestWeightLifted?.exercise && (
+                    <Typography variant="body1" sx={{ mb: 1, color: '#9c27b0', fontWeight: 600 }}>
+                      {winners.weight.highestWeightLifted.exercise}
+                    </Typography>
+                  )}
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.4 }}>
                     The maximum weight lifted in a single rep across
                     all exercises. Pure strength record.

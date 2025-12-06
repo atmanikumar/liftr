@@ -67,10 +67,10 @@ export default function LoginPage() {
             <Box sx={{ textAlign: 'center', mb: 4 }}>
               <FitnessCenterIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
               <Typography variant="h4" fontWeight="bold">
-                Liftr
+                Spartans
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Track your fitness journey
+                Train like a warrior
               </Typography>
             </Box>
 
