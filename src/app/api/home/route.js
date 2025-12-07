@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server';
 import { query } from '@/services/database/dbService';
 import { verifyAuth } from '@/lib/authMiddleware';
 
+// Increase max duration for this endpoint (Vercel default is 10s)
+export const maxDuration = 10; // Should load very fast now with minimal queries
+
 // GET - Fetch all data needed for home page in one call
 export async function GET(request) {
+  const startTime = Date.now();
+  
   try {
     const authResult = await verifyAuth(request);
     if (!authResult.authenticated) {
@@ -42,6 +47,10 @@ export async function GET(request) {
     
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
+    // Fetch all workouts upfront for better performance
+    const allWorkouts = await query(`SELECT id, name, muscleFocus, equipmentName FROM liftr_workouts`);
+    const workoutMap = new Map(allWorkouts.map(w => [w.id, w]));
+
     // 1. Get all active workouts (in-progress)
     const activeWorkoutsData = await query(
       `SELECT aw.*, tp.name as programName, tp.workoutIds
@@ -52,17 +61,13 @@ export async function GET(request) {
       [userId]
     );
     
-    const activeWorkouts = await Promise.all(activeWorkoutsData.map(async (aw) => {
+    const activeWorkouts = activeWorkoutsData.map((aw) => {
       const workoutIds = JSON.parse(aw.workoutIds || '[]');
       
-      // Check if all workouts use only dumbbells
+      // Check if all workouts use only dumbbells using workoutMap
       let isDumbbellOnly = false;
       if (workoutIds.length > 0) {
-        const workouts = await query(
-          `SELECT equipmentName FROM liftr_workouts WHERE id IN (${workoutIds.map(() => '?').join(',')})`,
-          workoutIds
-        );
-        
+        const workouts = workoutIds.map(id => workoutMap.get(id)).filter(Boolean);
         isDumbbellOnly = workouts.length > 0 && workouts.every(w => 
           w.equipmentName?.toLowerCase().includes('dumbbell')
         );
@@ -76,7 +81,7 @@ export async function GET(request) {
         workoutData: JSON.parse(aw.workoutData),
         equipmentTag: isDumbbellOnly ? 'Dumbbells (H)' : null,
       };
-    }));
+    });
 
     // 2. Get all today's sessions with equipment details for calories calculation
     const todaySessions = await query(
@@ -159,13 +164,7 @@ export async function GET(request) {
        ORDER BY createdAt DESC`
     );
 
-    // Get all workouts to calculate muscle distribution for each plan
-    const allWorkouts = await query(`SELECT id, name, muscleFocus FROM liftr_workouts`);
-    
-    // Create a Map for O(1) lookups instead of O(n) find operations
-    const workoutMap = new Map(allWorkouts.map(w => [w.id, w]));
-    
-    // Parse workoutIds for each plan and calculate muscle distribution
+    // Parse workoutIds for each plan and calculate muscle distribution (reusing workoutMap)
     const plans = workoutPlans.map(plan => {
       const workoutIds = JSON.parse(plan.workoutIds || '[]');
       
@@ -192,210 +191,11 @@ export async function GET(request) {
       };
     });
 
-    // 5. Get ALL sessions for progress calculations (last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    const allRecentSessions = await query(
-      `SELECT ws.*, w.equipmentName, w.muscleFocus
-       FROM liftr_workout_sessions ws
-       JOIN liftr_workouts w ON ws.workoutId = w.id
-       WHERE ws.userId = ? 
-       AND ws.completedAt >= ?
-       ORDER BY ws.completedAt DESC`,
-      [userId, thirtyDaysAgo.toISOString()]
-    );
+    // Progress stats (muscle distribution & calories chart) now loaded lazily via /api/progress-stats
+    // Recent activity now loaded lazily via /api/recent-activity endpoint
 
-    // Calculate calories per day for last 30 days
-    const caloriesByDay = {};
-    
-    allRecentSessions.forEach(session => {
-      const date = new Date(session.completedAt).toISOString().split('T')[0];
-      
-      // Calories by day
-      if (!caloriesByDay[date]) {
-        caloriesByDay[date] = 0;
-      }
-      const setCalories = calculateSetCalories(session.equipmentName);
-      caloriesByDay[date] += setCalories;
-    });
-
-    // 6. Get muscle distribution from last 7 days ONLY (muscles recover after 1 week)
-    // Count by SETS, not by workout sessions
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
-    const last7DaysSessions = await query(
-      `SELECT ws.*, w.muscleFocus
-       FROM liftr_workout_sessions ws
-       JOIN liftr_workouts w ON ws.workoutId = w.id
-       WHERE ws.userId = ? 
-       AND ws.completedAt >= ?`,
-      [userId, sevenDaysAgo.toISOString()]
-    );
-
-    // Count muscle sets (each set = 1 count for proper intensity distribution)
-    const workoutsByMuscle = {};
-    for (const session of last7DaysSessions) {
-      if (session.muscleFocus) {
-        if (!workoutsByMuscle[session.muscleFocus]) {
-          workoutsByMuscle[session.muscleFocus] = 0;
-        }
-        // Count this as 1 set (each session row is one set)
-        workoutsByMuscle[session.muscleFocus]++;
-      }
-    }
-
-    // Prepare chart data for last 30 days
-    const last30Days = [];
-    const todayDate = new Date();
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(todayDate);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      last30Days.push({
-        date: dateStr,
-        shortDate: `${date.getMonth() + 1}/${date.getDate()}`,
-        calories: Math.round(caloriesByDay[dateStr] || 0),
-      });
-    }
-
-    // Recent completed workout plans (last 5 unique training programs with session details)
-    const completedProgramSessions = new Map(); // Track by trainingProgramId + completedAt combination
-    
-    for (const session of allRecentSessions) {
-      if (session.trainingProgramId && session.completedAt) {
-        const sessionKey = `${session.trainingProgramId}_${session.completedAt}`;
-        
-        if (!completedProgramSessions.has(sessionKey)) {
-          completedProgramSessions.set(sessionKey, {
-            trainingProgramId: session.trainingProgramId,
-            completedAt: session.completedAt,
-            workouts: new Set(),
-            totalSets: 0,
-            calories: 0,
-          });
-        }
-        
-        const programSession = completedProgramSessions.get(sessionKey);
-        programSession.workouts.add(session.equipmentName);
-        programSession.totalSets++;
-        programSession.calories += calculateSetCalories(session.equipmentName);
-      }
-    }
-    
-    // Convert to array and get workout names for each plan
-    // Create a Map of plans for O(1) lookups
-    const planMap = new Map(plans.map(p => [p.id, p]));
-    
-    const recentCompletedPlans = [];
-    const sortedSessions = Array.from(completedProgramSessions.values())
-      .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
-      .slice(0, 5);
-    
-    for (const sessionData of sortedSessions) {
-      const plan = planMap.get(sessionData.trainingProgramId);
-      if (plan) {
-        // Get actual workouts performed in this specific session
-        const sessionWorkouts = allRecentSessions.filter(
-          s => s.trainingProgramId === sessionData.trainingProgramId && 
-               s.completedAt === sessionData.completedAt
-        );
-        
-        // Get unique workout IDs and use workoutMap for details (no additional query needed!)
-        const performedWorkoutIds = [...new Set(sessionWorkouts.map(s => s.workoutId))];
-        const workoutDetails = performedWorkoutIds
-          .map(id => workoutMap.get(id))
-          .filter(Boolean);
-        
-        if (workoutDetails.length > 0) {
-          // Calculate muscle distribution from actual performed workouts
-          // Use workoutMap for O(1) lookups instead of find()
-          const muscleFocusCount = {};
-          sessionWorkouts.forEach(s => {
-            const workout = workoutMap.get(s.workoutId);
-            if (workout && workout.muscleFocus) {
-              muscleFocusCount[workout.muscleFocus] = (muscleFocusCount[workout.muscleFocus] || 0) + 1;
-            }
-          });
-          
-          // Calculate improvements/decreases compared to previous session
-          const improvements = [];
-          const decreases = [];
-          
-          // Get previous session for this training program
-          const previousSessionWorkouts = allRecentSessions.filter(
-            s => s.trainingProgramId === sessionData.trainingProgramId && 
-                 s.completedAt < sessionData.completedAt
-          );
-          
-          if (previousSessionWorkouts.length > 0) {
-            // Get unique previous session dates and use the most recent one
-            const prevSessionDates = [...new Set(previousSessionWorkouts.map(s => s.completedAt))];
-            const mostRecentPrevDate = prevSessionDates.sort((a, b) => new Date(b) - new Date(a))[0];
-            
-            // Group previous session workouts by workoutId
-            const prevWorkoutMaxWeight = {};
-            previousSessionWorkouts
-              .filter(s => s.completedAt === mostRecentPrevDate)
-              .forEach(s => {
-                if (!prevWorkoutMaxWeight[s.workoutId] || s.weight > prevWorkoutMaxWeight[s.workoutId]) {
-                  prevWorkoutMaxWeight[s.workoutId] = s.weight;
-                }
-              });
-            
-            // Group current session workouts by workoutId
-            const currWorkoutMaxWeight = {};
-            sessionWorkouts.forEach(s => {
-              if (!currWorkoutMaxWeight[s.workoutId] || s.weight > currWorkoutMaxWeight[s.workoutId]) {
-                currWorkoutMaxWeight[s.workoutId] = s.weight;
-              }
-            });
-            
-            // Compare
-            for (const [workoutId, currentMax] of Object.entries(currWorkoutMaxWeight)) {
-              const prevMax = prevWorkoutMaxWeight[workoutId];
-              if (prevMax && prevMax !== currentMax) {
-                const workout = workoutMap.get(parseInt(workoutId));
-                if (workout) {
-                  if (currentMax > prevMax) {
-                    improvements.push({
-                      exercise: workout.name,
-                      increase: currentMax - prevMax,
-                      unit: sessionWorkouts.find(s => s.workoutId === parseInt(workoutId))?.unit || 'lbs',
-                    });
-                  } else {
-                    decreases.push({
-                      exercise: workout.name,
-                      decrease: prevMax - currentMax,
-                      unit: sessionWorkouts.find(s => s.workoutId === parseInt(workoutId))?.unit || 'lbs',
-                    });
-                  }
-                }
-              }
-            }
-          }
-          
-          recentCompletedPlans.push({
-            id: plan.id,
-            name: plan.name,
-            completedAt: sessionData.completedAt,
-            workoutCount: performedWorkoutIds.length,
-            workoutNames: workoutDetails.map(w => w.name),
-            muscleFocusGroups: Object.entries(muscleFocusCount).map(([muscle, count]) => ({ muscle, count })),
-            totalSets: sessionData.totalSets,
-            calories: Math.round(sessionData.calories),
-            comparison: {
-              hasComparison: improvements.length > 0 || decreases.length > 0,
-              improvements,
-              decreases,
-            },
-          });
-        }
-      }
-    }
-    
-    const recentActivity = recentCompletedPlans;
+    const executionTime = Date.now() - startTime;
+    console.log(`[Home API] Execution time: ${executionTime}ms`);
 
     return NextResponse.json({
       activeWorkouts, // Array of all in-progress workouts
@@ -403,18 +203,17 @@ export async function GET(request) {
       workoutPlans: plans,
       todayCalories: Math.round(totalCalories),
       sessionCount: todaySessions.length,
+      // Progress data now loaded lazily via separate endpoints
       progress: {
-        caloriesChart: last30Days,
-        muscleDistribution: Object.entries(workoutsByMuscle).map(([muscle, count]) => ({
-          muscle,
-          count,
-        })),
-        recentActivity,
+        caloriesChart: [], // Loaded lazily via /api/progress-stats
+        muscleDistribution: [], // Loaded lazily via /api/progress-stats
+        recentActivity: [], // Loaded lazily via /api/recent-activity
       },
     });
   } catch (error) {
-    console.error('Error fetching home data:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const executionTime = Date.now() - startTime;
+    console.error(`[Home API] Error after ${executionTime}ms:`, error);
+    return NextResponse.json({ error: error.message || 'Failed to fetch home data' }, { status: 500 });
   }
 }
 

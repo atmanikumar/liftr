@@ -15,6 +15,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  CircularProgress,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
@@ -44,6 +45,10 @@ export default function HomePage() {
   const [muscleMapOpen, setMuscleMapOpen] = useState(false);
   const [selectedWorkoutMuscles, setSelectedWorkoutMuscles] = useState([]);
   const [todayAchievements, setTodayAchievements] = useState([]);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [loadingRecentActivity, setLoadingRecentActivity] = useState(true);
+  const [progressStats, setProgressStats] = useState(null);
+  const [loadingProgressStats, setLoadingProgressStats] = useState(true);
 
   // Memoize viewingAs ID to prevent unnecessary effect triggers
   const viewingAsId = useMemo(() => viewingAs?.id, [viewingAs?.id]);
@@ -83,6 +88,84 @@ export default function HomePage() {
       abortController.abort();
     };
   }, [viewingAsId]);
+
+  // Fetch progress stats lazily (after home data loads)
+  useEffect(() => {
+    if (loadingData) return; // Wait for main data to load first
+    
+    const abortController = new AbortController();
+    
+    const fetchProgressStats = async () => {
+      try {
+        const url = viewingAsId 
+          ? `/api/progress-stats?viewAs=${viewingAsId}` 
+          : `/api/progress-stats`;
+        
+        const response = await fetch(url, {
+          signal: abortController.signal
+        });
+        const data = await response.json();
+        
+        if (data) {
+          setProgressStats(data);
+        }
+      } catch (e) {
+        if (e.name === 'AbortError') {
+          return;
+        }
+        console.error('Failed to fetch progress stats:', e);
+      } finally {
+        if (!abortController.signal.aborted) {
+          setLoadingProgressStats(false);
+        }
+      }
+    };
+
+    fetchProgressStats();
+    
+    return () => {
+      abortController.abort();
+    };
+  }, [viewingAsId, loadingData]);
+
+  // Fetch recent activity lazily (after home data loads)
+  useEffect(() => {
+    if (loadingData) return; // Wait for main data to load first
+    
+    const abortController = new AbortController();
+    
+    const fetchRecentActivity = async () => {
+      try {
+        const url = viewingAsId 
+          ? `/api/recent-activity?viewAs=${viewingAsId}` 
+          : `/api/recent-activity`;
+        
+        const response = await fetch(url, {
+          signal: abortController.signal
+        });
+        const data = await response.json();
+        
+        if (data.recentActivity) {
+          setRecentActivity(data.recentActivity);
+        }
+      } catch (e) {
+        if (e.name === 'AbortError') {
+          return;
+        }
+        console.error('Failed to fetch recent activity:', e);
+      } finally {
+        if (!abortController.signal.aborted) {
+          setLoadingRecentActivity(false);
+        }
+      }
+    };
+
+    fetchRecentActivity();
+    
+    return () => {
+      abortController.abort();
+    };
+  }, [viewingAsId, loadingData]);
 
   // Memoize fetch function to prevent recreation on every render
   const fetchHomeData = useCallback(async (signal) => {
@@ -392,7 +475,7 @@ export default function HomePage() {
         )}
 
         {/* No workouts message */}
-        {activeWorkouts.length === 0 && (!progressData || (progressData.recentActivity && progressData.recentActivity.length === 0)) && (
+        {activeWorkouts.length === 0 && recentActivity.length === 0 && !loadingRecentActivity && (
           <Grid item xs={12}>
             <Paper sx={{ p: 4, textAlign: 'center' }}>
               <FitnessCenterIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
@@ -423,7 +506,18 @@ export default function HomePage() {
         {progressData && (
           <>
             {/* Muscle Group Distribution - Body Map */}
-            {progressData.muscleDistribution && progressData.muscleDistribution.length > 0 && (
+            {loadingProgressStats ? (
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Typography variant="h6" gutterBottom sx={{ mb: 2, textAlign: 'center' }}>
+                    {effectiveUser?.username ? `${effectiveUser.username}'s ` : ''}Muscle Distribution
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress size={40} />
+                  </Box>
+                </Paper>
+              </Grid>
+            ) : progressStats?.muscleDistribution && progressStats.muscleDistribution.length > 0 && (
               <Grid item xs={12}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom sx={{ mb: 2, textAlign: 'center' }}>
@@ -432,13 +526,24 @@ export default function HomePage() {
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mb: 2 }}>
                     Last 7 days • Auto-resets after 1 week of rest
                   </Typography>
-                  <MuscleBodyMap muscleDistribution={progressData.muscleDistribution} useGradient={true} />
+                  <MuscleBodyMap muscleDistribution={progressStats.muscleDistribution} useGradient={true} />
                 </Paper>
               </Grid>
             )}
 
             {/* Calories Burned Per Day Chart */}
-            {progressData.caloriesChart && progressData.caloriesChart.some(day => day.calories > 0) && (
+            {loadingProgressStats ? (
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Typography variant="h6" gutterBottom sx={{ mb: 3, textAlign: 'center' }}>
+                    Calories Burned (Last 30 Days)
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress size={40} />
+                  </Box>
+                </Paper>
+              </Grid>
+            ) : progressStats?.caloriesChart && progressStats.caloriesChart.some(day => day.calories > 0) && (
               <Grid item xs={12}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom sx={{ mb: 3, textAlign: 'center' }}>
@@ -446,7 +551,7 @@ export default function HomePage() {
                   </Typography>
                   <Box sx={{ width: '100%', ml: -2 }}>
                     <ResponsiveContainer width="100%" height={250}>
-                      <LineChart data={progressData.caloriesChart} margin={{ left: -20 }}>
+                      <LineChart data={progressStats.caloriesChart} margin={{ left: -20 }}>
                         <XAxis 
                           dataKey="shortDate" 
                           stroke="rgba(255, 255, 255, 0.5)"
@@ -478,14 +583,19 @@ export default function HomePage() {
             )}
 
             {/* Recent Activity - Last 5 Completed Workout Plans */}
-            {progressData.recentActivity && progressData.recentActivity.length > 0 && (
+            {recentActivity.length > 0 && (
               <Grid item xs={12}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
                     Recent Activity
                   </Typography>
-                  <Stack spacing={2}>
-                    {progressData.recentActivity.map((plan, index) => (
+                  {loadingRecentActivity ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                      <CircularProgress size={40} />
+                    </Box>
+                  ) : (
+                    <Stack spacing={2}>
+                      {recentActivity.map((plan, index) => (
                       <Card 
                         key={`${plan.id}-${plan.completedAt}`}
                         onClick={() => router.push(`/workout-summary/${encodeURIComponent(plan.completedAt)}`)}
@@ -631,27 +741,28 @@ export default function HomePage() {
                           </Box>
                         </CardContent>
                       </Card>
-                    ))}
-                    
-                    {progressData.recentActivity.length >= 5 && (
-                      <Box sx={{ textAlign: 'center', mt: 2 }}>
-                        <Button
-                          variant="outlined"
-                          onClick={() => router.push('/recent')}
-                          sx={{
-                            color: '#c4ff0d',
-                            borderColor: 'rgba(196, 255, 13, 0.5)',
-                            '&:hover': {
-                              borderColor: '#c4ff0d',
-                              bgcolor: 'rgba(196, 255, 13, 0.1)',
-                            }
-                          }}
-                        >
-                          More Workouts
-                        </Button>
-                      </Box>
-                    )}
-                  </Stack>
+                      ))}
+                      
+                      {recentActivity.length >= 5 && (
+                        <Box sx={{ textAlign: 'center', mt: 2 }}>
+                          <Button
+                            variant="outlined"
+                            onClick={() => router.push('/recent')}
+                            sx={{
+                              color: '#c4ff0d',
+                              borderColor: 'rgba(196, 255, 13, 0.5)',
+                              '&:hover': {
+                                borderColor: '#c4ff0d',
+                                bgcolor: 'rgba(196, 255, 13, 0.1)',
+                              }
+                            }}
+                          >
+                            More Workouts
+                          </Button>
+                        </Box>
+                      )}
+                    </Stack>
+                  )}
                 </Paper>
               </Grid>
             )}
