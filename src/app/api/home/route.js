@@ -83,79 +83,16 @@ export async function GET(request) {
       };
     });
 
-    // 2. Get all today's sessions with equipment details for calories calculation
-    const todaySessions = await query(
-      `SELECT ws.*, w.equipmentName
-       FROM liftr_workout_sessions ws
-       JOIN liftr_workouts w ON ws.workoutId = w.id
-       WHERE ws.userId = ? 
-       AND DATE(ws.completedAt) = DATE(?)
-       ORDER BY ws.completedAt DESC`,
+    // 2. Get simple count of today's sessions (lightweight - no JOIN, no SELECT *)
+    const todaySessionCount = await query(
+      `SELECT COUNT(*) as count
+       FROM liftr_workout_sessions
+       WHERE userId = ? 
+       AND DATE(completedAt) = DATE(?)`,
       [userId, today]
     );
 
-    // Helper function to calculate calories for a set
-    const calculateSetCalories = (equipmentName) => {
-      const userWeight = 70; // kg, could be stored in user profile later
-      let met = 5.0; // default moderate intensity
-      const equipment = equipmentName?.toLowerCase() || '';
-      
-      if (equipment.includes('squat') || equipment.includes('deadlift')) {
-        met = 6.0; // high intensity compound
-      } else if (equipment.includes('curl') || equipment.includes('extension')) {
-        met = 4.0; // isolation exercise
-      } else if (equipment.includes('press')) {
-        met = 5.5; // moderate-high intensity
-      }
-      
-      // Calories = MET × weight(kg) × duration(hours)
-      // Assume ~2 minutes per set
-      const durationHours = 2 / 60;
-      return met * userWeight * durationHours;
-    };
-
-    // 3. Group sessions by trainingProgramId and completedAt, and calculate calories + muscle distribution
-    const sessionGroups = {};
-    let totalCalories = 0;
-
-    todaySessions.forEach(session => {
-      const key = `${session.trainingProgramId}_${session.completedAt}`;
-      
-      if (!sessionGroups[key]) {
-        sessionGroups[key] = {
-          trainingProgramId: session.trainingProgramId,
-          completedAt: session.completedAt,
-          setCount: 0,
-          calories: 0,
-          muscleDistribution: {},
-        };
-      }
-      
-      sessionGroups[key].setCount++;
-      const setCalories = calculateSetCalories(session.equipmentName);
-      sessionGroups[key].calories += setCalories;
-      totalCalories += setCalories;
-      
-      // Track muscle distribution for this session
-      if (session.muscleFocus) {
-        if (!sessionGroups[key].muscleDistribution[session.muscleFocus]) {
-          sessionGroups[key].muscleDistribution[session.muscleFocus] = 0;
-        }
-        sessionGroups[key].muscleDistribution[session.muscleFocus]++;
-      }
-    });
-
-    // Convert to array and sort
-    const completedSessions = Object.values(sessionGroups)
-      .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
-      .map(session => ({
-        ...session,
-        calories: Math.round(session.calories),
-        muscleDistribution: Object.entries(session.muscleDistribution).map(([muscle, count]) => ({
-          muscle,
-          count
-        })),
-      }));
+    const sessionCount = todaySessionCount[0]?.count || 0;
 
     // 4. Get workout plans with muscle distribution
     const workoutPlans = await query(
@@ -199,11 +136,9 @@ export async function GET(request) {
 
     return NextResponse.json({
       activeWorkouts, // Array of all in-progress workouts
-      completedSessions,
       workoutPlans: plans,
-      todayCalories: Math.round(totalCalories),
-      sessionCount: todaySessions.length,
-      // Progress data now loaded lazily via separate endpoints
+      sessionCount, // Simple count only
+      // All heavy data loaded lazily via separate endpoints
       progress: {
         caloriesChart: [], // Loaded lazily via /api/progress-stats
         muscleDistribution: [], // Loaded lazily via /api/progress-stats

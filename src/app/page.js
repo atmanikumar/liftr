@@ -37,9 +37,7 @@ export default function HomePage() {
   const effectiveUser = viewingAs || user;
   const router = useRouter();
   const [workoutPlans, setWorkoutPlans] = useState([]);
-  const [completedSessions, setCompletedSessions] = useState([]);
   const [activeWorkouts, setActiveWorkouts] = useState([]);
-  const [todayCalories, setTodayCalories] = useState(0);
   const [progressData, setProgressData] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
   const [muscleMapOpen, setMuscleMapOpen] = useState(false);
@@ -180,13 +178,9 @@ export default function HomePage() {
       if (data.workoutPlans) {
         setWorkoutPlans(data.workoutPlans);
       }
-      if (data.completedSessions) {
-        setCompletedSessions(data.completedSessions);
-      }
       if (data.activeWorkouts) {
         setActiveWorkouts(data.activeWorkouts);
       }
-      setTodayCalories(data.todayCalories || 0);
       setProgressData(data.progress || null);
     } catch (e) {
       if (e.name !== 'AbortError') {
