@@ -63,13 +63,14 @@ export async function GET(request) {
     };
 
     // Get sessions for last 30 days (limit 500)
+    // Select only needed columns for performance
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
     const allRecentSessions = await query(
-      `SELECT ws.*, w.equipmentName, w.muscleFocus
+      `SELECT ws.completedAt, w.equipmentName, w.muscleFocus
        FROM liftr_workout_sessions ws
-       JOIN liftr_workouts w ON ws.workoutId = w.id
+       INNER JOIN liftr_workouts w ON ws.workoutId = w.id
        WHERE ws.userId = ? 
        AND ws.completedAt >= ?
        ORDER BY ws.completedAt DESC
