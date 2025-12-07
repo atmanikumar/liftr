@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { query } from '@/services/database/dbService';
 import { verifyAuth } from '@/lib/authMiddleware';
 
+// Increase timeout for this endpoint
+export const maxDuration = 15;
+
 export async function GET(request) {
+  const startTime = Date.now();
+  
   try {
     const authResult = await verifyAuth(request);
     if (!authResult.authenticated) {
@@ -11,15 +16,17 @@ export async function GET(request) {
 
     const userId = authResult.user.id;
 
-    // Get all workout sessions for the user
+    // OPTIMIZED: Get only necessary columns and limit to last 500 sessions
     const sessions = await query(
-      `SELECT ws.*, w.name as workoutName, w.equipmentName, w.muscleFocus,
+      `SELECT ws.workoutId, ws.weight, ws.reps, ws.completedAt,
+              w.name as workoutName, w.equipmentName, w.muscleFocus,
               tp.name as programName
        FROM liftr_workout_sessions ws
-       JOIN liftr_workouts w ON ws.workoutId = w.id
+       INNER JOIN liftr_workouts w ON ws.workoutId = w.id
        LEFT JOIN liftr_training_programs tp ON ws.trainingProgramId = tp.id
        WHERE ws.userId = ?
-       ORDER BY ws.completedAt DESC`,
+       ORDER BY ws.completedAt DESC
+       LIMIT 500`,
       [userId]
     );
 
@@ -27,7 +34,6 @@ export async function GET(request) {
     const workoutsByExercise = {};
     const workoutsByDate = {};
     const workoutsByMuscle = {};
-    const workoutSessionsByDate = {}; // Track unique workout sessions by date
     let totalSets = 0;
     let totalReps = 0;
     let totalWeight = 0;
@@ -51,10 +57,14 @@ export async function GET(request) {
         workoutsByExercise[session.workoutName].maxWeight,
         session.weight || 0
       );
-      workoutsByExercise[session.workoutName].recentWeight.push({
-        weight: session.weight,
-        date: session.completedAt,
-      });
+      
+      // Keep only last 10 weights per exercise
+      if (workoutsByExercise[session.workoutName].recentWeight.length < 10) {
+        workoutsByExercise[session.workoutName].recentWeight.push({
+          weight: session.weight,
+          date: session.completedAt,
+        });
+      }
 
       // By date
       if (!workoutsByDate[date]) {
@@ -67,12 +77,6 @@ export async function GET(request) {
       workoutsByDate[date].programs.add(session.programName);
       workoutsByDate[date].totalSets++;
       workoutsByDate[date].exercises.add(session.workoutName);
-      
-      // Track unique workout sessions per date
-      if (!workoutSessionsByDate[date]) {
-        workoutSessionsByDate[date] = new Set();
-      }
-      workoutSessionsByDate[date].add(session.completedAt);
 
       // By muscle group
       if (session.muscleFocus) {
@@ -95,32 +99,19 @@ export async function GET(request) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
       const dateStr = date.toLocaleDateString();
+      
+      const dayData = workoutsByDate[dateStr];
       last30Days.push({
         date: dateStr,
         shortDate: `${date.getMonth() + 1}/${date.getDate()}`,
-        workouts: workoutsByDate[dateStr] ? workoutsByDate[dateStr].exercises.size : 0,
-        sets: workoutsByDate[dateStr]?.totalSets || 0,
+        workouts: dayData ? dayData.exercises.size : 0,
+        sets: dayData?.totalSets || 0,
+        // Simplified calories: 15 per set
+        calories: dayData ? dayData.totalSets * 15 : 0,
       });
     }
 
-    // Calculate calories per day
-    const caloriesByDay = {};
-    sessions.forEach(session => {
-      const date = new Date(session.completedAt).toLocaleDateString();
-      if (!caloriesByDay[date]) {
-        caloriesByDay[date] = 0;
-      }
-      // Simple calorie calculation: (weight * reps * 0.1)
-      const calories = (session.weight || 0) * (session.reps || 0) * 0.1;
-      caloriesByDay[date] += calories;
-    });
-
-    // Add calories to last 30 days data
-    last30Days.forEach(day => {
-      day.calories = Math.round(caloriesByDay[day.date] || 0);
-    });
-
-    // Get all achievements
+    // Get recent achievements (limit 100)
     const achievements = await query(
       `SELECT * FROM liftr_achievements 
        WHERE userId = ?
@@ -128,6 +119,9 @@ export async function GET(request) {
        LIMIT 100`,
       [userId]
     );
+
+    const executionTime = Date.now() - startTime;
+    console.log(`[Progress API] Execution time: ${executionTime}ms, Sessions: ${sessions.length}`);
 
     return NextResponse.json({
       summary: {
@@ -140,21 +134,26 @@ export async function GET(request) {
       chartData: {
         workoutsPerDay: last30Days,
       },
-      workoutsByDate: Object.entries(workoutsByDate).map(([date, data]) => ({
-        date,
-        programs: Array.from(data.programs),
-        sets: data.totalSets,
-        exercises: Array.from(data.exercises),
-      })).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 30),
-      muscleDistribution: Object.entries(workoutsByMuscle).map(([muscle, count]) => ({
-        muscle,
-        sets: count,
-      })).sort((a, b) => b.sets - a.sets),
+      workoutsByDate: Object.entries(workoutsByDate)
+        .map(([date, data]) => ({
+          date,
+          programs: Array.from(data.programs),
+          sets: data.totalSets,
+          exercises: Array.from(data.exercises),
+        }))
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 30),
+      muscleDistribution: Object.entries(workoutsByMuscle)
+        .map(([muscle, count]) => ({
+          muscle,
+          sets: count,
+        }))
+        .sort((a, b) => b.sets - a.sets),
       achievements,
     });
   } catch (error) {
-    console.error('Error fetching progress:', error);
+    const executionTime = Date.now() - startTime;
+    console.error(`[Progress API] Error after ${executionTime}ms:`, error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-

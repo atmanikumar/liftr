@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server';
 import { query } from '@/services/database/dbService';
 import { verifyAuth } from '@/lib/authMiddleware';
 
+// Increase timeout for this endpoint
+export const maxDuration = 15;
+
 export async function GET(request) {
+  const startTime = Date.now();
   try {
     const authResult = await verifyAuth(request);
     if (!authResult.authenticated) {
@@ -34,21 +38,30 @@ export async function GET(request) {
       params.push(searchPattern, searchDate, searchDate, searchDate, searchPattern);
     }
 
-    // Get total count of unique sessions (date + programId combinations)
+    // Get total count (use simple count, not DISTINCT which is slow)
     const countResult = await query(
-      `SELECT COUNT(DISTINCT DATE(ws.completedAt) || '_' || ws.trainingProgramId) as total
-       FROM liftr_workout_sessions ws
-       WHERE ${whereClause}`,
-      params
+      `SELECT COUNT(*) as total
+       FROM liftr_workout_sessions
+       WHERE userId = ?`,
+      [userId]
     );
 
     const total = countResult[0]?.total || 0;
 
-    // Get all sessions for the date range (we'll group and paginate after)
-    // We can't use LIMIT on individual rows because we need to group complete sessions
+    // OPTIMIZED: Fetch only specific columns and LIMIT the query
+    // Get only last 1000 sessions max (enough for pagination)
+    const maxRows = 1000;
     const allSessions = await query(
       `SELECT 
-        ws.*, 
+        ws.workoutId,
+        ws.trainingProgramId,
+        ws.setNumber,
+        ws.weight,
+        ws.weightChange,
+        ws.reps,
+        ws.rir,
+        ws.unit,
+        ws.completedAt,
         w.name as workoutName, 
         w.equipmentName, 
         w.muscleFocus,
@@ -56,11 +69,12 @@ export async function GET(request) {
         DATE(ws.completedAt) as sessionDate,
         TIME(ws.completedAt) as sessionTime
        FROM liftr_workout_sessions ws
-       JOIN liftr_workouts w ON ws.workoutId = w.id
+       INNER JOIN liftr_workouts w ON ws.workoutId = w.id
        LEFT JOIN liftr_training_programs tp ON ws.trainingProgramId = tp.id
        WHERE ${whereClause}
-       ORDER BY ws.completedAt DESC`,
-      params
+       ORDER BY ws.completedAt DESC
+       LIMIT ?`,
+      [...params, maxRows]
     );
 
     // Group all sessions first
@@ -148,6 +162,9 @@ export async function GET(request) {
     // Now paginate the grouped sessions
     const paginatedWorkouts = allWorkouts.slice(offset, offset + limit);
 
+    const executionTime = Date.now() - startTime;
+    console.log(`[Recent Workouts API] Execution time: ${executionTime}ms, Sessions: ${allSessions.length}, Grouped: ${allWorkouts.length}`);
+
     return NextResponse.json({
       workouts: paginatedWorkouts,
       pagination: {
@@ -158,7 +175,8 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    console.error('Error fetching recent workouts:', error);
+    const executionTime = Date.now() - startTime;
+    console.error(`[Recent Workouts API] Error after ${executionTime}ms:`, error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

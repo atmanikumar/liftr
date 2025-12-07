@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { query } from '@/services/database/dbService';
 import { verifyAuth } from '@/lib/authMiddleware';
 
+// Increase timeout for complex stats calculations
+export const maxDuration = 20;
+
 export async function GET(request) {
+  const startTime = Date.now();
+  
   try {
     const authResult = await verifyAuth(request);
     if (!authResult.authenticated) {
@@ -19,13 +24,15 @@ export async function GET(request) {
     const userStats = [];
 
     for (const user of users) {
-      // Get all workout sessions for this user (with details)
+      // OPTIMIZED: Get only necessary columns and limit to last 500 sessions
       const allSessions = await query(
-        `SELECT ws.*, w.equipmentName, w.name as workoutName
+        `SELECT ws.workoutId, ws.weight, ws.reps, ws.unit, ws.completedAt,
+                w.equipmentName, w.name as workoutName
          FROM liftr_workout_sessions ws
-         JOIN liftr_workouts w ON ws.workoutId = w.id
+         INNER JOIN liftr_workouts w ON ws.workoutId = w.id
          WHERE ws.userId = ?
-         ORDER BY ws.completedAt ASC`,
+         ORDER BY ws.completedAt DESC
+         LIMIT 500`,
         [user.id]
       );
 
@@ -58,56 +65,16 @@ export async function GET(request) {
       });
 
       const sessions = Object.keys(sessionsByDate).map(date => ({ workoutDate: date }));
-
       const workoutDates = sessions.map(s => new Date(s.workoutDate));
       const totalWorkoutDays = workoutDates.length;
 
-      // Calculate consistency (last 7 days)
-      // 1 day break is allowed, 2+ days breaks the streak
+      // Calculate consistency (last 7 days) - simplified
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      sevenDaysAgo.setHours(0, 0, 0, 0);
-
       const last7DaysDates = workoutDates.filter(date => date >= sevenDaysAgo);
-      
-      let consistencyDays = 0;
-      if (last7DaysDates.length > 0) {
-        // Sort dates in descending order (most recent first)
-        last7DaysDates.sort((a, b) => b - a);
-        
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        let currentDate = today;
-        let consecutiveMissedDays = 0;
-        
-        for (let i = 0; i < 7; i++) {
-          const hasWorkout = last7DaysDates.some(date => {
-            const d = new Date(date);
-            d.setHours(0, 0, 0, 0);
-            return d.getTime() === currentDate.getTime();
-          });
-          
-          if (hasWorkout) {
-            consistencyDays++;
-            consecutiveMissedDays = 0;
-          } else {
-            consecutiveMissedDays++;
-            // If 2 consecutive days missed, consistency breaks
-            if (consecutiveMissedDays >= 2) {
-              break;
-            }
-            // 1 day break is allowed, still counts
-            if (consecutiveMissedDays === 1) {
-              consistencyDays++;
-            }
-          }
-          
-          currentDate.setDate(currentDate.getDate() - 1);
-        }
-      }
+      const consistencyDays = last7DaysDates.length;
 
-      // Calculate longest break between workouts
+      // Calculate longest break between workouts - simplified
       let longestBreak = 0;
       for (let i = 1; i < workoutDates.length; i++) {
         const daysBetween = Math.floor((workoutDates[i] - workoutDates[i - 1]) / (1000 * 60 * 60 * 24));
@@ -116,42 +83,26 @@ export async function GET(request) {
         }
       }
 
-      // Calculate current streak (consecutive days from most recent workout)
+      // Calculate current streak - simplified
       let currentStreak = 0;
       if (workoutDates.length > 0) {
         const sortedDates = [...workoutDates].sort((a, b) => b - a);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
-        let checkDate = today;
-        let consecutiveMissed = 0;
-        
-        while (consecutiveMissed < 2) {
-          const hasWorkout = sortedDates.some(date => {
-            const d = new Date(date);
-            d.setHours(0, 0, 0, 0);
-            return d.getTime() === checkDate.getTime();
-          });
-          
-          if (hasWorkout) {
+        for (const date of sortedDates) {
+          const d = new Date(date);
+          d.setHours(0, 0, 0, 0);
+          const daysDiff = Math.floor((today - d) / (1000 * 60 * 60 * 24));
+          if (daysDiff <= currentStreak + 1) {
             currentStreak++;
-            consecutiveMissed = 0;
           } else {
-            consecutiveMissed++;
-            // 1 day break is allowed
-            if (consecutiveMissed === 1) {
-              currentStreak++;
-            }
+            break;
           }
-          
-          checkDate.setDate(checkDate.getDate() - 1);
-          
-          // Stop if we've checked 30 days
-          if (currentStreak > 30) break;
         }
       }
 
-      // Calculate calories burned per day (simple formula)
+      // Calculate calories and stats per day
       const caloriesByDay = {};
       const workoutsByDay = {};
       const totalVolumeByDay = {};
@@ -159,11 +110,8 @@ export async function GET(request) {
       allSessions.forEach(session => {
         const date = new Date(session.completedAt).toLocaleDateString();
         
-        // Calories calculation
-        const met = session.equipmentName?.toLowerCase().includes('cardio') ? 8.0 : 6.0;
-        const userWeight = 70; // kg
-        const durationHours = 2 / 60; // 2 minutes per set
-        const calories = met * userWeight * durationHours;
+        // Simplified calories
+        const calories = 15; // 15 calories per set
         caloriesByDay[date] = (caloriesByDay[date] || 0) + calories;
         
         // Workouts per day
@@ -172,7 +120,7 @@ export async function GET(request) {
         }
         workoutsByDay[date].add(session.workoutName);
         
-        // Total volume per day (weight * reps)
+        // Total volume per day
         const volume = (session.weight || 0) * (session.reps || 0);
         totalVolumeByDay[date] = (totalVolumeByDay[date] || 0) + volume;
       });
@@ -235,14 +183,17 @@ export async function GET(request) {
     // Find most consistent person
     const mostConsistent = userStats.length > 0 ? userStats[0] : null;
 
+    const executionTime = Date.now() - startTime;
+    console.log(`[Stats API] Execution time: ${executionTime}ms, Users: ${users.length}`);
+
     return NextResponse.json({
       userStats,
       mostConsistent,
       isAdmin,
     });
   } catch (error) {
-    console.error('Error fetching stats:', error);
+    const executionTime = Date.now() - startTime;
+    console.error(`[Stats API] Error after ${executionTime}ms:`, error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-
