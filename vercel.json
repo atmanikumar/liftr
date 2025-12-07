@@ -3,6 +3,12 @@
   "outputDirectory": ".next",
   "framework": "nextjs",
   "installCommand": "npm install",
+  "crons": [
+    {
+      "path": "/api/cleanup-old-data",
+      "schedule": "0 2 1 * *"
+    }
+  ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/$1" },
     {
@@ -15,4 +21,3 @@
     }
   ]
 }
-

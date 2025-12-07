@@ -217,6 +217,29 @@ export async function POST(request) {
       }
     }
 
+    // Update workout metadata for each workout (for lightweight access)
+    for (const session of sessions) {
+      const { workoutId, sets, unit } = session;
+      
+      const maxWeight = Math.max(...sets.map(s => s.weight || 0));
+      const avgWeight = sets.reduce((sum, s) => sum + (s.weight || 0), 0) / sets.length;
+      const avgReps = sets.reduce((sum, s) => sum + (s.reps || 0), 0) / sets.length;
+      const avgRir = sets.reduce((sum, s) => sum + (s.rir || 0), 0) / sets.length;
+      const sessionDate = completedAt.split('T')[0];
+      
+      try {
+        await execute(
+          `INSERT OR REPLACE INTO liftr_workout_meta 
+           (userId, workoutId, sessionDate, maxWeight, avgWeight, totalSets, avgReps, avgRir, unit)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [userId, workoutId, sessionDate, maxWeight, avgWeight, sets.length, avgReps, avgRir, unit]
+        );
+      } catch (e) {
+        // Meta table might not exist yet, that's ok
+        console.log('Metadata table not initialized yet');
+      }
+    }
+
     // Delete active workout after successful save
     await execute('DELETE FROM liftr_active_workouts WHERE userId = ?', [userId]);
 
