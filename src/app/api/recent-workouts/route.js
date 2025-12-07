@@ -20,45 +20,24 @@ export async function GET(request) {
     const searchDate = searchParams.get('date') || '';
     const offset = (page - 1) * limit;
 
-    let whereClause = 'ws.userId = ?';
-    const params = [userId];
+    // OPTIMIZED: Use indexed completedAt with LIMIT directly in subquery
+    // Much faster than fetching all sessions and grouping in memory
+    let subqueryWhere = 'userId = ?';
+    const subqueryParams = [userId];
 
     // Add free text date filter if provided
     if (searchDate) {
-      whereClause += ` AND (
-        DATE(ws.completedAt) LIKE ? 
-        OR strftime('%d', ws.completedAt) = ?
-        OR strftime('%m', ws.completedAt) = ?
-        OR strftime('%Y', ws.completedAt) = ?
-        OR strftime('%Y-%m-%d', ws.completedAt) LIKE ?
+      subqueryWhere += ` AND (
+        DATE(completedAt) LIKE ? 
+        OR strftime('%d', completedAt) = ?
+        OR strftime('%m', completedAt) = ?
+        OR strftime('%Y', completedAt) = ?
+        OR strftime('%Y-%m-%d', completedAt) LIKE ?
       )`;
       const searchPattern = `%${searchDate}%`;
-      params.push(searchPattern, searchDate, searchDate, searchDate, searchPattern);
+      subqueryParams.push(searchPattern, searchDate, searchDate, searchDate, searchPattern);
     }
 
-    // CRITICAL OPTIMIZATION: Get distinct session keys with pagination FIRST
-    // This prevents fetching ALL sessions when we only need a page worth
-    const distinctSessionKeysQuery = `
-      SELECT DISTINCT DATE(ws.completedAt) || '_' || ws.trainingProgramId || '_' || ws.completedAt as sessionKey, ws.completedAt
-      FROM liftr_workout_sessions ws
-      WHERE ${whereClause}
-      ORDER BY ws.completedAt DESC
-      LIMIT ? OFFSET ?
-    `;
-    const distinctSessionKeys = await query(distinctSessionKeysQuery, [...params, limit, offset]);
-
-    if (distinctSessionKeys.length === 0) {
-      return NextResponse.json({ 
-        workouts: [], 
-        pagination: { page, limit, total: 0, totalPages: 0 } 
-      });
-    }
-
-    // Get the session key values for the IN clause
-    const sessionKeyValues = distinctSessionKeys.map(row => row.sessionKey);
-    const sessionKeyPlaceholders = sessionKeyValues.map(() => '?').join(',');
-
-    // Now fetch ONLY the sessions for these specific session keys
     const allSessionsForPage = await query(
       `SELECT
         ws.workoutId,
@@ -79,10 +58,24 @@ export async function GET(request) {
        FROM liftr_workout_sessions ws
        INNER JOIN liftr_workouts w ON ws.workoutId = w.id
        LEFT JOIN liftr_training_programs tp ON ws.trainingProgramId = tp.id
-       WHERE ws.userId = ? AND (DATE(ws.completedAt) || '_' || ws.trainingProgramId || '_' || ws.completedAt) IN (${sessionKeyPlaceholders})
+       WHERE ws.completedAt IN (
+         SELECT DISTINCT completedAt 
+         FROM liftr_workout_sessions
+         WHERE ${subqueryWhere}
+         ORDER BY completedAt DESC
+         LIMIT ? OFFSET ?
+       )
+       AND ws.userId = ?
        ORDER BY ws.completedAt DESC, ws.trainingProgramId, ws.workoutId, ws.setNumber`,
-      [userId, ...sessionKeyValues]
+      [...subqueryParams, limit, offset, userId]
     );
+
+    if (allSessionsForPage.length === 0) {
+      return NextResponse.json({ 
+        workouts: [], 
+        pagination: { page, limit, total: 0, totalPages: 0 } 
+      });
+    }
 
     // Group sessions by sessionKey
     const groupedSessions = {};
@@ -168,10 +161,10 @@ export async function GET(request) {
 
     // Get total count for pagination (simplified)
     const totalCountResult = await query(
-      `SELECT COUNT(DISTINCT DATE(ws.completedAt) || '_' || ws.trainingProgramId || '_' || ws.completedAt) as total
-       FROM liftr_workout_sessions ws
-       WHERE ${whereClause}`,
-      params
+      `SELECT COUNT(DISTINCT completedAt) as total
+       FROM liftr_workout_sessions
+       WHERE ${subqueryWhere}`,
+      subqueryParams
     );
     const total = totalCountResult[0]?.total || 0;
 
