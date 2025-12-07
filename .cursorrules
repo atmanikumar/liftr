@@ -129,11 +129,11 @@ src/
 - Use selectors for derived state
 - Handle loading/error states consistently
 
-## 🗄️ Database Schema
+## 🗄️ Database Schema & Indexing
 
 **Important**: All Liftr table names must be prefixed with `liftr_`
 
-### Tables
+### Core Tables
 ```sql
 liftr_users (
   id INTEGER PRIMARY KEY,
@@ -141,6 +141,7 @@ liftr_users (
   password TEXT, -- bcrypt hashed
   name TEXT,
   role TEXT DEFAULT 'user', -- 'user' | 'admin'
+  trainerId INTEGER, -- for trainer assignments
   createdAt TEXT,
   lastLogin TEXT
 )
@@ -169,14 +170,198 @@ liftr_workout_sessions (
   userId INTEGER,
   workoutId INTEGER,
   trainingProgramId INTEGER,
-  sets INTEGER,
-  reps TEXT, -- JSON array
-  weight TEXT, -- JSON array
-  duration INTEGER, -- minutes
-  notes TEXT,
+  setNumber INTEGER,
+  reps INTEGER,
+  weight REAL,
+  weightChange REAL,
+  rir INTEGER,
+  unit TEXT DEFAULT 'lbs',
   completedAt TEXT
 )
+
+liftr_active_workouts (
+  id INTEGER PRIMARY KEY,
+  userId INTEGER,
+  trainingProgramId INTEGER,
+  workoutData TEXT, -- JSON
+  startedAt TEXT
+)
+
+liftr_achievements (
+  id INTEGER PRIMARY KEY,
+  userId INTEGER,
+  workoutId INTEGER,
+  exerciseName TEXT,
+  achievementType TEXT, -- 'weight', 'reps', 'rir'
+  previousValue REAL,
+  newValue REAL,
+  improvement REAL,
+  unit TEXT,
+  achievedAt TEXT
+)
 ```
+
+### Metadata Tables (For Scalability)
+```sql
+-- Stores last 10 sessions per workout (lightweight)
+liftr_workout_meta (
+  id INTEGER PRIMARY KEY,
+  userId INTEGER,
+  workoutId INTEGER,
+  sessionDate TEXT,
+  maxWeight REAL,
+  avgWeight REAL,
+  totalSets INTEGER,
+  avgReps REAL,
+  avgRir REAL,
+  unit TEXT,
+  UNIQUE(userId, workoutId, sessionDate)
+)
+
+-- Personal records (all-time bests)
+liftr_personal_records (
+  id INTEGER PRIMARY KEY,
+  userId INTEGER,
+  workoutId INTEGER,
+  recordType TEXT, -- 'max_weight', 'max_reps', 'max_volume'
+  recordValue REAL,
+  unit TEXT,
+  achievedAt TEXT,
+  previousRecord REAL,
+  UNIQUE(userId, workoutId, recordType)
+)
+
+-- Weekly statistics
+liftr_weekly_stats (
+  id INTEGER PRIMARY KEY,
+  userId INTEGER,
+  weekStart TEXT, -- YYYY-MM-DD (Monday)
+  totalWorkouts INTEGER,
+  totalSets INTEGER,
+  totalCalories INTEGER,
+  musclesWorked TEXT, -- JSON
+  UNIQUE(userId, weekStart)
+)
+
+-- Monthly statistics
+liftr_monthly_stats (
+  id INTEGER PRIMARY KEY,
+  userId INTEGER,
+  month TEXT, -- YYYY-MM
+  totalWorkouts INTEGER,
+  totalSets INTEGER,
+  totalCalories INTEGER,
+  avgWorkoutsPerWeek REAL,
+  UNIQUE(userId, month)
+)
+```
+
+### Database Indexing Strategy
+
+**CRITICAL**: Always maintain these indexes for optimal performance
+
+#### Core Workout Indexes (4 indexes)
+```sql
+-- User's sessions by date (used in /api/home, /api/progress-stats)
+CREATE INDEX idx_workout_sessions_user_date 
+ON liftr_workout_sessions(userId, completedAt DESC);
+
+-- Program sessions (used in /api/recent-activity)
+CREATE INDEX idx_workout_sessions_program_date 
+ON liftr_workout_sessions(trainingProgramId, completedAt DESC);
+
+-- Workout-specific sessions (used in comparisons)
+CREATE INDEX idx_workout_sessions_workout 
+ON liftr_workout_sessions(workoutId, completedAt DESC);
+
+-- User-workout history (used in /api/workout-history)
+CREATE INDEX idx_workout_sessions_user_workout 
+ON liftr_workout_sessions(userId, workoutId, completedAt DESC);
+```
+
+#### Achievement Indexes (3 indexes)
+```sql
+-- Today's achievements (used in /api/achievements/today)
+CREATE INDEX idx_achievements_user_date 
+ON liftr_achievements(userId, achievedAt DESC);
+
+-- Exercise-specific achievements
+CREATE INDEX idx_achievements_user_workout 
+ON liftr_achievements(userId, workoutId, achievedAt DESC);
+
+-- Achievements by type (weight/reps/rir)
+CREATE INDEX idx_achievements_user_type 
+ON liftr_achievements(userId, achievementType, achievedAt DESC);
+```
+
+#### Metadata Indexes (6 indexes)
+```sql
+-- Workout history (last 10 sessions)
+CREATE INDEX idx_workout_meta_user_workout 
+ON liftr_workout_meta(userId, workoutId, sessionDate DESC);
+
+-- Recent progress
+CREATE INDEX idx_workout_meta_user_date 
+ON liftr_workout_meta(userId, sessionDate DESC);
+
+-- Personal records lookup
+CREATE INDEX idx_personal_records_user_workout 
+ON liftr_personal_records(userId, workoutId, recordType);
+
+-- Recent PRs
+CREATE INDEX idx_personal_records_user_date 
+ON liftr_personal_records(userId, achievedAt DESC);
+
+-- Weekly statistics
+CREATE INDEX idx_weekly_stats_user_week 
+ON liftr_weekly_stats(userId, weekStart DESC);
+
+-- Monthly statistics
+CREATE INDEX idx_monthly_stats_user_month 
+ON liftr_monthly_stats(userId, month DESC);
+```
+
+#### Other Indexes (3 indexes)
+```sql
+-- Active workouts
+CREATE INDEX idx_active_workouts_user 
+ON liftr_active_workouts(userId, startedAt DESC);
+
+-- Trainer queries
+CREATE INDEX idx_users_trainer 
+ON liftr_users(trainerId);
+
+-- Workout lookups (for JOINs)
+CREATE INDEX idx_workouts_id 
+ON liftr_workouts(id);
+```
+
+### Indexing Best Practices
+
+1. **Always run `/api/optimize-db` after deployment** to create all indexes
+2. **Run `ANALYZE` in Turso console** after creating indexes
+3. **When adding new queries**, ensure they use indexed columns in WHERE/ORDER BY
+4. **Monitor query performance** - all queries should be < 500ms
+5. **If adding new tables**, create corresponding indexes for common queries
+
+### Data Retention Strategy
+
+- **Keep detailed sessions**: Last 30 days only
+- **Keep metadata**: Last 10 sessions per workout (forever)
+- **Keep PRs**: All-time bests (forever)
+- **Keep stats**: Weekly/monthly summaries (forever)
+- **Auto-cleanup**: Monthly cron job deletes old sessions, preserves metadata
+- **Run cleanup**: `/api/cleanup-old-data` (runs automatically monthly)
+
+### Performance Expectations
+
+With proper indexing:
+- Home page: < 200ms
+- Progress stats: < 500ms
+- Achievements: < 100ms
+- Workout history: < 50ms
+- Personal records: < 10ms
+- Statistics: < 100ms
 
 ## 🔧 Service Layer (Modular)
 
@@ -292,9 +477,76 @@ JWT_EXPIRY=90d
 
 1. ✅ All environment variables set in Vercel
 2. ✅ Initialize database tables (`/api/init-db`)
-3. ✅ Create admin user
-4. ✅ Test authentication flow
-5. ✅ Verify responsive design
+3. ✅ Initialize metadata tables (`/api/init-meta-tables`)
+4. ✅ Create database indexes (`/api/optimize-db`)
+5. ✅ Create admin user
+6. ✅ Test authentication flow
+7. ✅ Verify responsive design
+8. ✅ Run `ANALYZE` in Turso console
+
+## 🎯 Performance & Scalability
+
+### Lazy Loading Architecture
+
+To prevent timeout errors and ensure fast page loads:
+
+1. **Main data loads first** (< 3 seconds)
+   - Home page: `/api/home` returns only essential data
+   - Active workouts, today's calories, session count
+
+2. **Heavy data loads lazily** (background, after main load)
+   - Progress stats: `/api/progress-stats` (muscle distribution, calories chart)
+   - Recent activity: `/api/recent-activity` (last 5 workouts with comparisons)
+   - Achievements: `/api/achievements/today` (today's PRs)
+
+3. **Use loading spinners** for lazy sections
+   - Show `CircularProgress` while data loads
+   - Progressive UI updates as data arrives
+
+### API Endpoint Guidelines
+
+When creating new API endpoints:
+
+- **Select specific columns**, not `SELECT *`
+- **Use INNER JOIN** when data must exist
+- **Add LIMIT** to prevent excessive data
+- **Filter by indexed columns** in WHERE clause
+- **Use date ranges** instead of all-time queries
+- **Return only needed data** to frontend
+- **Set maxDuration** for long-running endpoints
+
+Example:
+```javascript
+export const maxDuration = 20; // For slow endpoints
+
+const data = await query(
+  `SELECT ws.completedAt, w.muscleFocus 
+   FROM liftr_workout_sessions ws
+   INNER JOIN liftr_workouts w ON ws.workoutId = w.id
+   WHERE ws.userId = ? AND ws.completedAt >= ?
+   ORDER BY ws.completedAt DESC
+   LIMIT 500`,
+  [userId, thirtyDaysAgo]
+);
+```
+
+### Cron Jobs
+
+Vercel cron jobs are configured in `vercel.json`:
+
+```json
+{
+  "crons": [{
+    "path": "/api/cleanup-old-data",
+    "schedule": "0 2 1 * *"  // 1st of month, 2 AM
+  }]
+}
+```
+
+- **Cleanup old data**: Runs monthly, deletes sessions > 30 days
+- **Preserves metadata**: Keeps last 10 sessions per workout
+- **Updates PRs**: Ensures personal records are current
+- **Automatic**: No manual intervention needed
 
 ## ⚠️ Important Notes
 
