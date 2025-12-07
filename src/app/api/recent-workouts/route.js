@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { query } from '@/services/database/dbService';
 import { verifyAuth } from '@/lib/authMiddleware';
 
-// Increase timeout for this endpoint
-export const maxDuration = 15;
+// Increase timeout for this complex endpoint
+export const maxDuration = 20;
 
 export async function GET(request) {
   const startTime = Date.now();
@@ -24,9 +24,7 @@ export async function GET(request) {
     const params = [userId];
 
     // Add free text date filter if provided
-    // Supports: "17", "April", "2025", "Nov 30", "2024-11-30", etc.
     if (searchDate) {
-      // Try to match various date formats
       whereClause += ` AND (
         DATE(ws.completedAt) LIKE ? 
         OR strftime('%d', ws.completedAt) = ?
@@ -38,21 +36,31 @@ export async function GET(request) {
       params.push(searchPattern, searchDate, searchDate, searchDate, searchPattern);
     }
 
-    // Get total count (use simple count, not DISTINCT which is slow)
-    const countResult = await query(
-      `SELECT COUNT(*) as total
-       FROM liftr_workout_sessions
-       WHERE userId = ?`,
-      [userId]
-    );
+    // CRITICAL OPTIMIZATION: Get distinct session keys with pagination FIRST
+    // This prevents fetching ALL sessions when we only need a page worth
+    const distinctSessionKeysQuery = `
+      SELECT DISTINCT DATE(ws.completedAt) || '_' || ws.trainingProgramId || '_' || ws.completedAt as sessionKey, ws.completedAt
+      FROM liftr_workout_sessions ws
+      WHERE ${whereClause}
+      ORDER BY ws.completedAt DESC
+      LIMIT ? OFFSET ?
+    `;
+    const distinctSessionKeys = await query(distinctSessionKeysQuery, [...params, limit, offset]);
 
-    const total = countResult[0]?.total || 0;
+    if (distinctSessionKeys.length === 0) {
+      return NextResponse.json({ 
+        workouts: [], 
+        pagination: { page, limit, total: 0, totalPages: 0 } 
+      });
+    }
 
-    // OPTIMIZED: Fetch only specific columns and LIMIT the query
-    // Get only last 1000 sessions max (enough for pagination)
-    const maxRows = 1000;
-    const allSessions = await query(
-      `SELECT 
+    // Get the session key values for the IN clause
+    const sessionKeyValues = distinctSessionKeys.map(row => row.sessionKey);
+    const sessionKeyPlaceholders = sessionKeyValues.map(() => '?').join(',');
+
+    // Now fetch ONLY the sessions for these specific session keys
+    const allSessionsForPage = await query(
+      `SELECT
         ws.workoutId,
         ws.trainingProgramId,
         ws.setNumber,
@@ -62,8 +70,8 @@ export async function GET(request) {
         ws.rir,
         ws.unit,
         ws.completedAt,
-        w.name as workoutName, 
-        w.equipmentName, 
+        w.name as workoutName,
+        w.equipmentName,
         w.muscleFocus,
         tp.name as programName,
         DATE(ws.completedAt) as sessionDate,
@@ -71,18 +79,17 @@ export async function GET(request) {
        FROM liftr_workout_sessions ws
        INNER JOIN liftr_workouts w ON ws.workoutId = w.id
        LEFT JOIN liftr_training_programs tp ON ws.trainingProgramId = tp.id
-       WHERE ${whereClause}
-       ORDER BY ws.completedAt DESC
-       LIMIT ?`,
-      [...params, maxRows]
+       WHERE ws.userId = ? AND (DATE(ws.completedAt) || '_' || ws.trainingProgramId || '_' || ws.completedAt) IN (${sessionKeyPlaceholders})
+       ORDER BY ws.completedAt DESC, ws.trainingProgramId, ws.workoutId, ws.setNumber`,
+      [userId, ...sessionKeyValues]
     );
 
-    // Group all sessions first
-    const allGroupedSessions = {};
-    allSessions.forEach(session => {
+    // Group sessions by sessionKey
+    const groupedSessions = {};
+    allSessionsForPage.forEach(session => {
       const key = `${session.sessionDate}_${session.trainingProgramId}_${session.completedAt}`;
-      if (!allGroupedSessions[key]) {
-        allGroupedSessions[key] = {
+      if (!groupedSessions[key]) {
+        groupedSessions[key] = {
           date: session.sessionDate,
           time: session.sessionTime,
           programId: session.trainingProgramId,
@@ -92,8 +99,8 @@ export async function GET(request) {
         };
       }
 
-      if (!allGroupedSessions[key].workouts[session.workoutId]) {
-        allGroupedSessions[key].workouts[session.workoutId] = {
+      if (!groupedSessions[key].workouts[session.workoutId]) {
+        groupedSessions[key].workouts[session.workoutId] = {
           workoutId: session.workoutId,
           workoutName: session.workoutName,
           equipmentName: session.equipmentName,
@@ -102,7 +109,7 @@ export async function GET(request) {
         };
       }
 
-      allGroupedSessions[key].workouts[session.workoutId].sets.push({
+      groupedSessions[key].workouts[session.workoutId].sets.push({
         setNumber: session.setNumber,
         weight: session.weight,
         weightChange: session.weightChange || 0,
@@ -112,7 +119,7 @@ export async function GET(request) {
       });
     });
 
-    // Helper function to calculate calories (same as home API)
+    // Helper function to calculate calories
     const calculateSetCalories = (equipmentName) => {
       const met = equipmentName?.toLowerCase().includes('cardio') ? 8.0 : 6.0;
       const userWeight = 70;
@@ -120,8 +127,8 @@ export async function GET(request) {
       return met * userWeight * durationHours;
     };
 
-    // Convert to array, calculate muscle distribution, and sort
-    const allWorkouts = Object.values(allGroupedSessions)
+    // Convert to array and calculate stats
+    const workouts = Object.values(groupedSessions)
       .map(session => {
         const workoutsArray = Object.values(session.workouts);
         
@@ -159,19 +166,25 @@ export async function GET(request) {
       })
       .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
 
-    // Now paginate the grouped sessions
-    const paginatedWorkouts = allWorkouts.slice(offset, offset + limit);
+    // Get total count for pagination (simplified)
+    const totalCountResult = await query(
+      `SELECT COUNT(DISTINCT DATE(ws.completedAt) || '_' || ws.trainingProgramId || '_' || ws.completedAt) as total
+       FROM liftr_workout_sessions ws
+       WHERE ${whereClause}`,
+      params
+    );
+    const total = totalCountResult[0]?.total || 0;
 
     const executionTime = Date.now() - startTime;
-    console.log(`[Recent Workouts API] Execution time: ${executionTime}ms, Sessions: ${allSessions.length}, Grouped: ${allWorkouts.length}`);
+    console.log(`[Recent Workouts API] Execution time: ${executionTime}ms, Page: ${page}, Sessions fetched: ${allSessionsForPage.length}, Grouped: ${workouts.length}`);
 
     return NextResponse.json({
-      workouts: paginatedWorkouts,
+      workouts,
       pagination: {
         page,
         limit,
-        total: allWorkouts.length,
-        totalPages: Math.ceil(allWorkouts.length / limit),
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     });
   } catch (error) {
