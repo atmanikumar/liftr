@@ -163,7 +163,7 @@ export async function POST(request) {
         const prevRir = parseInt(previousSession[0].rir);
         
         // Find current session data at same weight
-        const currentAtSameWeight = workoutData.sets.find(s => parseFloat(s.weight) === prevWeight);
+        const currentAtSameWeight = sets.find(s => parseFloat(s.weight) === prevWeight);
         
         if (currentAtSameWeight) {
           const currentReps = parseInt(currentAtSameWeight.reps);
