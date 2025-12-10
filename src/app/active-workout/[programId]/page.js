@@ -22,6 +22,8 @@ import {
   DialogContent,
   DialogActions,
   CircularProgress,
+  Slider,
+  Pagination,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -30,6 +32,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import CloseIcon from '@mui/icons-material/Close';
 import { useParams, useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchTrainingPrograms, selectTrainingPrograms } from '@/redux/slices/trainingProgramsSlice';
@@ -38,21 +41,9 @@ import Loader from '@/components/common/Loader';
 import MuscleBodyMap from '@/components/common/MuscleBodyMap';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { debounce } from '@/lib/debounce';
+import { MUSCLE_GROUPS } from '@/constants/app';
 
 const WEIGHT_UNITS = ['lbs', 'kgs'];
-const RIR_OPTIONS = [0, 1, 2, 3, 4, 5, 6];
-const REPS_OPTIONS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-
-// Generate weight options from 0 to 150 in increments of 2.5
-const generateWeightOptions = () => {
-  const options = [];
-  for (let i = 0; i <= 150; i += 2.5) {
-    options.push(i);
-  }
-  return options;
-};
-
-const WEIGHT_OPTIONS = generateWeightOptions();
 
 // Determine equipment type and auto-increment
 const getAutoIncrement = (equipmentName) => {
@@ -89,7 +80,9 @@ export default function ActiveWorkoutPage() {
   const [program, setProgram] = useState(null);
   const [programWorkouts, setProgramWorkouts] = useState([]);
   const [workoutData, setWorkoutData] = useState({});
-  const [expandedWorkouts, setExpandedWorkouts] = useState([]); // Changed to array to support multiple
+  const [currentWorkoutId, setCurrentWorkoutId] = useState(null); // Currently selected workout in dialog
+  const [completedWorkoutIds, setCompletedWorkoutIds] = useState([]); // Track completed workouts in order
+  const [workoutDialogOpen, setWorkoutDialogOpen] = useState(false); // Dialog for workout details
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [addWorkoutDialogOpen, setAddWorkoutDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -100,6 +93,17 @@ export default function ActiveWorkoutPage() {
   const [canceling, setCanceling] = useState(false);
   const [addingWorkout, setAddingWorkout] = useState(false);
   const [workoutHistory, setWorkoutHistory] = useState({});
+  const [searchWorkout, setSearchWorkout] = useState('');
+  const [searchPage, setSearchPage] = useState(1);
+  const [createWorkoutDialogOpen, setCreateWorkoutDialogOpen] = useState(false);
+  const [newWorkoutData, setNewWorkoutData] = useState({
+    name: '',
+    equipmentName: '',
+    muscleFocus: '',
+    description: ''
+  });
+  const [creatingWorkout, setCreatingWorkout] = useState(false);
+  const ITEMS_PER_PAGE = 10;
   
   const initializedRef = useRef(false);
 
@@ -172,17 +176,9 @@ export default function ActiveWorkoutPage() {
 
   const updateSet = useCallback((workoutId, setIndex, field, value) => {
     setWorkoutData(prev => {
-      const workout = programWorkouts.find(w => w.id === workoutId);
-      const autoIncrement = getAutoIncrement(workout?.equipmentName);
-      
       const newSets = prev[workoutId].sets.map((set, idx) => {
         if (idx === setIndex) {
           return { ...set, [field]: value };
-        }
-        // Auto-increment weight for subsequent sets when first set weight is changed
-        if (field === 'weight' && setIndex === 0 && idx > 0) {
-          const incrementedWeight = Math.min(150, value + (autoIncrement * idx));
-          return { ...set, weight: incrementedWeight };
         }
         return set;
       });
@@ -200,7 +196,7 @@ export default function ActiveWorkoutPage() {
       
       return updatedData;
     });
-  }, [programWorkouts, debouncedSave]);
+  }, [debouncedSave]);
 
   const updateUnit = useCallback((workoutId, unit) => {
     setWorkoutData(prev => {
@@ -227,11 +223,9 @@ export default function ActiveWorkoutPage() {
     setWorkoutData(prev => {
       const currentSets = prev[workoutId].sets;
       const lastSet = currentSets[currentSets.length - 1];
-      const workout = programWorkouts.find(w => w.id === workoutId);
-      const autoIncrement = getAutoIncrement(workout?.equipmentName);
       
-      // Auto-increment weight from last set
-      const newWeight = Math.min(150, (lastSet?.weight || 0) + autoIncrement);
+      // Use same weight as last set (no auto-increment)
+      const newWeight = lastSet?.weight || 0;
       
       const updatedData = {
         ...prev,
@@ -259,9 +253,33 @@ export default function ActiveWorkoutPage() {
       
       return updatedData;
     });
-  }, [programWorkouts]);
+  }, []);
 
   const removeSet = useCallback((workoutId, setIndex) => {
+    setWorkoutData(prev => {
+      const updatedData = {
+        ...prev,
+        [workoutId]: {
+          ...prev[workoutId],
+          sets: prev[workoutId].sets.filter((_, idx) => idx !== setIndex),
+        },
+      };
+      
+      // Save to DB
+      fetch('/api/active-workout', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workoutData: updatedData }),
+      }).catch(e => console.error('Failed to save:', e));
+      
+      return updatedData;
+    });
+  }, []);
+
+  const deleteSet = useCallback((workoutId, setIndex) => {
+    // Only allow deleting sets after the first 2
+    if (setIndex < 2) return;
+    
     setWorkoutData(prev => {
       const updatedData = {
         ...prev,
@@ -379,21 +397,112 @@ export default function ActiveWorkoutPage() {
     }
   }, [workoutHistory]);
 
-  // Handle workout expansion
-  const handleWorkoutExpand = useCallback((workoutId) => {
-    const isExpanding = !expandedWorkouts.includes(workoutId);
+  // Open workout details dialog
+  const handleOpenWorkout = useCallback((workoutId) => {
+    setCurrentWorkoutId(workoutId);
+    setWorkoutDialogOpen(true);
+    fetchWorkoutHistory(workoutId);
+  }, [fetchWorkoutHistory]);
+
+  // Close workout dialog
+  const handleCloseWorkout = useCallback(() => {
+    setWorkoutDialogOpen(false);
+    setCurrentWorkoutId(null);
+  }, []);
+
+  // Mark current workout as complete
+  const handleCompleteWorkout = useCallback(() => {
+    if (!currentWorkoutId) return;
     
-    setExpandedWorkouts(prev => 
-      prev.includes(workoutId) 
-        ? prev.filter(id => id !== workoutId)
-        : [...prev, workoutId]
+    // Mark all sets as completed for this workout
+    setWorkoutData(prev => {
+      const workout = prev[currentWorkoutId];
+      if (!workout) return prev;
+      
+      const updatedSets = workout.sets.map(set => ({
+        ...set,
+        completed: true,
+      }));
+      
+      const updatedData = {
+        ...prev,
+        [currentWorkoutId]: {
+          ...workout,
+          sets: updatedSets,
+          workoutCompleted: true,
+        },
+      };
+      
+      // Save to DB
+      fetch('/api/active-workout', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workoutData: updatedData }),
+      }).catch(e => console.error('Failed to save:', e));
+      
+      return updatedData;
+    });
+    
+    // Add to completed list
+    setCompletedWorkoutIds(prev => {
+      if (!prev.includes(currentWorkoutId)) {
+        return [...prev, currentWorkoutId];
+      }
+      return prev;
+    });
+    
+    // Close dialog
+    handleCloseWorkout();
+    
+    // Auto-open next uncompleted workout if available
+    const nextWorkout = programWorkouts.find(w => 
+      w.id !== currentWorkoutId && !completedWorkoutIds.includes(w.id)
     );
-    
-    // Fetch history when expanding
-    if (isExpanding) {
-      fetchWorkoutHistory(workoutId);
+    if (nextWorkout) {
+      setTimeout(() => handleOpenWorkout(nextWorkout.id), 300);
     }
-  }, [expandedWorkouts, fetchWorkoutHistory]);
+  }, [currentWorkoutId, programWorkouts, completedWorkoutIds, handleCloseWorkout, handleOpenWorkout]);
+
+  const handleCreateWorkout = async () => {
+    if (creatingWorkout) return;
+    
+    // Validate
+    if (!newWorkoutData.name.trim()) {
+      alert('Please enter a workout name');
+      return;
+    }
+    
+    setCreatingWorkout(true);
+    
+    try {
+      const response = await fetch('/api/workouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newWorkoutData),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create workout');
+      }
+      
+      // Add the newly created workout to the session
+      await addWorkoutToSession(data.workout.id);
+      
+      // Close the create dialog
+      setCreateWorkoutDialogOpen(false);
+      setNewWorkoutData({ name: '', equipmentName: '', muscleFocus: '', description: '' });
+      
+      // Refresh workouts list
+      dispatch(fetchWorkouts());
+    } catch (error) {
+      console.error('Failed to create workout:', error);
+      alert('Failed to create workout: ' + error.message);
+    } finally {
+      setCreatingWorkout(false);
+    }
+  };
 
   const addWorkoutToSession = async (workoutId) => {
     if (addingWorkout) return; // Prevent duplicate clicks
@@ -467,7 +576,10 @@ export default function ActiveWorkoutPage() {
       }
 
       const sessions = [];
-      programWorkouts.forEach(workout => {
+      // Only save completed workouts
+      const completedWorkouts = programWorkouts.filter(w => completedWorkoutIds.includes(w.id));
+      
+      completedWorkouts.forEach(workout => {
         if (!workoutData[workout.id] || !workoutData[workout.id].sets) {
           return; // Skip if no data
         }
@@ -490,10 +602,10 @@ export default function ActiveWorkoutPage() {
         }
       });
       
-      // Validate that we have at least one session to save
+      // Validate that we have at least one completed workout to save
       if (sessions.length === 0) {
         setSaving(false);
-        alert('Please complete at least one set before saving');
+        alert('Please complete at least one workout before saving');
         return;
       }
 
@@ -580,45 +692,104 @@ export default function ActiveWorkoutPage() {
         )}
       </Box>
 
-      {/* Workout Exercises */}
+      {/* Workout List */}
       <Stack spacing={2}>
-        {programWorkouts.map((workout, workoutIndex) => {
+        {/* Completed Workouts - Show at top */}
+        {completedWorkoutIds.length > 0 && (
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: '#c4ff0d', fontWeight: 'bold' }}>
+              ✓ Completed ({completedWorkoutIds.length})
+            </Typography>
+            <Stack spacing={1}>
+              {completedWorkoutIds.map((workoutId, index) => {
+                const workout = programWorkouts.find(w => w.id === workoutId);
+                if (!workout) return null;
+                
           const workoutSets = workoutData[workout.id]?.sets || [];
           const completedSets = workoutSets.filter(s => s.completed).length;
           
           return (
-            <Accordion
-              key={workout.id}
-              expanded={expandedWorkouts.includes(workout.id)}
-              onChange={() => handleWorkoutExpand(workout.id)}
-            >
-              <AccordionSummary 
-                expandIcon={<ExpandMoreIcon />}
+                  <Card
+                    key={workoutId}
                 sx={{
-                  border: workoutData[workout.id]?.workoutCompleted ? '2px solid #c4ff0d' : '1px solid rgba(255, 255, 255, 0.05)',
-                  bgcolor: 'inherit',
-                  minHeight: '80px',
-                  '& .MuiAccordionSummary-content': {
-                    my: 2,
-                  }
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', flexDirection: 'column', gap: 1, width: '100%' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-                    {workoutData[workout.id]?.workoutCompleted && (
-                      <CheckCircleIcon color="success" />
-                    )}
-                    <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                      {workoutIndex + 1}. {workout.name}
+                      cursor: 'pointer',
+                      border: '2px solid #c4ff0d',
+                      bgcolor: 'rgba(196, 255, 13, 0.1)',
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        bgcolor: 'rgba(196, 255, 13, 0.15)',
+                      },
+                    }}
+                    onClick={() => handleOpenWorkout(workoutId)}
+                  >
+                    <CardContent sx={{ py: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <CheckCircleIcon sx={{ color: '#c4ff0d', fontSize: 28 }} />
+                        <Box sx={{ flexGrow: 1 }}>
+                          <Typography variant="h6" sx={{ color: '#c4ff0d' }}>
+                            {index + 1}. {workout.name}
                     </Typography>
+                          <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
+                            <Chip 
+                              label={`${completedSets} sets completed`}
+                              size="small"
+                              sx={{
+                                bgcolor: 'rgba(196, 255, 13, 0.2)',
+                                color: '#c4ff0d',
+                              }}
+                            />
+                            {workout.muscleFocus && (
+                              <Chip label={workout.muscleFocus} size="small" />
+                            )}
                   </Box>
-                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </Stack>
+          </Box>
+        )}
+
+        {/* Pending Workouts */}
+        <Box>
+          <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary', fontWeight: 'bold' }}>
+            Pending ({programWorkouts.filter(w => !completedWorkoutIds.includes(w.id)).length})
+          </Typography>
+          <Stack spacing={1}>
+            {programWorkouts
+              .filter(w => !completedWorkoutIds.includes(w.id))
+              .map((workout, index) => {
+                const workoutSets = workoutData[workout.id]?.sets || [];
+                const completedSets = workoutSets.filter(s => s.completed).length;
+                
+                return (
+                  <Card
+                    key={workout.id}
+                    sx={{
+                      cursor: 'pointer',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        border: '1px solid #c4ff0d',
+                        bgcolor: 'rgba(196, 255, 13, 0.05)',
+                      },
+                    }}
+                    onClick={() => handleOpenWorkout(workout.id)}
+                  >
+                    <CardContent sx={{ py: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Box sx={{ flexGrow: 1 }}>
+                          <Typography variant="h6">
+                            {completedWorkoutIds.length + index + 1}. {workout.name}
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
                     <Chip 
-                      label={`${completedSets}/${workoutSets.length} sets`}
+                              label={`${workoutSets.length} sets`}
                       size="small"
                       sx={{
                         bgcolor: 'rgba(255, 255, 255, 0.1)',
-                        color: 'white',
                       }}
                     />
                     {workout.muscleFocus && (
@@ -636,70 +807,123 @@ export default function ActiveWorkoutPage() {
                     )}
                   </Box>
                 </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                {/* Last 5 Workouts Progress Graph */}
+                      </Box>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+          </Stack>
+        </Box>
+      </Stack>
+
+      {/* Workout Details Dialog */}
+      <Dialog 
+        open={workoutDialogOpen} 
+        onClose={handleCloseWorkout}
+        maxWidth="md"
+        fullWidth
+        fullScreen
+        TransitionProps={{
+          timeout: 300,
+        }}
+        disableScrollLock={true}
+        sx={{
+          '& .MuiDialog-container': {
+            alignItems: 'flex-start',
+          },
+          '& .MuiPaper-root': {
+            margin: 0,
+            maxHeight: '100%',
+          }
+        }}
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">
+              {programWorkouts.find(w => w.id === currentWorkoutId)?.name}
+            </Typography>
+            <IconButton onClick={handleCloseWorkout}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {currentWorkoutId && workoutData[currentWorkoutId] && (() => {
+            const workout = programWorkouts.find(w => w.id === currentWorkoutId);
+            if (!workout) return null;
+            
+            const workoutSets = workoutData[currentWorkoutId]?.sets || [];
+            
+            return (
+              <Box>
+                {/* Last Workout Progress - Simple Line */}
                 {workoutHistory[workout.id] && workoutHistory[workout.id].length > 0 && (
-                  <Box sx={{ mb: 3, p: 2, bgcolor: 'rgba(196, 255, 13, 0.03)', borderRadius: 2, border: '1px solid rgba(196, 255, 13, 0.2)' }}>
-                    <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, color: '#c4ff0d', fontWeight: 'bold' }}>
-                      Last {workoutHistory[workout.id].length} Workouts Progress
+                  <Box sx={{ mb: 2, p: 1.5, bgcolor: 'rgba(196, 255, 13, 0.03)', borderRadius: 1 }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1.5 }}>
+                      Progress History
                     </Typography>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <LineChart data={workoutHistory[workout.id]} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
-                        <XAxis 
-                          dataKey="date" 
-                          stroke="rgba(255, 255, 255, 0.5)"
-                          tick={{ fontSize: 11 }}
-                        />
-                        <YAxis 
-                          yAxisId="weight"
-                          orientation="left"
-                          stroke="#c4ff0d"
-                          tick={{ fontSize: 11 }}
-                          label={{ value: 'Weight', angle: -90, position: 'insideLeft', style: { fill: '#c4ff0d', fontSize: 11 } }}
-                        />
-                        <YAxis 
-                          yAxisId="reps"
-                          orientation="right"
-                          stroke="#8b5cf6"
-                          tick={{ fontSize: 11 }}
-                          label={{ value: 'Reps', angle: 90, position: 'insideRight', style: { fill: '#8b5cf6', fontSize: 11 } }}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                            border: '1px solid rgba(196, 255, 13, 0.3)',
-                            borderRadius: '8px',
-                            fontSize: '12px',
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 1,
+                      position: 'relative',
+                      '&::before': {
+                        content: '""',
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        top: '50%',
+                        height: '2px',
+                        bgcolor: 'rgba(196, 255, 13, 0.2)',
+                        zIndex: 0,
+                      }
+                    }}>
+                      {workoutHistory[workout.id].slice(-7).map((session, index) => (
+                        <Box 
+                          key={index}
+                          sx={{ 
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            position: 'relative',
+                            zIndex: 1,
                           }}
-                          formatter={(value, name) => {
-                            if (name === 'Max Weight') return [`${value} ${workoutHistory[workout.id][0]?.unit || 'lbs'}`, name];
-                            return [value, name];
-                          }}
-                        />
-                        <Line 
-                          yAxisId="weight"
-                          type="monotone" 
-                          dataKey="maxWeight" 
-                          stroke="#c4ff0d" 
-                          strokeWidth={3}
-                          name="Max Weight"
-                          dot={{ fill: '#c4ff0d', r: 4 }}
-                          activeDot={{ r: 6 }}
-                        />
-                        <Line 
-                          yAxisId="reps"
-                          type="monotone" 
-                          dataKey="avgReps" 
-                          stroke="#8b5cf6" 
-                          strokeWidth={3}
-                          name="Avg Reps"
-                          dot={{ fill: '#8b5cf6', r: 4 }}
-                          activeDot={{ r: 6 }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
+                        >
+                          <Box
+                            sx={{
+                              width: 12,
+                              height: 12,
+                              borderRadius: '50%',
+                              bgcolor: index === workoutHistory[workout.id].slice(-7).length - 1 ? '#c4ff0d' : 'rgba(196, 255, 13, 0.4)',
+                              border: '2px solid #000',
+                              mb: 0.5,
+                            }}
+                          />
+                          <Typography 
+                            variant="caption" 
+                            sx={{ 
+                              fontSize: '0.65rem',
+                              fontWeight: index === workoutHistory[workout.id].slice(-7).length - 1 ? 'bold' : 'normal',
+                              color: index === workoutHistory[workout.id].slice(-7).length - 1 ? '#c4ff0d' : 'text.secondary',
+                              textAlign: 'center',
+                            }}
+                          >
+                            {session.weight1 || 0}{session.unit || 'lbs'}
+                          </Typography>
+                          <Typography 
+                            variant="caption" 
+                            sx={{ 
+                              fontSize: '0.6rem',
+                              color: 'text.secondary',
+                              textAlign: 'center',
+                            }}
+                          >
+                            ({session.reps1 || 12} reps)
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
                   </Box>
                 )}
 
@@ -708,27 +932,45 @@ export default function ActiveWorkoutPage() {
                   <Box>
                     {workout.equipmentName && (
                       <Typography variant="caption" color="text.secondary">
-                        {workout.equipmentName} • Auto +{getAutoIncrement(workout.equipmentName)}lbs per set
+                        {workout.equipmentName}
                       </Typography>
                     )}
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2">Unit:</Typography>
-                    <TextField
-                      select
-                      value={workoutData[workout.id]?.unit || 'lbs'}
-                      onChange={(e) => updateUnit(workout.id, e.target.value)}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'rgba(255, 255, 255, 0.05)', borderRadius: 2, p: 0.5 }}>
+                    <Button
                       size="small"
-                      sx={{ width: 80 }}
+                      variant={workoutData[workout.id]?.unit === 'lbs' ? 'contained' : 'text'}
+                      onClick={() => updateUnit(workout.id, 'lbs')}
+                      sx={{
+                        minWidth: 50,
+                        bgcolor: workoutData[workout.id]?.unit === 'lbs' ? '#1976d2' : 'transparent',
+                        color: workoutData[workout.id]?.unit === 'lbs' ? '#fff' : 'text.secondary',
+                        '&:hover': {
+                          bgcolor: workoutData[workout.id]?.unit === 'lbs' ? '#1565c0' : 'rgba(255, 255, 255, 0.08)',
+                        }
+                      }}
                     >
-                      {WEIGHT_UNITS.map(u => (
-                        <MenuItem key={u} value={u}>{u}</MenuItem>
-                      ))}
-                    </TextField>
+                      lbs
+                    </Button>
+                    <Button
+                      size="small"
+                      variant={workoutData[workout.id]?.unit === 'kgs' ? 'contained' : 'text'}
+                      onClick={() => updateUnit(workout.id, 'kgs')}
+                      sx={{
+                        minWidth: 50,
+                        bgcolor: workoutData[workout.id]?.unit === 'kgs' ? '#1976d2' : 'transparent',
+                        color: workoutData[workout.id]?.unit === 'kgs' ? '#fff' : 'text.secondary',
+                        '&:hover': {
+                          bgcolor: workoutData[workout.id]?.unit === 'kgs' ? '#1565c0' : 'rgba(255, 255, 255, 0.08)',
+                        }
+                      }}
+                    >
+                      kgs
+                    </Button>
                   </Box>
                 </Box>
 
-                <Stack spacing={2}>
+                <Stack spacing={2.5}>
                   {workoutSets.map((set, setIndex) => (
                     <Card key={setIndex} sx={{ bgcolor: 'background.paper' }}>
                       <CardContent>
@@ -736,88 +978,156 @@ export default function ActiveWorkoutPage() {
                           <Typography variant="subtitle1" fontWeight="bold">
                             Set {setIndex + 1}
                           </Typography>
-                          <Box sx={{ display: 'flex', gap: 1 }}>
-                            {/* Delete set button disabled for all users */}
+                          {setIndex >= 2 && (
                             <IconButton
-                              color={set.completed ? 'success' : 'default'}
-                              onClick={() => toggleSetComplete(workout.id, setIndex)}
-                              title={set.completed ? 'Mark as incomplete' : 'Mark as complete'}
+                              size="small"
+                              color="error"
+                              onClick={() => deleteSet(workout.id, setIndex)}
+                              title="Delete set"
                             >
-                              <CheckCircleIcon />
+                              <DeleteIcon fontSize="small" />
                             </IconButton>
-                          </Box>
+                          )}
                         </Box>
                         
-                        <Grid container spacing={2}>
-                          {/* Weight with swipe support */}
-                          <Grid item xs={12} sm={4}>
-                            <Box sx={{ position: 'relative' }}>
-                              <TextField
-                                select
-                                fullWidth
-                                label="Weight"
+                        <Grid container spacing={3}>
+                          {/* Weight Slider */}
+                          <Grid item xs={12}>
+                            <Box sx={{ position: 'relative', px: 1 }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="caption" color="text.secondary">
+                                  Weight
+                                </Typography>
+                                <Typography 
+                                  variant="h6" 
+                                  fontWeight="bold"
+                                  sx={{
+                                    color: set.previousWeight && set.weight > set.previousWeight ? '#c4ff0d' : 'inherit'
+                                  }}
+                                >
+                                  {set.weight} {workoutData[workout.id]?.unit || 'lbs'}
+                                </Typography>
+                              </Box>
+                              <Slider
                                 value={set.weight}
-                                onChange={(e) => updateSet(workout.id, setIndex, 'weight', parseFloat(e.target.value))}
-                                size="small"
-                                onTouchStart={handleTouchStart}
-                                onTouchMove={handleTouchMove}
-                                onTouchEnd={() => handleTouchEnd(workout.id, setIndex, set.weight)}
-                                helperText="Swipe ↕ to adjust"
-                              >
-                                {WEIGHT_OPTIONS.map(w => (
-                                  <MenuItem key={w} value={w}>{w}</MenuItem>
-                                ))}
-                              </TextField>
-                              {set.previousWeight && set.weight !== set.previousWeight && (
+                                onChange={(e, value) => updateSet(workout.id, setIndex, 'weight', value)}
+                                min={0}
+                                max={workoutData[workout.id]?.unit === 'kgs' ? 100 : 150}
+                                step={2.5}
+                                marks={[
+                                  { value: 0, label: '0' },
+                                  { value: workoutData[workout.id]?.unit === 'kgs' ? 50 : 75, label: workoutData[workout.id]?.unit === 'kgs' ? '50' : '75' },
+                                  { value: workoutData[workout.id]?.unit === 'kgs' ? 100 : 150, label: workoutData[workout.id]?.unit === 'kgs' ? '100' : '150' }
+                                ]}
+                                sx={{
+                                  '& .MuiSlider-thumb': {
+                                    bgcolor: set.previousWeight && set.weight !== set.previousWeight 
+                                      ? (set.weight > set.previousWeight ? '#c4ff0d' : '#ef4444') 
+                                      : '#1976d2',
+                                  },
+                                  '& .MuiSlider-track': {
+                                    bgcolor: set.previousWeight && set.weight !== set.previousWeight 
+                                      ? (set.weight > set.previousWeight ? '#c4ff0d' : '#ef4444') 
+                                      : '#1976d2',
+                                  },
+                                  '& .MuiSlider-rail': {
+                                    opacity: 0.3,
+                                  }
+                                }}
+                              />
+                              {set.previousWeight && set.previousWeight > 0 && set.weight !== set.previousWeight && (
                                 <Chip
-                                  label={`${set.weight > set.previousWeight ? '+' : ''}${set.weight - set.previousWeight} ${workoutData[workout.id]?.unit || 'lbs'}`}
+                                  label={`${set.weight > set.previousWeight ? '+' : ''}${(set.weight - set.previousWeight).toFixed(1)} ${workoutData[workout.id]?.unit || 'lbs'}`}
                                   size="small"
                                   sx={{
                                     position: 'absolute',
-                                    top: -8,
-                                    right: -8,
+                                    top: 0,
+                                    right: 8,
                                     height: 20,
                                     fontSize: '0.7rem',
                                     fontWeight: 'bold',
                                     bgcolor: set.weight > set.previousWeight ? '#c4ff0d' : '#ef4444',
                                     color: set.weight > set.previousWeight ? '#000000' : '#ffffff',
-                                    border: 'none'
+                                    border: 'none',
+                                    zIndex: 1,
                                   }}
                                 />
                               )}
                             </Box>
                           </Grid>
 
-                          {/* Reps */}
-                          <Grid item xs={6} sm={4}>
-                            <TextField
-                              select
-                              fullWidth
-                              label="Reps"
+                          {/* Reps Slider */}
+                          <Grid item xs={12} sm={6}>
+                            <Box sx={{ px: 1 }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="caption" color="text.secondary">
+                                  Reps
+                                </Typography>
+                                <Typography variant="h6" fontWeight="bold">
+                                  {set.reps}
+                                </Typography>
+                              </Box>
+                              <Slider
                               value={set.reps}
-                              onChange={(e) => updateSet(workout.id, setIndex, 'reps', parseInt(e.target.value))}
-                              size="small"
-                            >
-                              {REPS_OPTIONS.map(r => (
-                                <MenuItem key={r} value={r}>{r}</MenuItem>
-                              ))}
-                            </TextField>
+                                onChange={(e, value) => updateSet(workout.id, setIndex, 'reps', value)}
+                                min={0}
+                                max={20}
+                                step={1}
+                                marks={[
+                                  { value: 0, label: '0' },
+                                  { value: 10, label: '10' },
+                                  { value: 20, label: '20' }
+                                ]}
+                                sx={{
+                                  '& .MuiSlider-thumb': {
+                                    bgcolor: '#8b5cf6',
+                                  },
+                                  '& .MuiSlider-track': {
+                                    bgcolor: '#8b5cf6',
+                                  },
+                                  '& .MuiSlider-rail': {
+                                    opacity: 0.3,
+                                  }
+                                }}
+                              />
+                            </Box>
                           </Grid>
 
-                          {/* RIR */}
-                          <Grid item xs={6} sm={4}>
-                            <TextField
-                              select
-                              fullWidth
-                              label="RIR"
+                          {/* RIR Slider */}
+                          <Grid item xs={12} sm={6}>
+                            <Box sx={{ px: 1 }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="caption" color="text.secondary">
+                                  RIR
+                                </Typography>
+                                <Typography variant="h6" fontWeight="bold">
+                                  {set.rir}
+                                </Typography>
+                              </Box>
+                              <Slider
                               value={set.rir}
-                              onChange={(e) => updateSet(workout.id, setIndex, 'rir', e.target.value)}
-                              size="small"
-                            >
-                              {RIR_OPTIONS.map(r => (
-                                <MenuItem key={r} value={r}>{r}</MenuItem>
-                              ))}
-                            </TextField>
+                                onChange={(e, value) => updateSet(workout.id, setIndex, 'rir', value)}
+                                min={0}
+                                max={10}
+                                step={1}
+                                marks={[
+                                  { value: 0, label: '0' },
+                                  { value: 5, label: '5' },
+                                  { value: 10, label: '10' }
+                                ]}
+                                sx={{
+                                  '& .MuiSlider-thumb': {
+                                    bgcolor: '#f59e0b',
+                                  },
+                                  '& .MuiSlider-track': {
+                                    bgcolor: '#f59e0b',
+                                  },
+                                  '& .MuiSlider-rail': {
+                                    opacity: 0.3,
+                                  }
+                                }}
+                              />
+                            </Box>
                           </Grid>
                         </Grid>
                       </CardContent>
@@ -828,17 +1138,37 @@ export default function ActiveWorkoutPage() {
                   <Button
                     variant="outlined"
                     startIcon={<AddIcon />}
-                    onClick={() => addSet(workout.id)}
+                    onClick={() => addSet(currentWorkoutId)}
                     fullWidth
                   >
                     Add Set
                   </Button>
                 </Stack>
-              </AccordionDetails>
-            </Accordion>
-          );
-        })}
-      </Stack>
+              </Box>
+            );
+          })()}
+        </DialogContent>
+        <DialogActions sx={{ p: 3, gap: 2 }}>
+          <Button onClick={handleCloseWorkout} variant="outlined">
+            Close
+          </Button>
+          <Button
+            onClick={handleCompleteWorkout}
+            variant="contained"
+            size="large"
+            sx={{
+              bgcolor: '#c4ff0d',
+              color: '#000',
+              fontWeight: 'bold',
+              '&:hover': {
+                bgcolor: '#b0e00b',
+              }
+            }}
+          >
+            Complete Workout
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Add Workout Button */}
       <Box sx={{ mt: 2 }}>
@@ -939,48 +1269,247 @@ export default function ActiveWorkoutPage() {
       </Dialog>
 
       {/* Add Workout Dialog */}
-      <Dialog open={addWorkoutDialogOpen} onClose={() => setAddWorkoutDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={addWorkoutDialogOpen} onClose={() => {
+        setAddWorkoutDialogOpen(false);
+        setSearchWorkout('');
+      }} maxWidth="sm" fullWidth>
         <DialogTitle>Add Exercise to Session</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Select an exercise to add to today&apos;s workout session
+            Search for an exercise to add to today&apos;s workout session
           </Typography>
-          <Stack spacing={1} sx={{ mt: 2 }}>
-            {workouts
+          
+          {/* Create New Workout Button */}
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => setCreateWorkoutDialogOpen(true)}
+            fullWidth
+            sx={{
+              mb: 2,
+              borderColor: '#c4ff0d',
+              color: '#c4ff0d',
+              '&:hover': {
+                borderColor: '#c4ff0d',
+                bgcolor: 'rgba(196, 255, 13, 0.1)',
+              }
+            }}
+          >
+            Create New Workout
+          </Button>
+
+          {/* Search Field */}
+          <TextField
+            fullWidth
+            placeholder="Type to search exercises..."
+            value={searchWorkout}
+            onChange={(e) => {
+              setSearchWorkout(e.target.value);
+              setSearchPage(1); // Reset to page 1 on new search
+            }}
+            sx={{ mb: 2 }}
+            size="small"
+            autoFocus
+          />
+          
+          <Box sx={{ mt: 2 }}>
+            {searchWorkout.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                Start typing to search for exercises...
+              </Typography>
+            ) : (
+              <>
+            {(() => {
+              const filteredWorkouts = workouts
               .filter(w => !programWorkouts.find(pw => pw.id === w.id))
-              .map(workout => (
-                <Card 
+                .filter(w => 
+                  w.name.toLowerCase().includes(searchWorkout.toLowerCase()) ||
+                  w.equipmentName?.toLowerCase().includes(searchWorkout.toLowerCase()) ||
+                  w.muscleFocus?.toLowerCase().includes(searchWorkout.toLowerCase())
+                );
+              
+              const totalPages = Math.ceil(filteredWorkouts.length / ITEMS_PER_PAGE);
+              const startIndex = (searchPage - 1) * ITEMS_PER_PAGE;
+              const paginatedWorkouts = filteredWorkouts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+              
+              return (
+                <>
+                  {paginatedWorkouts.length > 0 ? (
+                    <>
+                      <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+                        Showing {startIndex + 1}-{Math.min(startIndex + ITEMS_PER_PAGE, filteredWorkouts.length)} of {filteredWorkouts.length} exercises
+                      </Typography>
+                      
+                      <Stack spacing={1.5} sx={{ maxHeight: '400px', overflowY: 'auto', pr: 1 }}>
+                        {paginatedWorkouts.map(workout => (
+                <Box
                   key={workout.id}
                   sx={{ 
                     cursor: addingWorkout ? 'default' : 'pointer',
                     transition: 'all 0.2s',
                     opacity: addingWorkout ? 0.5 : 1,
+                    bgcolor: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: 1,
+                    p: 2,
+                    '&:hover': {
+                      bgcolor: addingWorkout ? 'rgba(255, 255, 255, 0.05)' : 'rgba(196, 255, 13, 0.1)',
+                      borderColor: addingWorkout ? 'rgba(255, 255, 255, 0.1)' : '#c4ff0d',
+                    }
                   }}
                   onClick={() => !addingWorkout && addWorkoutToSession(workout.id)}
                 >
-                  <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Box>
-                        <Typography variant="body1" fontWeight="medium">
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
+                    <Box sx={{ flexGrow: 1 }}>
+                      <Typography variant="body1" fontWeight="medium" sx={{ color: '#ffffff', mb: 0.5 }}>
                           {workout.name}
                         </Typography>
                         {workout.equipmentName && (
-                          <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.6)' }}>
                             {workout.equipmentName}
                           </Typography>
                         )}
                       </Box>
                       {workout.muscleFocus && (
-                        <Chip label={workout.muscleFocus} size="small" />
+                      <Chip 
+                        label={workout.muscleFocus} 
+                        size="small" 
+                        sx={{ 
+                          bgcolor: 'rgba(196, 255, 13, 0.2)',
+                          color: '#c4ff0d',
+                          fontWeight: 'medium',
+                          border: '1px solid rgba(196, 255, 13, 0.3)'
+                        }}
+                      />
                       )}
                     </Box>
-                  </CardContent>
-                </Card>
+                </Box>
               ))}
+          </Stack>
+                      
+                      {/* Pagination */}
+                      {totalPages > 1 && (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                          <Pagination 
+                            count={totalPages} 
+                            page={searchPage} 
+                            onChange={(e, page) => setSearchPage(page)}
+                            color="primary"
+                            size="small"
+                            sx={{
+                              '& .MuiPaginationItem-root': {
+                                color: '#fff'
+                              }
+                            }}
+                          />
+                        </Box>
+                      )}
+                    </>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                      No exercises found for &quot;{searchWorkout}&quot;
+                    </Typography>
+                  )}
+                </>
+              );
+            })()}
+              </>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setAddWorkoutDialogOpen(false);
+            setSearchWorkout('');
+            setSearchPage(1);
+          }}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Create New Workout Dialog */}
+      <Dialog
+        open={createWorkoutDialogOpen}
+        onClose={() => !creatingWorkout && setCreateWorkoutDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Create New Workout</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {/* Workout Name */}
+            <TextField
+              label="Workout Name"
+              value={newWorkoutData.name}
+              onChange={(e) => setNewWorkoutData(prev => ({ ...prev, name: e.target.value }))}
+              fullWidth
+              required
+              placeholder="e.g., Barbell Bench Press"
+              autoFocus
+            />
+
+            {/* Equipment Name */}
+            <TextField
+              label="Equipment Name"
+              value={newWorkoutData.equipmentName}
+              onChange={(e) => setNewWorkoutData(prev => ({ ...prev, equipmentName: e.target.value }))}
+              fullWidth
+              placeholder="e.g., Barbell, Dumbbell, Cable"
+            />
+
+            {/* Muscle Focus */}
+            <TextField
+              select
+              label="Muscle Focus"
+              value={newWorkoutData.muscleFocus}
+              onChange={(e) => setNewWorkoutData(prev => ({ ...prev, muscleFocus: e.target.value }))}
+              fullWidth
+            >
+              <MenuItem value="">
+                <em>Select muscle group</em>
+              </MenuItem>
+              {MUSCLE_GROUPS.map(muscle => (
+                <MenuItem key={muscle} value={muscle}>
+                  {muscle}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            {/* Description */}
+            <TextField
+              label="Description (Optional)"
+              value={newWorkoutData.description}
+              onChange={(e) => setNewWorkoutData(prev => ({ ...prev, description: e.target.value }))}
+              fullWidth
+              multiline
+              rows={3}
+              placeholder="Add workout instructions or notes..."
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddWorkoutDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={() => {
+              setCreateWorkoutDialogOpen(false);
+              setNewWorkoutData({ name: '', equipmentName: '', muscleFocus: '', description: '' });
+            }}
+            disabled={creatingWorkout}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCreateWorkout}
+            variant="contained"
+            disabled={creatingWorkout || !newWorkoutData.name.trim()}
+            sx={{
+              bgcolor: '#c4ff0d',
+              color: '#000',
+              '&:hover': {
+                bgcolor: '#b0e00b',
+              }
+            }}
+          >
+            {creatingWorkout ? <CircularProgress size={20} /> : 'Create & Add to Session'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

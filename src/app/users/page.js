@@ -199,7 +199,7 @@ export default function UsersPage() {
           <TableHead>
             <TableRow>
               <TableCell><strong>Username</strong></TableCell>
-              <TableCell><strong>Last Login</strong></TableCell>
+              <TableCell><strong>Last Activity</strong></TableCell>
               <TableCell width={50}></TableCell>
             </TableRow>
           </TableHead>

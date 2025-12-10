@@ -92,9 +92,10 @@ export async function requireTrainerOrAdmin() {
 /**
  * Verify authentication from request (supports both cookies and Authorization header)
  * @param {Request} request - The incoming request
+ * @param {boolean} updateActivity - Whether to update last activity timestamp (default: true)
  * @returns {Promise<{authenticated: boolean, user: Object}>}
  */
-export async function verifyAuth(request) {
+export async function verifyAuth(request, updateActivity = true) {
   try {
     // Try to get token from Authorization header first
     const authHeader = request.headers.get('Authorization');
@@ -127,10 +128,37 @@ export async function verifyAuth(request) {
       return { authenticated: false, user: null };
     }
 
+    // Update last activity timestamp in background (don't await to avoid slowing down requests)
+    if (updateActivity) {
+      updateLastActivity(user.id).catch(err => {
+        // Silent fail - don't block the request if activity update fails
+        console.error('Failed to update last activity:', err);
+      });
+    }
+
     return { authenticated: true, user };
   } catch (error) {
     console.error('Auth verification error:', error);
     return { authenticated: false, user: null };
+  }
+}
+
+/**
+ * Update user's last activity timestamp
+ * @param {number} userId - The user ID
+ * @returns {Promise<void>}
+ */
+async function updateLastActivity(userId) {
+  const { execute } = await import('@/services/database/dbService');
+  
+  try {
+    await execute(
+      'UPDATE liftr_users SET lastLogin = CURRENT_TIMESTAMP WHERE id = ?',
+      [userId]
+    );
+  } catch (error) {
+    // Silent fail - don't throw error
+    console.error('Error updating last activity:', error);
   }
 }
 

@@ -101,6 +101,17 @@ export async function GET(request) {
        ORDER BY createdAt DESC`
     );
 
+    // Get usage count for each training program for this specific user
+    const usageCounts = await query(
+      `SELECT trainingProgramId, COUNT(DISTINCT completedAt) as usageCount
+       FROM liftr_workout_sessions
+       WHERE userId = ? AND trainingProgramId IS NOT NULL
+       GROUP BY trainingProgramId`,
+      [userId]
+    );
+    
+    const usageMap = new Map(usageCounts.map(uc => [uc.trainingProgramId, uc.usageCount]));
+
     // Parse workoutIds for each plan and calculate muscle distribution (reusing workoutMap)
     const plans = workoutPlans.map(plan => {
       const workoutIds = JSON.parse(plan.workoutIds || '[]');
@@ -125,7 +136,16 @@ export async function GET(request) {
         workoutIds,
         createdAt: plan.createdAt,
         muscleDistribution, // Add muscle distribution to each plan
+        usageCount: usageMap.get(plan.id) || 0, // Add usage count
       };
+    });
+
+    // Sort plans by usage count (most used first), then by createdAt
+    plans.sort((a, b) => {
+      if (b.usageCount !== a.usageCount) {
+        return b.usageCount - a.usageCount;
+      }
+      return new Date(b.createdAt) - new Date(a.createdAt);
     });
 
     // Progress stats (muscle distribution & calories chart) now loaded lazily via /api/progress-stats

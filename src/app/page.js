@@ -47,9 +47,66 @@ export default function HomePage() {
   const [loadingRecentActivity, setLoadingRecentActivity] = useState(true);
   const [progressStats, setProgressStats] = useState(null);
   const [loadingProgressStats, setLoadingProgressStats] = useState(true);
+  const [suggestedWorkout, setSuggestedWorkout] = useState(null);
 
   // Memoize viewingAs ID to prevent unnecessary effect triggers
   const viewingAsId = useMemo(() => viewingAs?.id, [viewingAs?.id]);
+
+  // Detect Push/Pull/Leg pattern and suggest next workout
+  // PPL Pattern: Push -> Pull -> Legs -> Push (repeat)
+  const detectPushPullLegPattern = useCallback((plans) => {
+    // Check if user is following PPL pattern
+    const pushPlans = plans.filter(p => 
+      p.name.toLowerCase().includes('push')
+    );
+    const pullPlans = plans.filter(p => 
+      p.name.toLowerCase().includes('pull')
+    );
+    const legPlans = plans.filter(p => 
+      p.name.toLowerCase().includes('leg')
+    );
+
+    // Only suggest if user has all three types
+    if (pushPlans.length === 0 || pullPlans.length === 0 || legPlans.length === 0) {
+      return null;
+    }
+
+    // Get last workout to detect pattern - need to wait for recentActivity to load
+    if (recentActivity.length === 0) {
+      // No recent activity, suggest push as starting point
+      return { type: 'push', plan: pushPlans[0], reason: 'Start your PPL routine with Push day' };
+    }
+
+    // Get the last completed workout (most recent)
+    const lastWorkout = recentActivity[0];
+    const lastWorkoutName = lastWorkout.programName ? lastWorkout.programName.toLowerCase() : '';
+    
+    // Detect last workout type based on name
+    let lastType = null;
+    if (lastWorkoutName.includes('push')) {
+      lastType = 'push';
+    } else if (lastWorkoutName.includes('pull')) {
+      lastType = 'pull';
+    } else if (lastWorkoutName.includes('leg')) {
+      lastType = 'leg';
+    }
+
+    // If we couldn't detect the type, don't suggest
+    if (!lastType) {
+      return null;
+    }
+
+    // Suggest next in cycle: Push -> Pull -> Leg -> Push
+    if (lastType === 'push') {
+      return { type: 'pull', plan: pullPlans[0], reason: 'Next in your PPL cycle: Pull day' };
+    } else if (lastType === 'pull') {
+      return { type: 'leg', plan: legPlans[0], reason: 'Next in your PPL cycle: Leg day' };
+    } else if (lastType === 'leg') {
+      return { type: 'push', plan: pushPlans[0], reason: 'Next in your PPL cycle: Push day' };
+    }
+
+    return null;
+  }, [recentActivity]);
 
   // Fetch today's achievements
   useEffect(() => {
@@ -145,6 +202,12 @@ export default function HomePage() {
         
         if (data.recentActivity) {
           setRecentActivity(data.recentActivity);
+          
+          // After recent activity loads, detect PPL pattern and suggest next workout
+          if (workoutPlans.length > 0) {
+            const suggestion = detectPushPullLegPattern(workoutPlans);
+            setSuggestedWorkout(suggestion);
+          }
         }
       } catch (e) {
         if (e.name === 'AbortError') {
@@ -163,7 +226,7 @@ export default function HomePage() {
     return () => {
       abortController.abort();
     };
-  }, [viewingAsId, loadingData]);
+  }, [viewingAsId, loadingData, workoutPlans, detectPushPullLegPattern]);
 
   // Memoize fetch function to prevent recreation on every render
   const fetchHomeData = useCallback(async (signal) => {
@@ -192,6 +255,14 @@ export default function HomePage() {
       }
     }
   }, [viewingAsId]);
+
+  // Detect PPL pattern after recentActivity loads
+  useEffect(() => {
+    if (recentActivity.length > 0 && workoutPlans.length > 0) {
+      const suggestion = detectPushPullLegPattern(workoutPlans);
+      setSuggestedWorkout(suggestion);
+    }
+  }, [recentActivity, workoutPlans, detectPushPullLegPattern]);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -468,8 +539,51 @@ export default function HomePage() {
           </Grid>
         )}
 
+        {/* Suggested Next Workout (Push/Pull/Leg Detection) */}
+        {suggestedWorkout && activeWorkouts.length === 0 && (
+          <Grid item xs={12}>
+            <Paper sx={{ 
+              p: 3, 
+              bgcolor: 'rgba(139, 92, 246, 0.08)', 
+              border: '1px solid rgba(139, 92, 246, 0.3)',
+            }}>
+              <Typography variant="h6" gutterBottom sx={{ color: '#8b5cf6', fontWeight: 'bold' }}>
+                💡 Suggested Next Workout
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {suggestedWorkout.reason}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="h6">
+                    {suggestedWorkout.plan.name}
+                  </Typography>
+                  {suggestedWorkout.plan.muscleDistribution && suggestedWorkout.plan.muscleDistribution.length > 0 && (
+                    <Typography variant="caption" color="text.secondary">
+                      {suggestedWorkout.plan.muscleDistribution.map(m => `${m.muscle} (${m.count}x)`).join(', ')}
+                    </Typography>
+                  )}
+                </Box>
+                <Button
+                  variant="contained"
+                  onClick={() => router.push(`/training-programs`)}
+                  sx={{
+                    bgcolor: '#8b5cf6',
+                    color: '#fff',
+                    '&:hover': {
+                      bgcolor: '#7c3aed',
+                    }
+                  }}
+                >
+                  Start Workout
+                </Button>
+              </Box>
+            </Paper>
+          </Grid>
+        )}
+
         {/* No workouts message */}
-        {activeWorkouts.length === 0 && recentActivity.length === 0 && !loadingRecentActivity && (
+        {activeWorkouts.length === 0 && recentActivity.length === 0 && !loadingRecentActivity && !suggestedWorkout && (
           <Grid item xs={12}>
             <Paper sx={{ p: 4, textAlign: 'center' }}>
               <FitnessCenterIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />

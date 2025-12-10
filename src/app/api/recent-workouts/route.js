@@ -147,11 +147,14 @@ export async function GET(request) {
         return {
           sessionId: session.completedAt,
           date: session.date,
-          time: session.time,
-          programId: session.programId,
           programName: session.programName,
           completedAt: session.completedAt,
-          workouts: workoutsArray,
+          workouts: workoutsArray.map(w => ({
+            workoutId: w.workoutId,
+            workoutName: w.workoutName,
+            muscleFocus: w.muscleFocus,
+            sets: w.sets, // Keep sets for details when clicked
+          })),
           muscleDistribution,
           totalSets,
           totalCalories: Math.round(totalCalories),

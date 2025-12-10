@@ -379,11 +379,36 @@ export default function WorkoutsPage() {
               fullWidth
             />
             
-            {/* Muscle Focus Selection via Body Map */}
+            {/* Muscle Focus Selection - Dropdown OR Body Map */}
             <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                Muscle Focus - Click on the muscle group below
+              <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
+                Muscle Focus
               </Typography>
+              
+              {/* Dropdown Selection */}
+              <TextField
+                select
+                label="Select from List"
+                value={formData.muscleFocus}
+                onChange={(e) => setFormData({ ...formData, muscleFocus: e.target.value })}
+                fullWidth
+                sx={{ mb: 3 }}
+              >
+                <MenuItem value="">
+                  <em>None</em>
+                </MenuItem>
+                {MUSCLE_GROUPS.map((muscle) => (
+                  <MenuItem key={muscle} value={muscle}>
+                    {muscle}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block', textAlign: 'center' }}>
+                OR Click on the muscle map below
+              </Typography>
+              
+              {/* Visual Muscle Map Selection */}
               {formData.muscleFocus && (
                 <Chip 
                   label={`Selected: ${formData.muscleFocus}`}
@@ -393,7 +418,10 @@ export default function WorkoutsPage() {
                 />
               )}
               <MuscleBodyMap 
-                muscleDistribution={MUSCLE_GROUPS.map(m => ({ muscle: m, count: 1 }))}
+                muscleDistribution={formData.muscleFocus 
+                  ? [{ muscle: formData.muscleFocus, count: 1 }]
+                  : MUSCLE_GROUPS.map(m => ({ muscle: m, count: 1 }))
+                }
                 size="medium"
                 showToggle={true}
                 showBreakdown={true}

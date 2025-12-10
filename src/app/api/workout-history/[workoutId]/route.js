@@ -48,14 +48,16 @@ export async function GET(request, { params }) {
       });
     });
 
-    // Get last 5 sessions and calculate max weight and total reps per session
+    // Get last 5 sessions and extract set 1 and set 2 data
     const history = Object.values(sessionsByDate)
       .slice(0, 5)
       .reverse() // Oldest first for chart
       .map((session, index) => {
-        const maxWeight = Math.max(...session.sets.map(s => s.weight));
-        const totalReps = session.sets.reduce((sum, s) => sum + s.reps, 0);
-        const avgReps = Math.round(totalReps / session.sets.length);
+        // Sort sets by setNumber to ensure consistent ordering
+        const sortedSets = session.sets.sort((a, b) => a.setNumber - b.setNumber);
+        
+        const set1 = sortedSets[0] || { weight: 0, reps: 0 };
+        const set2 = sortedSets[1] || { weight: 0, reps: 0 };
         
         return {
           sessionNumber: index + 1,
@@ -63,9 +65,10 @@ export async function GET(request, { params }) {
             month: 'short',
             day: 'numeric'
           }),
-          maxWeight: maxWeight,
-          avgReps: avgReps,
-          totalReps: totalReps,
+          weight1: set1.weight,
+          reps1: set1.reps,
+          weight2: set2.weight,
+          reps2: set2.reps,
           unit: session.unit,
           sets: session.sets,
         };
@@ -77,6 +80,7 @@ export async function GET(request, { params }) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
 
 
 

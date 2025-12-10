@@ -18,7 +18,11 @@ export async function POST(request) {
 
     const userId = authResult.user.id;
     let totalSetsInserted = 0;
-    const completedAt = new Date().toISOString();
+    // Get current time in IST (UTC+5:30)
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+    const istTime = new Date(now.getTime() + istOffset);
+    const completedAt = istTime.toISOString();
     const improvements = [];
     const decreases = [];
 

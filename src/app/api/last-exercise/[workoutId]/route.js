@@ -66,16 +66,22 @@ export async function GET(request, { params }) {
     const lastCompletedAt = sessions[0].completedAt;
     const lastSessionSets = sessions.filter(s => s.completedAt === lastCompletedAt);
 
-    const exerciseData = {
-      workoutName: sessions[0].workoutName,
-      equipmentName: sessions[0].equipmentName,
-      unit: sessions[0].unit || 'lbs',
-      sets: lastSessionSets.map(set => ({
+    // Only return first 2 sets to prevent extra sets from persisting
+    const setsData = lastSessionSets
+      .map(set => ({
         setNumber: set.setNumber,
         weight: set.weight,
         reps: set.reps,
         rir: set.rir,
-      })).sort((a, b) => a.setNumber - b.setNumber),
+      }))
+      .sort((a, b) => a.setNumber - b.setNumber)
+      .slice(0, 2); // Only keep first 2 sets
+
+    const exerciseData = {
+      workoutName: sessions[0].workoutName,
+      equipmentName: sessions[0].equipmentName,
+      unit: sessions[0].unit || 'lbs',
+      sets: setsData,
     };
 
     return NextResponse.json({ lastSession: exerciseData });
