@@ -1,0 +1,161 @@
+        {/* Today's Achievements - Compact Expandable */}
+        {todayAchievements.length > 0 && (
+          <Grid item xs={12}>
+            <Card sx={{ 
+              bgcolor: 'rgba(50, 80, 0, 0.4)',
+              border: '2px solid rgba(196, 255, 13, 0.3)',
+              borderRadius: 3,
+              overflow: 'hidden',
+            }}>
+              <CardContent 
+                onClick={() => setAchievementsExpanded(!achievementsExpanded)}
+                sx={{ 
+                  cursor: 'pointer',
+                  p: 2,
+                  '&:last-child': { pb: 2 },
+                  transition: 'background-color 0.2s',
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box sx={{ 
+                      bgcolor: '#10b981', 
+                      borderRadius: '50%', 
+                      width: 40, 
+                      height: 40, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <CheckCircleIcon sx={{ fontSize: 24, color: '#000' }} />
+                    </Box>
+                    <Box>
+                      <Typography variant="h6" sx={{ color: '#10b981', fontWeight: 'bold', mb: 0.25 }}>
+                        Today&apos;s Achievements
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.6)' }}>
+                        {todayAchievements.length} new personal record{todayAchievements.length > 1 ? 's' : ''}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <IconButton 
+                    size="small"
+                    sx={{ 
+                      color: '#10b981',
+                      transform: achievementsExpanded ? 'rotate(180deg)' : 'rotate(0)',
+                      transition: 'transform 0.3s',
+                    }}
+                  >
+                    <ExpandMoreIcon />
+                  </IconButton>
+                </Box>
+              </CardContent>
+
+              <Collapse in={achievementsExpanded}>
+                <Box sx={{ px: 2, pb: 2 }}>
+                  <Stack spacing={1.5}>
+                    {todayAchievements.map((ach, idx) => {
+                      const achievementType = ach.achievementType || 'weight';
+                      
+                      return (
+                        <Box 
+                          key={idx} 
+                          sx={{ 
+                            bgcolor: 'rgba(50, 70, 0, 0.6)',
+                            border: '1px solid rgba(196, 255, 13, 0.3)',
+                            borderRadius: 2,
+                            p: 1.5,
+                          }}
+                        >
+                          <Typography variant="subtitle2" sx={{ color: '#fff', fontWeight: 600, mb: 1 }}>
+                            {ach.exerciseName}
+                          </Typography>
+                          
+                          {achievementType === 'weight' && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                                  {ach.previousValue} {ach.unit}
+                                </Typography>
+                                <TrendingUpIcon sx={{ color: '#10b981', fontSize: 18 }} />
+                                <Typography variant="body2" fontWeight="bold" sx={{ color: '#fff' }}>
+                                  {ach.newValue} {ach.unit}
+                                </Typography>
+                              </Box>
+                              <Chip
+                                icon={<TrendingUpIcon sx={{ fontSize: 14 }} />}
+                                label={`+${ach.improvement} ${ach.unit}`}
+                                size="small"
+                                sx={{ 
+                                  bgcolor: '#10b981', 
+                                  color: '#000',
+                                  fontWeight: 'bold',
+                                  height: 24,
+                                  '& .MuiChip-icon': { color: '#000' },
+                                }}
+                              />
+                            </Box>
+                          )}
+                            
+                          {achievementType === 'reps' && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                                  {ach.previousValue} reps
+                                </Typography>
+                                <TrendingUpIcon sx={{ color: '#10b981', fontSize: 18 }} />
+                                <Typography variant="body2" fontWeight="bold" sx={{ color: '#fff' }}>
+                                  {ach.newValue} reps
+                                </Typography>
+                              </Box>
+                              <Chip
+                                icon={<TrendingUpIcon sx={{ fontSize: 14 }} />}
+                                label={`+${ach.improvement} reps`}
+                                size="small"
+                                sx={{ 
+                                  bgcolor: '#10b981', 
+                                  color: '#000',
+                                  fontWeight: 'bold',
+                                  height: 24,
+                                  '& .MuiChip-icon': { color: '#000' },
+                                }}
+                              />
+                            </Box>
+                          )}
+                            
+                          {achievementType === 'rir' && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                                  RIR {ach.previousValue}
+                                </Typography>
+                                <TrendingDownIcon sx={{ color: '#10b981', fontSize: 18 }} />
+                                <Typography variant="body2" fontWeight="bold" sx={{ color: '#fff' }}>
+                                  RIR {ach.newValue}
+                                </Typography>
+                              </Box>
+                              <Chip
+                                icon={<TrendingDownIcon sx={{ fontSize: 14 }} />}
+                                label={`-${ach.improvement} RIR`}
+                                size="small"
+                                sx={{ 
+                                  bgcolor: '#10b981', 
+                                  color: '#000',
+                                  fontWeight: 'bold',
+                                  height: 24,
+                                  '& .MuiChip-icon': { color: '#000' },
+                                }}
+                              />
+                            </Box>
+                          )}
+                        </Box>
+                      );
+                    })}
+                  </Stack>
+                </Box>
+              </Collapse>
+            </Card>
+          </Grid>
+        )}
+

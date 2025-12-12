@@ -21,7 +21,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  CircularProgress,
   Slider,
   Pagination,
 } from '@mui/material';
@@ -30,7 +29,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
-import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
+import TimelineIcon from '@mui/icons-material/Timeline';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
 import { useParams, useRouter } from 'next/navigation';
@@ -38,6 +37,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchTrainingPrograms, selectTrainingPrograms } from '@/redux/slices/trainingProgramsSlice';
 import { fetchWorkouts, selectWorkouts } from '@/redux/slices/workoutsSlice';
 import Loader from '@/components/common/Loader';
+import { ActiveWorkoutSkeleton } from '@/components/common/SkeletonLoader';
 import MuscleBodyMap from '@/components/common/MuscleBodyMap';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { debounce } from '@/lib/debounce';
@@ -637,7 +637,12 @@ export default function ActiveWorkoutPage() {
   };
 
   if (loading) {
-    return <Loader fullScreen />;
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography variant="h4" sx={{ mb: 3 }}>Active Workout</Typography>
+        <ActiveWorkoutSkeleton />
+      </Box>
+    );
   }
 
   if (!program) {
@@ -697,7 +702,7 @@ export default function ActiveWorkoutPage() {
         {/* Completed Workouts - Show at top */}
         {completedWorkoutIds.length > 0 && (
           <Box>
-            <Typography variant="subtitle2" sx={{ mb: 1, color: '#c4ff0d', fontWeight: 'bold' }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: '#10b981', fontWeight: 'bold' }}>
               ✓ Completed ({completedWorkoutIds.length})
             </Typography>
             <Stack spacing={1}>
@@ -713,20 +718,16 @@ export default function ActiveWorkoutPage() {
                     key={workoutId}
                 sx={{
                       cursor: 'pointer',
-                      border: '2px solid #c4ff0d',
+                      border: '2px solid #10b981',
                       bgcolor: 'rgba(196, 255, 13, 0.1)',
-                      transition: 'all 0.2s',
-                      '&:hover': {
-                        bgcolor: 'rgba(196, 255, 13, 0.15)',
-                      },
                     }}
                     onClick={() => handleOpenWorkout(workoutId)}
                   >
                     <CardContent sx={{ py: 2 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <CheckCircleIcon sx={{ color: '#c4ff0d', fontSize: 28 }} />
+                        <CheckCircleIcon sx={{ color: '#10b981', fontSize: 28 }} />
                         <Box sx={{ flexGrow: 1 }}>
-                          <Typography variant="h6" sx={{ color: '#c4ff0d' }}>
+                          <Typography variant="h6" sx={{ color: '#10b981' }}>
                             {index + 1}. {workout.name}
                     </Typography>
                           <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
@@ -735,7 +736,7 @@ export default function ActiveWorkoutPage() {
                               size="small"
                               sx={{
                                 bgcolor: 'rgba(196, 255, 13, 0.2)',
-                                color: '#c4ff0d',
+                                color: '#10b981',
                               }}
                             />
                             {workout.muscleFocus && (
@@ -770,11 +771,6 @@ export default function ActiveWorkoutPage() {
                     sx={{
                       cursor: 'pointer',
                       border: '1px solid rgba(255, 255, 255, 0.1)',
-                      transition: 'all 0.2s',
-                      '&:hover': {
-                        border: '1px solid #c4ff0d',
-                        bgcolor: 'rgba(196, 255, 13, 0.05)',
-                      },
                     }}
                     onClick={() => handleOpenWorkout(workout.id)}
                   >
@@ -841,7 +837,7 @@ export default function ActiveWorkoutPage() {
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6">
               {programWorkouts.find(w => w.id === currentWorkoutId)?.name}
-            </Typography>
+                    </Typography>
             <IconButton onClick={handleCloseWorkout}>
               <CloseIcon />
             </IconButton>
@@ -856,12 +852,12 @@ export default function ActiveWorkoutPage() {
             
             return (
               <Box>
-                {/* Last Workout Progress - Simple Line */}
-                {workoutHistory[workout.id] && workoutHistory[workout.id].length > 0 && (
-                  <Box sx={{ mb: 2, p: 1.5, bgcolor: 'rgba(196, 255, 13, 0.03)', borderRadius: 1 }}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1.5 }}>
-                      Progress History
-                    </Typography>
+                {/* Last Workout Progress - Simple Line with Reserved Space */}
+                <Box sx={{ mb: 2, p: 1.5, bgcolor: 'rgba(196, 255, 13, 0.03)', borderRadius: 1, minHeight: 90 }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1.5 }}>
+                    Progress History
+                  </Typography>
+                  {workoutHistory[workout.id] && workoutHistory[workout.id].length > 0 ? (
                     <Box sx={{ 
                       display: 'flex', 
                       alignItems: 'center', 
@@ -892,11 +888,12 @@ export default function ActiveWorkoutPage() {
                         >
                           <Box
                             sx={{
-                              width: 12,
-                              height: 12,
+                              width: 14,
+                              height: 14,
                               borderRadius: '50%',
-                              bgcolor: index === workoutHistory[workout.id].slice(-7).length - 1 ? '#c4ff0d' : 'rgba(196, 255, 13, 0.4)',
-                              border: '2px solid #000',
+                              bgcolor: index === workoutHistory[workout.id].slice(-7).length - 1 ? '#10b981' : 'rgba(196, 255, 13, 0.6)',
+                              border: '2px solid rgba(10, 10, 10, 0.8)',
+                              boxShadow: '0 0 0 1px rgba(196, 255, 13, 0.3)',
                               mb: 0.5,
                             }}
                           />
@@ -905,7 +902,7 @@ export default function ActiveWorkoutPage() {
                             sx={{ 
                               fontSize: '0.65rem',
                               fontWeight: index === workoutHistory[workout.id].slice(-7).length - 1 ? 'bold' : 'normal',
-                              color: index === workoutHistory[workout.id].slice(-7).length - 1 ? '#c4ff0d' : 'text.secondary',
+                              color: index === workoutHistory[workout.id].slice(-7).length - 1 ? '#10b981' : 'text.secondary',
                               textAlign: 'center',
                             }}
                           >
@@ -924,8 +921,14 @@ export default function ActiveWorkoutPage() {
                         </Box>
                       ))}
                     </Box>
-                  </Box>
-                )}
+                  ) : (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 2 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Loading history...
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
 
                 {/* Equipment info and Unit selector row */}
                 <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
@@ -1002,7 +1005,7 @@ export default function ActiveWorkoutPage() {
                                   variant="h6" 
                                   fontWeight="bold"
                                   sx={{
-                                    color: set.previousWeight && set.weight > set.previousWeight ? '#c4ff0d' : 'inherit'
+                                    color: set.previousWeight && set.weight > set.previousWeight ? '#10b981' : 'inherit'
                                   }}
                                 >
                                   {set.weight} {workoutData[workout.id]?.unit || 'lbs'}
@@ -1011,27 +1014,47 @@ export default function ActiveWorkoutPage() {
                               <Slider
                                 value={set.weight}
                                 onChange={(e, value) => updateSet(workout.id, setIndex, 'weight', value)}
-                                min={0}
-                                max={workoutData[workout.id]?.unit === 'kgs' ? 100 : 150}
+                                min={set.previousWeight && set.previousWeight > 0 ? Math.max(0, set.previousWeight - 30) : 0}
+                                max={set.previousWeight && set.previousWeight > 0 ? set.previousWeight + 30 : 60}
                                 step={2.5}
-                                marks={[
-                                  { value: 0, label: '0' },
-                                  { value: workoutData[workout.id]?.unit === 'kgs' ? 50 : 75, label: workoutData[workout.id]?.unit === 'kgs' ? '50' : '75' },
-                                  { value: workoutData[workout.id]?.unit === 'kgs' ? 100 : 150, label: workoutData[workout.id]?.unit === 'kgs' ? '100' : '150' }
-                                ]}
+                                marks={(() => {
+                                  const min = set.previousWeight && set.previousWeight > 0 ? Math.max(0, set.previousWeight - 30) : 0;
+                                  const max = set.previousWeight && set.previousWeight > 0 ? set.previousWeight + 30 : 60;
+                                  const marks = [];
+                                  for (let i = min; i <= max; i += 2.5) {
+                                    // Only show labels if there's a previous weight, otherwise no labels
+                                    const showLabel = set.previousWeight && set.previousWeight > 0 && 
+                                      (i === min || i === max || Math.abs(i - set.previousWeight) < 0.1);
+                                    marks.push({
+                                      value: i,
+                                      label: showLabel ? `${i}` : ''
+                                    });
+                                  }
+                                  return marks;
+                                })()}
                                 sx={{
                                   '& .MuiSlider-thumb': {
                                     bgcolor: set.previousWeight && set.weight !== set.previousWeight 
-                                      ? (set.weight > set.previousWeight ? '#c4ff0d' : '#ef4444') 
+                                      ? (set.weight > set.previousWeight ? '#10b981' : '#f87171') 
                                       : '#1976d2',
                                   },
                                   '& .MuiSlider-track': {
                                     bgcolor: set.previousWeight && set.weight !== set.previousWeight 
-                                      ? (set.weight > set.previousWeight ? '#c4ff0d' : '#ef4444') 
+                                      ? (set.weight > set.previousWeight ? '#10b981' : '#f87171') 
                                       : '#1976d2',
                                   },
                                   '& .MuiSlider-rail': {
                                     opacity: 0.3,
+                                  },
+                                  '& .MuiSlider-mark': {
+                                    backgroundColor: 'rgba(255,255,255,0.6)',
+                                    height: 10,
+                                    width: 3,
+                                    borderRadius: '50%',
+                                  },
+                                  '& .MuiSlider-markActive': {
+                                    backgroundColor: 'currentColor',
+                                    opacity: 0.8,
                                   }
                                 }}
                               />
@@ -1046,7 +1069,7 @@ export default function ActiveWorkoutPage() {
                                     height: 20,
                                     fontSize: '0.7rem',
                                     fontWeight: 'bold',
-                                    bgcolor: set.weight > set.previousWeight ? '#c4ff0d' : '#ef4444',
+                                    bgcolor: set.weight > set.previousWeight ? '#10b981' : '#f87171',
                                     color: set.weight > set.previousWeight ? '#000000' : '#ffffff',
                                     border: 'none',
                                     zIndex: 1,
@@ -1073,11 +1096,7 @@ export default function ActiveWorkoutPage() {
                                 min={0}
                                 max={20}
                                 step={1}
-                                marks={[
-                                  { value: 0, label: '0' },
-                                  { value: 10, label: '10' },
-                                  { value: 20, label: '20' }
-                                ]}
+                                marks={Array.from({ length: 21 }, (_, i) => ({ value: i, label: i % 5 === 0 ? `${i}` : '' }))}
                                 sx={{
                                   '& .MuiSlider-thumb': {
                                     bgcolor: '#8b5cf6',
@@ -1087,6 +1106,14 @@ export default function ActiveWorkoutPage() {
                                   },
                                   '& .MuiSlider-rail': {
                                     opacity: 0.3,
+                                  },
+                                  '& .MuiSlider-mark': {
+                                    backgroundColor: 'rgba(255,255,255,0.3)',
+                                    height: 6,
+                                    width: 2,
+                                  },
+                                  '& .MuiSlider-markActive': {
+                                    backgroundColor: 'currentColor',
                                   }
                                 }}
                               />
@@ -1110,11 +1137,7 @@ export default function ActiveWorkoutPage() {
                                 min={0}
                                 max={10}
                                 step={1}
-                                marks={[
-                                  { value: 0, label: '0' },
-                                  { value: 5, label: '5' },
-                                  { value: 10, label: '10' }
-                                ]}
+                                marks={Array.from({ length: 11 }, (_, i) => ({ value: i, label: i % 5 === 0 || i === 10 ? `${i}` : '' }))}
                                 sx={{
                                   '& .MuiSlider-thumb': {
                                     bgcolor: '#f59e0b',
@@ -1124,6 +1147,14 @@ export default function ActiveWorkoutPage() {
                                   },
                                   '& .MuiSlider-rail': {
                                     opacity: 0.3,
+                                  },
+                                  '& .MuiSlider-mark': {
+                                    backgroundColor: 'rgba(255,255,255,0.3)',
+                                    height: 6,
+                                    width: 2,
+                                  },
+                                  '& .MuiSlider-markActive': {
+                                    backgroundColor: 'currentColor',
                                   }
                                 }}
                               />
@@ -1157,7 +1188,7 @@ export default function ActiveWorkoutPage() {
             variant="contained"
             size="large"
             sx={{
-              bgcolor: '#c4ff0d',
+              bgcolor: '#10b981',
               color: '#000',
               fontWeight: 'bold',
               '&:hover': {
@@ -1174,13 +1205,13 @@ export default function ActiveWorkoutPage() {
       <Box sx={{ mt: 2 }}>
         <Button
           variant="outlined"
-          startIcon={<FitnessCenterIcon />}
+          startIcon={<TimelineIcon />}
           onClick={() => setAddWorkoutDialogOpen(true)}
           fullWidth
           sx={{ 
             borderStyle: 'dashed',
-            color: '#c4ff0d',
-            borderColor: '#c4ff0d',
+            color: '#10b981',
+            borderColor: '#10b981',
           }}
         >
           Add Exercise to Today&apos;s Session
@@ -1201,7 +1232,7 @@ export default function ActiveWorkoutPage() {
           onClick={() => setSaveDialogOpen(true)}
           disabled={progress === 0 || saving}
         >
-          {saving ? <CircularProgress size={20} color="inherit" /> : 'Save Workout'}
+          {saving ? 'Saving...' : 'Save Workout'}
         </Button>
       </Box>
 
@@ -1220,8 +1251,8 @@ export default function ActiveWorkoutPage() {
             const completedSets = data.sets.filter(s => s.completed);
             return completedSets.some(s => s.previousWeight && s.weight > s.previousWeight);
           }) && (
-            <Box sx={{ mt: 2, p: 2, border: '2px solid #c4ff0d', bgcolor: 'rgba(196, 255, 13, 0.1)', borderRadius: 1 }}>
-              <Typography variant="subtitle2" gutterBottom fontWeight="bold" sx={{ color: '#c4ff0d' }}>
+            <Box sx={{ mt: 2, p: 2, border: '2px solid #10b981', bgcolor: 'rgba(196, 255, 13, 0.1)', borderRadius: 1 }}>
+              <Typography variant="subtitle2" gutterBottom fontWeight="bold" sx={{ color: '#10b981' }}>
                 🎉 Weight Increases:
               </Typography>
               <Stack spacing={1}>
@@ -1244,7 +1275,7 @@ export default function ActiveWorkoutPage() {
                         size="small"
                         sx={{ 
                           fontWeight: 'bold',
-                          bgcolor: '#c4ff0d',
+                          bgcolor: '#10b981',
                           color: '#000000'
                         }}
                       />
@@ -1263,7 +1294,7 @@ export default function ActiveWorkoutPage() {
             disabled={saving}
             startIcon={saving ? null : undefined}
           >
-            {saving ? <CircularProgress size={20} color="inherit" /> : 'Save'}
+            {saving ? 'Saving...' : 'Save'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1287,10 +1318,10 @@ export default function ActiveWorkoutPage() {
             fullWidth
             sx={{
               mb: 2,
-              borderColor: '#c4ff0d',
-              color: '#c4ff0d',
+              borderColor: '#10b981',
+              color: '#10b981',
               '&:hover': {
-                borderColor: '#c4ff0d',
+                borderColor: '#10b981',
                 bgcolor: 'rgba(196, 255, 13, 0.1)',
               }
             }}
@@ -1354,7 +1385,7 @@ export default function ActiveWorkoutPage() {
                     p: 2,
                     '&:hover': {
                       bgcolor: addingWorkout ? 'rgba(255, 255, 255, 0.05)' : 'rgba(196, 255, 13, 0.1)',
-                      borderColor: addingWorkout ? 'rgba(255, 255, 255, 0.1)' : '#c4ff0d',
+                      borderColor: addingWorkout ? 'rgba(255, 255, 255, 0.1)' : '#10b981',
                     }
                   }}
                   onClick={() => !addingWorkout && addWorkoutToSession(workout.id)}
@@ -1376,7 +1407,7 @@ export default function ActiveWorkoutPage() {
                         size="small" 
                         sx={{ 
                           bgcolor: 'rgba(196, 255, 13, 0.2)',
-                          color: '#c4ff0d',
+                          color: '#10b981',
                           fontWeight: 'medium',
                           border: '1px solid rgba(196, 255, 13, 0.3)'
                         }}
@@ -1501,14 +1532,14 @@ export default function ActiveWorkoutPage() {
             variant="contained"
             disabled={creatingWorkout || !newWorkoutData.name.trim()}
             sx={{
-              bgcolor: '#c4ff0d',
+              bgcolor: '#10b981',
               color: '#000',
               '&:hover': {
                 bgcolor: '#b0e00b',
               }
             }}
           >
-            {creatingWorkout ? <CircularProgress size={20} /> : 'Create & Add to Session'}
+            {creatingWorkout ? 'Creating...' : 'Create & Add to Session'}
           </Button>
         </DialogActions>
       </Dialog>

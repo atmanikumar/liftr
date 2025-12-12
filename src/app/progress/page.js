@@ -21,6 +21,9 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import { useRouter } from 'next/navigation';
 import Loader from '@/components/common/Loader';
+import { PageSkeleton } from '@/components/common/SkeletonLoader';
+import PullToRefresh from '@/components/common/PullToRefresh';
+import { hapticSuccess } from '@/lib/nativeFeatures';
 import {
   LineChart,
   Line,
@@ -53,8 +56,23 @@ export default function ProgressPage() {
     fetchProgress();
   }, []);
 
+  // Handle pull-to-refresh
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/progress');
+      const data = await response.json();
+      setProgressData(data);
+      hapticSuccess();
+    } catch (error) {
+      console.error('Failed to fetch progress:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading) {
-    return <Loader fullScreen />;
+    return <PageSkeleton />;
   }
 
   if (!progressData) {
@@ -83,65 +101,13 @@ export default function ProgressPage() {
   const { workoutsPerDay = [] } = chartData;
 
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <Box>
       <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
         My Total Progress
       </Typography>
 
       <Grid container spacing={3}>
-        {/* Workouts Per Day Chart */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <Typography variant="h6" gutterBottom>
-              Workouts Per Day (Last 30 Days)
-            </Typography>
-            {workoutsPerDay.length === 0 ? (
-              <Typography color="text.secondary">No workout data yet</Typography>
-            ) : (
-              <Box sx={{ width: '100%', maxWidth: 900, mt: 2, '& .recharts-wrapper': { margin: '0 auto' } }}>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart 
-                    data={workoutsPerDay}
-                    margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
-                  >
-                    <XAxis 
-                      dataKey="shortDate" 
-                      stroke="rgba(255,255,255,0.5)"
-                      style={{ fontSize: '12px' }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis 
-                      stroke="rgba(255,255,255,0.5)"
-                      style={{ fontSize: '12px' }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={30}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'rgba(28, 28, 30, 0.95)',
-                        border: 'none',
-                        borderRadius: '8px',
-                      }}
-                    />
-                    <Legend wrapperStyle={{ outline: 'none' }} />
-                    <Line
-                      type="monotone"
-                      dataKey="workouts"
-                      stroke="#ff6b35"
-                      strokeWidth={3}
-                      dot={false}
-                      activeDot={false}
-                      name="Workouts"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </Box>
-            )}
-          </Paper>
-        </Grid>
-
         {/* Calories Burned Per Day Chart */}
         <Grid item xs={12}>
           <Paper sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -262,7 +228,7 @@ export default function ProgressPage() {
           <Grid item xs={12}>
             <Paper sx={{ p: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                <EmojiEventsIcon sx={{ color: '#c4ff0d', fontSize: 32, mr: 1 }} />
+                <EmojiEventsIcon sx={{ color: '#10b981', fontSize: 32, mr: 1 }} />
                 <Typography variant="h6">🏆 My Achievements</Typography>
               </Box>
               <Grid container spacing={2}>
@@ -280,7 +246,7 @@ export default function ProgressPage() {
                     }}>
                       <CardContent>
                         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
-                          <Typography variant="h6" sx={{ color: '#c4ff0d' }}>
+                          <Typography variant="h6" sx={{ color: '#10b981' }}>
                             {achievement.exerciseName}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
@@ -299,8 +265,8 @@ export default function ProgressPage() {
                           <Typography variant="body1" fontWeight="bold">
                             {achievement.previousWeight} {achievement.unit}
                           </Typography>
-                          <TrendingUpIcon sx={{ color: '#c4ff0d' }} />
-                          <Typography variant="body1" fontWeight="bold" sx={{ color: '#c4ff0d' }}>
+                          <TrendingUpIcon sx={{ color: '#10b981' }} />
+                          <Typography variant="body1" fontWeight="bold" sx={{ color: '#10b981' }}>
                             {achievement.newWeight} {achievement.unit}
                           </Typography>
                           <Box sx={{ 
@@ -309,9 +275,9 @@ export default function ProgressPage() {
                             py: 0.5,
                             bgcolor: 'rgba(196, 255, 13, 0.3)',
                             borderRadius: 2,
-                            border: '1px solid #c4ff0d',
+                            border: '1px solid #10b981',
                           }}>
-                            <Typography variant="body2" fontWeight="bold" sx={{ color: '#c4ff0d' }}>
+                            <Typography variant="body2" fontWeight="bold" sx={{ color: '#10b981' }}>
                               +{achievement.improvement} {achievement.unit}
                             </Typography>
                           </Box>
@@ -326,6 +292,7 @@ export default function ProgressPage() {
         )}
       </Grid>
     </Box>
+    </PullToRefresh>
   );
 }
 

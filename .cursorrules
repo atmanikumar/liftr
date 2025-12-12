@@ -382,20 +382,20 @@ With proper indexing:
 
 ## 🚫 File Creation Rules
 
-### NEVER Create These Files:
-- README.md
-- CHANGELOG.md
-- CONTRIBUTING.md
-- LICENSE.md
-- SETUP_GUIDE.md
-- PROJECT_SUMMARY.md
-- QUICK_START.md
-- Any .md documentation/instruction files
-- .txt summary files
-- .sh test script files
+### NEVER Create These Files (Unless Explicitly Requested):
+- **NEVER create .md files** (README.md, CHANGELOG.md, CONTRIBUTING.md, LICENSE.md, SETUP_GUIDE.md, PROJECT_SUMMARY.md, QUICK_START.md, or ANY .md documentation files)
+- **NEVER create .txt summary files**
+- **NEVER create .sh test script files**
+- **NEVER create documentation files** in any format
+
+### CRITICAL RULE:
+**DO NOT CREATE ANY .md FILES UNLESS THE USER EXPLICITLY REQUESTS IT**
 
 ### Important:
-Documentation and instructions should ONLY be in code comments or inline JSDoc, NEVER in separate .md files.
+- Documentation and instructions should ONLY be in code comments or inline JSDoc
+- NEVER write separate documentation files
+- If you need to explain something, use code comments or respond in chat
+- Only create .md files if user says "create a markdown file" or "write a README"
 
 ## 🎯 Feature Requirements
 
@@ -548,6 +548,38 @@ Vercel cron jobs are configured in `vercel.json`:
 - **Updates PRs**: Ensures personal records are current
 - **Automatic**: No manual intervention needed
 
+## 📱 Native Features
+
+### Pull-to-Refresh
+- **Component**: `src/components/common/PullToRefresh.js`
+- **Usage**: Wrap page content with `<PullToRefresh onRefresh={handleRefresh}>`
+- **Enabled On**: Home, Workouts, Training Programs pages
+- **Behavior**: Pull down from top of page to refresh data with haptic feedback
+
+### Swipe-to-Go-Back Gesture
+- **Hook**: `src/hooks/useSwipeBack.js`
+- **Enabled**: Globally in layout.js
+- **Behavior**: Swipe from left edge (within 20px) to go back
+- **Native Config**: `allowsBackForwardNavigationGestures: true` in capacitor.config.ts
+
+### Haptic Feedback
+- **Utilities**: `src/lib/nativeFeatures.js`
+- **Available Types**: hapticLight, hapticMedium, hapticHeavy, hapticSuccess, hapticError, hapticWarning
+- **Usage**: Import and call directly, or use `<HapticButton>` component
+- **Integrated**: Navigation, pull-to-refresh, swipe-back, button interactions
+
+### Status Bar
+- **Fixed**: Solid black background (#0a0a0a)
+- **Style**: DARK mode
+- **Safe Areas**: Proper handling of notch/home indicator
+- **No Transparency**: Content never bleeds through
+
+### Skeleton Loaders
+- **Component**: `src/components/common/SkeletonLoader.js`
+- **Types**: Card, WorkoutCard, Table, Chart, Stats, List, Page, ActiveWorkout
+- **Usage**: Show instead of blank screens during loading
+- **Implemented**: Home, Workouts, and other key pages
+
 ## ⚠️ Important Notes
 
 - **JWT Expiry**: 90 days (3 months)
@@ -556,6 +588,8 @@ Vercel cron jobs are configured in `vercel.json`:
 - **State Management**: Redux Toolkit only
 - **UI Library**: Material UI only
 - **Theme**: Dark mode by default
+- **Refresh Method**: Pull-to-refresh only (no manual refresh buttons)
+- **Navigation**: Native swipe-back gesture enabled
 
 ---
 

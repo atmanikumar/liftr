@@ -41,6 +41,9 @@ import { selectUser } from '@/redux/slices/authSlice';
 import { MUSCLE_GROUPS } from '@/constants/app';
 import Loader from '@/components/common/Loader';
 import MuscleBodyMap from '@/components/common/MuscleBodyMap';
+import { CardSkeleton } from '@/components/common/SkeletonLoader';
+import PullToRefresh from '@/components/common/PullToRefresh';
+import { hapticSuccess } from '@/lib/nativeFeatures';
 
 export default function WorkoutsPage() {
   const dispatch = useDispatch();
@@ -156,11 +159,18 @@ export default function WorkoutsPage() {
 
   const totalPages = Math.ceil(filteredWorkouts.length / rowsPerPage);
 
+  // Handle pull-to-refresh
+  const handleRefresh = async () => {
+    await dispatch(fetchWorkouts());
+    hapticSuccess();
+  };
+
   if (loading && workouts.length === 0) {
     return <Loader fullScreen />;
   }
 
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4">Workouts</Typography>
@@ -200,20 +210,19 @@ export default function WorkoutsPage() {
         Showing {paginatedWorkouts.length} of {filteredWorkouts.length} workouts
       </Typography>
 
+      {/* Loading skeleton */}
+      {loading && <CardSkeleton count={6} />}
+
       {/* Workouts Grid - 2 columns per row on all devices */}
-      <Grid container spacing={3}>
-        {paginatedWorkouts.map((workout) => (
+      {!loading && (
+        <Grid container spacing={3}>
+          {paginatedWorkouts.map((workout) => (
           <Grid item xs={6} sm={6} key={workout.id}>
             <Card 
               sx={{ 
                 height: '100%', 
                 display: 'flex', 
                 flexDirection: 'column',
-                transition: 'transform 0.2s, box-shadow 0.2s',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                  boxShadow: '0 8px 24px rgba(196, 255, 13, 0.15)',
-                }
               }}
             >
               <CardContent sx={{ flexGrow: 1 }}>
@@ -262,7 +271,7 @@ export default function WorkoutsPage() {
                     sx={{ 
                       mt: 1,
                       bgcolor: 'rgba(196, 255, 13, 0.15)',
-                      color: '#c4ff0d',
+                      color: '#10b981',
                       border: '1px solid rgba(196, 255, 13, 0.3)'
                     }}
                   />
@@ -292,8 +301,7 @@ export default function WorkoutsPage() {
                     onClick={() => handleOpenDialog(workout)}
                     title="Edit"
                     sx={{ 
-                      color: '#c4ff0d',
-                      '&:hover': { bgcolor: 'rgba(196, 255, 13, 0.1)' }
+                      color: '#10b981',
                     }}
                   >
                     <EditIcon fontSize="small" />
@@ -306,7 +314,7 @@ export default function WorkoutsPage() {
                     onClick={() => openDeleteDialog(workout)}
                     title="Delete"
                     sx={{ 
-                      '&:hover': { bgcolor: 'rgba(244, 67, 54, 0.1)' }
+                      color: 'error.main'
                     }}
                   >
                     <DeleteIcon fontSize="small" />
@@ -316,7 +324,8 @@ export default function WorkoutsPage() {
             </Card>
           </Grid>
         ))}
-      </Grid>
+        </Grid>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (
@@ -488,6 +497,7 @@ export default function WorkoutsPage() {
         </Alert>
       </Snackbar>
     </Box>
+    </PullToRefresh>
   );
 }
 

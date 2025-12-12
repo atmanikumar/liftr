@@ -16,7 +16,7 @@
 /* Performance optimization */
 * {
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
+  /* Removed touch-action to allow normal scrolling */
 }
 
 /* Smooth transitions for all elements */
@@ -40,13 +40,12 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  height: 100%;
 }
 
 html {
   padding: 0;
   margin: 0;
-  background: var(--status-bar-color);
+  background: #0a0a0a !important; /* Force solid black background */
 }
 
 body {
@@ -54,20 +53,24 @@ body {
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: var(--app-background);
-  background-image: radial-gradient(circle at 20% 50%, rgba(196, 255, 13, 0.03) 0%, transparent 50%),
-                    radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.02) 0%, transparent 50%);
-  background-attachment: fixed;
+  background: #0a0a0a !important; /* Force solid background for status bar area */
   min-height: 100vh;
+  min-height: -webkit-fill-available;
   padding: 0;
   margin: 0;
+  /* Prevent rubber-band scrolling on iOS */
+  overscroll-behavior-y: none;
 }
 
 /* iOS PWA: Custom Status Bar Color Fix */
 @media all and (display-mode: standalone) {
+  html {
+    background-color: #0a0a0a !important;
+  }
+  
   body {
     /* Set body background to status bar color */
-    background-color: var(--status-bar-color);
+    background-color: #0a0a0a !important;
     margin: 0;
     padding: 0;
   }
@@ -75,17 +78,13 @@ body {
   #__next {
     /* App container with proper scrolling and background */
     -webkit-overflow-scrolling: touch;
-    background: var(--app-background);
+    background: #000000;
     background-image: radial-gradient(circle at 20% 50%, rgba(196, 255, 13, 0.03) 0%, transparent 50%),
                       radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.02) 0%, transparent 50%);
     background-attachment: fixed;
     min-height: 100vh;
     overflow-x: hidden;
-    overflow-y: auto;
-    position: fixed;
-    width: 100%;
-    top: 0;
-    left: 0;
+    /* Removed position: fixed to allow proper mobile scrolling */
   }
 }
 

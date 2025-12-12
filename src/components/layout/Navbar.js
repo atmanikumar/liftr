@@ -2,7 +2,6 @@
 
 import { AppBar, Toolbar, IconButton, Typography, Box, Avatar, Menu, MenuItem, Divider, ListItemIcon, ListItemText, Chip } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SwitchAccountIcon from '@mui/icons-material/SwitchAccount';
@@ -25,8 +24,6 @@ export default function Navbar({ onMenuClick }) {
   const [viewAsAnchorEl, setViewAsAnchorEl] = useState(null);
   const [trainees, setTrainees] = useState([]);
 
-  // Determine if we should show back button (not on home page)
-  const showBackButton = pathname !== '/';
 
   // Fetch trainees if user is a trainer
   useEffect(() => {
@@ -90,17 +87,19 @@ export default function Navbar({ onMenuClick }) {
         top: 0,
         left: 0,
         right: 0,
-        backgroundColor: 'var(--status-bar-color, #0a0a0a)', // Use CSS variable for consistency
+        backgroundColor: '#0a0a0a !important', // Solid color, force no transparency
         borderRadius: 0,
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.3)',
         borderBottom: 'none',
+        // Remove any padding/margin since status bar is now solid
+        padding: 0,
+        margin: 0,
       }}
     >
       <Toolbar sx={{ 
         minHeight: '70px !important', 
         py: 1,
         // iOS PWA: Add padding for safe area (status bar, notch, etc.)
-        paddingTop: 'env(safe-area-inset-top, 0px)',
         paddingLeft: 'calc(16px + env(safe-area-inset-left, 0px))',
         paddingRight: 'calc(16px + env(safe-area-inset-right, 0px))',
       }}>
@@ -122,23 +121,6 @@ export default function Navbar({ onMenuClick }) {
           <MenuIcon />
         </IconButton>
 
-        {/* Back button (shown when not on home page) */}
-        {showBackButton && (
-          <IconButton
-            color="inherit"
-            aria-label="back"
-            onClick={() => router.back()}
-            sx={{ 
-              mr: 1,
-              color: '#c4ff0d',
-              '&:hover': {
-                backgroundColor: 'rgba(196, 255, 13, 0.1)',
-              }
-            }}
-          >
-            <ArrowBackIcon />
-          </IconButton>
-        )}
 
         <Link href="/" passHref style={{ textDecoration: 'none', color: 'inherit', flexGrow: 1 }}>
           <Typography 

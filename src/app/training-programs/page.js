@@ -37,7 +37,6 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import SearchIcon from '@mui/icons-material/Search';
-import CircularProgress from '@mui/material/CircularProgress';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import {
@@ -55,6 +54,8 @@ import {
 import { selectUser } from '@/redux/slices/authSlice';
 import Loader from '@/components/common/Loader';
 import MuscleBodyMap from '@/components/common/MuscleBodyMap';
+import PullToRefresh from '@/components/common/PullToRefresh';
+import { hapticSuccess } from '@/lib/nativeFeatures';
 
 export default function TrainingProgramsPage() {
   const dispatch = useDispatch();
@@ -284,11 +285,19 @@ export default function TrainingProgramsPage() {
     workout.equipmentName?.toLowerCase().includes(workoutSearchQuery.toLowerCase())
   );
 
+  // Handle pull-to-refresh
+  const handleRefresh = async () => {
+    await dispatch(fetchTrainingPrograms());
+    await dispatch(fetchWorkouts());
+    hapticSuccess();
+  };
+
   if (loading && programs.length === 0) {
     return <Loader fullScreen message="Loading training programs..." />;
   }
 
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4" sx={{ flexGrow: 1, minWidth: 'fit-content' }}>
@@ -349,7 +358,7 @@ export default function TrainingProgramsPage() {
                       size="small"
                       sx={{
                         bgcolor: 'rgba(196, 255, 13, 0.2)',
-                        color: '#c4ff0d',
+                        color: '#10b981',
                         border: '1px solid rgba(196, 255, 13, 0.4)',
                         fontWeight: 'bold',
                         fontSize: '0.7rem',
@@ -405,7 +414,7 @@ export default function TrainingProgramsPage() {
                   }}
                 >
                   {startingWorkoutId === program.id ? (
-                    <CircularProgress size={20} color="inherit" />
+                    'Creating...'
                   ) : (
                     'Start'
                   )}
@@ -654,6 +663,7 @@ export default function TrainingProgramsPage() {
         </Alert>
       </Snackbar>
     </Box>
+    </PullToRefresh>
   );
 }
 

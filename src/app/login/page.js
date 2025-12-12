@@ -11,7 +11,7 @@ import {
   Alert,
   Container,
 } from '@mui/material';
-import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
+import FlashOnIcon from '@mui/icons-material/FlashOn';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { login, clearError, selectAuth } from '@/redux/slices/authSlice';
@@ -65,7 +65,7 @@ export default function LoginPage() {
           <CardContent sx={{ p: 4 }}>
             {/* Logo and Title */}
             <Box sx={{ textAlign: 'center', mb: 4 }}>
-              <FitnessCenterIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
+              <FlashOnIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
               <Typography variant="h4" fontWeight="bold">
                 Spartans
               </Typography>
@@ -89,7 +89,19 @@ export default function LoginPage() {
                 variant="outlined"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                sx={{ mb: 2 }}
+                sx={{ 
+                  mb: 2,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    bgcolor: 'rgba(255,255,255,0.05)',
+                    '&:hover fieldset': {
+                      borderColor: '#10b981',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#10b981',
+                    },
+                  },
+                }}
                 required
                 autoFocus
                 disabled={loading}
@@ -102,7 +114,19 @@ export default function LoginPage() {
                 variant="outlined"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                sx={{ mb: 3 }}
+                sx={{ 
+                  mb: 3,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    bgcolor: 'rgba(255,255,255,0.05)',
+                    '&:hover fieldset': {
+                      borderColor: '#10b981',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#10b981',
+                    },
+                  },
+                }}
                 required
                 disabled={loading}
               />
@@ -113,9 +137,33 @@ export default function LoginPage() {
                 variant="contained"
                 size="large"
                 disabled={loading || !username || !password}
-                sx={{ py: 1.5 }}
+                sx={{ 
+                  py: 1.8,
+                  bgcolor: '#10b981',
+                  color: '#fff',
+                  fontWeight: 600,
+                  fontSize: '1.1rem',
+                  borderRadius: 3,
+                  textTransform: 'none',
+                  boxShadow: '0 4px 14px 0 rgba(16, 185, 129, 0.39)',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    bgcolor: '#059669',
+                    boxShadow: '0 6px 20px rgba(16, 185, 129, 0.5)',
+                    transform: 'translateY(-2px)',
+                  },
+                  '&:active': {
+                    transform: 'translateY(0)',
+                    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                  },
+                  '&:disabled': {
+                    bgcolor: 'rgba(255,255,255,0.1)',
+                    color: 'rgba(255,255,255,0.3)',
+                    boxShadow: 'none',
+                  }
+                }}
               >
-                {loading ? <Loader message="" /> : 'Login'}
+                {loading ? 'Logging in...' : 'Login'}
               </Button>
             </form>
 

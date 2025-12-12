@@ -44,6 +44,9 @@ import {
 import { selectUser, selectViewingAs, setViewingAs, clearViewingAs } from '@/redux/slices/authSlice';
 import Loader from '@/components/common/Loader';
 import { formatDateTimeIST } from '@/lib/timezone';
+import { TableSkeleton } from '@/components/common/SkeletonLoader';
+import PullToRefresh from '@/components/common/PullToRefresh';
+import { hapticSuccess } from '@/lib/nativeFeatures';
 
 export default function UsersPage() {
   const dispatch = useDispatch();
@@ -158,11 +161,23 @@ export default function UsersPage() {
     router.push('/');
   };
 
+  // Handle pull-to-refresh
+  const handleRefresh = async () => {
+    await dispatch(fetchUsers());
+    hapticSuccess();
+  };
+
   if (loading && users.length === 0) {
-    return <Loader fullScreen message="Loading users..." />;
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography variant="h4" sx={{ mb: 3 }}>Users Management</Typography>
+        <TableSkeleton rows={8} columns={5} />
+      </Box>
+    );
   }
 
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4">Users Management</Typography>
@@ -172,10 +187,10 @@ export default function UsersPage() {
               variant="outlined"
               onClick={handleViewAsMyself}
               sx={{
-                color: '#c4ff0d',
-                borderColor: '#c4ff0d',
+                color: '#10b981',
+                borderColor: '#10b981',
                 '&:hover': {
-                  borderColor: '#c4ff0d',
+                  borderColor: '#10b981',
                   bgcolor: 'rgba(196, 255, 13, 0.1)',
                 }
               }}
@@ -219,7 +234,7 @@ export default function UsersPage() {
                         <Chip label="Admin" color="secondary" size="small" />
                       )}
                       {user.role === 'trainer' && (
-                        <Chip label="Trainer" sx={{ bgcolor: '#c4ff0d', color: '#000' }} size="small" />
+                        <Chip label="Trainer" sx={{ bgcolor: '#10b981', color: '#000' }} size="small" />
                       )}
                     </Box>
                   </TableCell>
@@ -239,7 +254,7 @@ export default function UsersPage() {
                           }}
                           title="View As This User"
                           sx={{ 
-                            color: '#c4ff0d',
+                            color: '#10b981',
                             '&:hover': {
                               bgcolor: 'rgba(196, 255, 13, 0.1)',
                             }
@@ -294,7 +309,7 @@ export default function UsersPage() {
                               {user.role !== 'admin' && (
                                 <IconButton
                                   sx={{ 
-                                    color: '#c4ff0d',
+                                    color: '#10b981',
                                     '&:hover': {
                                       bgcolor: 'rgba(196, 255, 13, 0.1)',
                                     }
@@ -457,6 +472,7 @@ export default function UsersPage() {
         </Alert>
       </Snackbar>
     </Box>
+    </PullToRefresh>
   );
 }
 

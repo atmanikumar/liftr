@@ -21,6 +21,7 @@ import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import Loader from '@/components/common/Loader';
+import { PageSkeleton } from '@/components/common/SkeletonLoader';
 import MuscleBodyMap from '@/components/common/MuscleBodyMap';
 import { Dialog, DialogContent, DialogTitle, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -50,7 +51,12 @@ export default function WorkoutSummaryPage() {
   }, [sessionId]);
 
   if (loading) {
-    return <Loader fullScreen message="Loading workout summary..." />;
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography variant="h4" sx={{ mb: 3 }}>Workout Summary</Typography>
+        <PageSkeleton />
+      </Box>
+    );
   }
 
   if (!summary) {
@@ -84,7 +90,7 @@ export default function WorkoutSummaryPage() {
   return (
     <Box>
       {/* Workout Title */}
-      <Paper sx={{ p: 3, mb: 3, background: 'linear-gradient(135deg, #c4ff0d 0%, #8b5cf6 100%)', border: 'none' }}>
+      <Paper sx={{ p: 3, mb: 3, background: 'linear-gradient(135deg, #10b981 0%, #8b5cf6 100%)', border: 'none' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <CheckCircleIcon sx={{ fontSize: 48, color: '#000000' }} />
           <Box sx={{ flexGrow: 1 }}>
@@ -101,11 +107,11 @@ export default function WorkoutSummaryPage() {
       <Grid container spacing={3} sx={{ mb: 3 }}>
         {/* Calories Burned */}
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, bgcolor: 'rgba(196, 255, 13, 0.1)', border: '2px solid #c4ff0d', height: '100%' }}>
+          <Paper sx={{ p: 3, bgcolor: 'rgba(196, 255, 13, 0.1)', border: '2px solid #10b981', height: '100%' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <LocalFireDepartmentIcon sx={{ fontSize: 40, color: '#c4ff0d' }} />
+              <LocalFireDepartmentIcon sx={{ fontSize: 40, color: '#10b981' }} />
               <Box>
-                <Typography variant="h3" sx={{ color: '#c4ff0d', fontWeight: 'bold' }}>
+                <Typography variant="h3" sx={{ color: '#10b981', fontWeight: 'bold' }}>
                   {Math.round(totalCalories)} cal
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -169,8 +175,8 @@ export default function WorkoutSummaryPage() {
                 <Card sx={{ bgcolor: 'rgba(196, 255, 13, 0.1)', border: '1px solid rgba(196, 255, 13, 0.3)' }}>
                   <CardContent>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                      <TrendingUpIcon sx={{ color: '#c4ff0d' }} />
-                      <Typography variant="subtitle1" fontWeight="bold" sx={{ color: '#c4ff0d' }}>
+                      <TrendingUpIcon sx={{ color: '#10b981' }} />
+                      <Typography variant="subtitle1" fontWeight="bold" sx={{ color: '#10b981' }}>
                         Improvements 💪
                       </Typography>
                     </Box>
@@ -181,7 +187,7 @@ export default function WorkoutSummaryPage() {
                           <Chip
                             label={`+${imp.increase} ${imp.unit}`}
                             size="small"
-                            sx={{ bgcolor: 'rgba(196, 255, 13, 0.25)', color: '#c4ff0d', fontWeight: 'bold', border: '1px solid #c4ff0d' }}
+                            sx={{ bgcolor: 'rgba(196, 255, 13, 0.25)', color: '#10b981', fontWeight: 'bold', border: '1px solid #10b981' }}
                           />
                         </Box>
                       ))}
@@ -233,7 +239,7 @@ export default function WorkoutSummaryPage() {
                 <Chip
                   icon={<LocalFireDepartmentIcon />}
                   label={`${Math.round(exercise.calories)} cal`}
-                  sx={{ bgcolor: 'rgba(196, 255, 13, 0.15)', color: '#c4ff0d', border: '1px solid rgba(196, 255, 13, 0.3)' }}
+                  sx={{ bgcolor: 'rgba(196, 255, 13, 0.15)', color: '#10b981', border: '1px solid rgba(196, 255, 13, 0.3)' }}
                 />
               </Box>
               {exercise.muscleFocus && (
@@ -278,7 +284,7 @@ export default function WorkoutSummaryPage() {
         <Button
           variant="outlined"
           onClick={() => router.push('/recent')}
-          sx={{ borderColor: '#c4ff0d', color: '#c4ff0d' }}
+          sx={{ borderColor: '#10b981', color: '#10b981' }}
         >
           View All Workouts
         </Button>
@@ -287,8 +293,8 @@ export default function WorkoutSummaryPage() {
           onClick={() => router.push('/')}
           sx={{ 
             bgcolor: 'rgba(196, 255, 13, 0.15)', 
-            color: '#c4ff0d',
-            border: '1px solid #c4ff0d',
+            color: '#10b981',
+            border: '1px solid #10b981',
             '&:hover': {
               bgcolor: 'rgba(196, 255, 13, 0.25)',
             }

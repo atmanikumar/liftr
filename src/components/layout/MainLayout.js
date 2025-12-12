@@ -110,20 +110,20 @@ export default function MainLayout({ children }) {
           maxWidth: '100vw',
           overflow: 'hidden',
           backgroundColor: 'background.default',
-          // Responsive padding with safe area insets and sidebar offset
+          // Responsive padding (no safe-area-inset-top since status bar is native)
           paddingTop: {
-            xs: 'calc(64px + env(safe-area-inset-top, 0px) + 16px)',
-            sm: 'calc(70px + env(safe-area-inset-top, 0px) + 20px)',
-            md: 'calc(70px + env(safe-area-inset-top, 0px) + 24px)',
+            xs: 'calc(64px + 16px)',
+            sm: 'calc(70px + 20px)',
+            md: 'calc(70px + 24px)',
           },
           paddingLeft: {
-            xs: 'calc(16px + env(safe-area-inset-left, 0px))',
-            sm: 'calc(20px + env(safe-area-inset-left, 0px))',
+            xs: 'calc(10px + env(safe-area-inset-left, 0px))',
+            sm: 'calc(16px + env(safe-area-inset-left, 0px))',
             md: 'calc(24px + env(safe-area-inset-left, 0px))',
           },
           paddingRight: {
-            xs: 'calc(16px + env(safe-area-inset-right, 0px))',
-            sm: 'calc(20px + env(safe-area-inset-right, 0px))',
+            xs: 'calc(10px + env(safe-area-inset-right, 0px))',
+            sm: 'calc(16px + env(safe-area-inset-right, 0px))',
             md: 'calc(24px + env(safe-area-inset-right, 0px))',
           },
           paddingBottom: {

@@ -89,15 +89,27 @@ export async function POST(request) {
       );
     }
 
-    // Create training program
+    // Create training program with IST timestamp
+    const istTime = new Date().toLocaleString('en-US', { 
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    
     const result = await execute(
-      `INSERT INTO liftr_training_programs (name, workoutIds, description, createdBy) 
-       VALUES (?, ?, ?, ?)`,
+      `INSERT INTO liftr_training_programs (name, workoutIds, description, createdBy, createdAt) 
+       VALUES (?, ?, ?, ?, ?)`,
       [
         name,
         JSON.stringify(workoutIds),
         description || null,
         authResult.user.id,
+        istTime,
       ]
     );
 

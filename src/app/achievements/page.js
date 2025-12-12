@@ -18,6 +18,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import CelebrationIcon from '@mui/icons-material/Celebration';
 import Loader from '@/components/common/Loader';
+import { CardSkeleton } from '@/components/common/SkeletonLoader';
 
 export default function AchievementsPage() {
   const router = useRouter();
@@ -53,7 +54,12 @@ export default function AchievementsPage() {
   }, [sessionId, router]);
 
   if (loading) {
-    return <Loader fullScreen message="Loading achievements..." />;
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography variant="h4" sx={{ mb: 3 }}>Workout Achievements</Typography>
+        <CardSkeleton count={3} />
+      </Box>
+    );
   }
 
   if (achievements.length === 0) {
@@ -72,8 +78,8 @@ export default function AchievementsPage() {
         border: '2px solid rgba(196, 255, 13, 0.3)',
         textAlign: 'center'
       }}>
-        <CelebrationIcon sx={{ fontSize: 80, color: '#c4ff0d', mb: 2 }} />
-        <Typography variant="h3" sx={{ color: '#c4ff0d', fontWeight: 'bold', mb: 2 }}>
+        <CelebrationIcon sx={{ fontSize: 80, color: '#10b981', mb: 2 }} />
+        <Typography variant="h3" sx={{ color: '#10b981', fontWeight: 'bold', mb: 2 }}>
           Congratulations! 🎉
         </Typography>
         <Typography variant="h6" color="text.secondary">
@@ -91,7 +97,7 @@ export default function AchievementsPage() {
               key={idx} 
               sx={{ 
                 bgcolor: '#000', 
-                border: '2px solid #c4ff0d',
+                border: '2px solid #10b981',
                 transition: 'all 0.2s',
                 '&:hover': {
                   transform: 'scale(1.02)',
@@ -101,7 +107,7 @@ export default function AchievementsPage() {
             >
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                  <CheckCircleIcon sx={{ fontSize: 40, color: '#c4ff0d' }} />
+                  <CheckCircleIcon sx={{ fontSize: 40, color: '#10b981' }} />
                   <Typography variant="h5" gutterBottom sx={{ color: '#fff', fontWeight: 'bold', mb: 0 }}>
                     {achievement.exerciseName}
                   </Typography>
@@ -113,7 +119,7 @@ export default function AchievementsPage() {
                       <Typography variant="h6" sx={{ color: '#fff' }}>
                         {achievement.previousValue} {achievement.unit}
                       </Typography>
-                      <TrendingUpIcon sx={{ color: '#c4ff0d', fontSize: 24 }} />
+                      <TrendingUpIcon sx={{ color: '#10b981', fontSize: 24 }} />
                       <Typography variant="h5" fontWeight="bold" sx={{ color: '#fff' }}>
                         {achievement.newValue} {achievement.unit}
                       </Typography>
@@ -123,7 +129,7 @@ export default function AchievementsPage() {
                       size="medium"
                       icon={<TrendingUpIcon />}
                       sx={{ 
-                        bgcolor: '#c4ff0d', 
+                        bgcolor: '#10b981', 
                         color: '#000', 
                         fontWeight: 'bold',
                         fontSize: '0.9rem',
@@ -138,7 +144,7 @@ export default function AchievementsPage() {
                       <Typography variant="h6" sx={{ color: '#fff' }}>
                         {achievement.previousValue} reps
                       </Typography>
-                      <TrendingUpIcon sx={{ color: '#c4ff0d', fontSize: 24 }} />
+                      <TrendingUpIcon sx={{ color: '#10b981', fontSize: 24 }} />
                       <Typography variant="h5" fontWeight="bold" sx={{ color: '#fff' }}>
                         {achievement.newValue} reps
                       </Typography>
@@ -151,7 +157,7 @@ export default function AchievementsPage() {
                       size="medium"
                       icon={<TrendingUpIcon />}
                       sx={{ 
-                        bgcolor: '#c4ff0d', 
+                        bgcolor: '#10b981', 
                         color: '#000', 
                         fontWeight: 'bold',
                         fontSize: '0.9rem',
@@ -166,7 +172,7 @@ export default function AchievementsPage() {
                       <Typography variant="h6" sx={{ color: '#fff' }}>
                         RIR {achievement.previousValue}
                       </Typography>
-                      <TrendingDownIcon sx={{ color: '#c4ff0d', fontSize: 24 }} />
+                      <TrendingDownIcon sx={{ color: '#10b981', fontSize: 24 }} />
                       <Typography variant="h5" fontWeight="bold" sx={{ color: '#fff' }}>
                         RIR {achievement.newValue}
                       </Typography>
@@ -179,7 +185,7 @@ export default function AchievementsPage() {
                       size="medium"
                       icon={<TrendingDownIcon />}
                       sx={{ 
-                        bgcolor: '#c4ff0d', 
+                        bgcolor: '#10b981', 
                         color: '#000', 
                         fontWeight: 'bold',
                         fontSize: '0.9rem',
@@ -199,10 +205,10 @@ export default function AchievementsPage() {
           variant="outlined"
           onClick={() => router.push('/progress')}
           sx={{
-            borderColor: '#c4ff0d',
-            color: '#c4ff0d',
+            borderColor: '#10b981',
+            color: '#10b981',
             '&:hover': {
-              borderColor: '#c4ff0d',
+              borderColor: '#10b981',
               bgcolor: 'rgba(196, 255, 13, 0.1)',
             }
           }}
@@ -213,7 +219,7 @@ export default function AchievementsPage() {
           variant="contained"
           onClick={() => router.push('/')}
           sx={{
-            bgcolor: '#c4ff0d',
+            bgcolor: '#10b981',
             color: '#000',
             '&:hover': {
               bgcolor: '#b0e00b',

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -15,13 +15,14 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  CircularProgress,
+  Collapse,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
-import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
+import TimelineIcon from '@mui/icons-material/Timeline';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import { useSelector } from 'react-redux';
@@ -30,6 +31,9 @@ import { useRouter } from 'next/navigation';
 import Loader from '@/components/common/Loader';
 import MuscleBodyMap from '@/components/common/MuscleBodyMap';
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { WorkoutCardSkeleton, StatsCardSkeleton, ChartSkeleton } from '@/components/common/SkeletonLoader';
+import PullToRefresh from '@/components/common/PullToRefresh';
+import { hapticSuccess } from '@/lib/nativeFeatures';
 
 export default function HomePage() {
   const user = useSelector(selectUser);
@@ -43,11 +47,15 @@ export default function HomePage() {
   const [muscleMapOpen, setMuscleMapOpen] = useState(false);
   const [selectedWorkoutMuscles, setSelectedWorkoutMuscles] = useState([]);
   const [todayAchievements, setTodayAchievements] = useState([]);
+  const [achievementsExpanded, setAchievementsExpanded] = useState(false);
   const [recentActivity, setRecentActivity] = useState([]);
   const [loadingRecentActivity, setLoadingRecentActivity] = useState(true);
   const [progressStats, setProgressStats] = useState(null);
   const [loadingProgressStats, setLoadingProgressStats] = useState(true);
   const [suggestedWorkout, setSuggestedWorkout] = useState(null);
+  
+  // Track if PPL detection has already run to prevent loops
+  const pplDetectionRan = useRef(false);
 
   // Memoize viewingAs ID to prevent unnecessary effect triggers
   const viewingAsId = useMemo(() => viewingAs?.id, [viewingAs?.id]);
@@ -202,12 +210,6 @@ export default function HomePage() {
         
         if (data.recentActivity) {
           setRecentActivity(data.recentActivity);
-          
-          // After recent activity loads, detect PPL pattern and suggest next workout
-          if (workoutPlans.length > 0) {
-            const suggestion = detectPushPullLegPattern(workoutPlans);
-            setSuggestedWorkout(suggestion);
-          }
         }
       } catch (e) {
         if (e.name === 'AbortError') {
@@ -226,7 +228,16 @@ export default function HomePage() {
     return () => {
       abortController.abort();
     };
-  }, [viewingAsId, loadingData, workoutPlans, detectPushPullLegPattern]);
+  }, [viewingAsId, loadingData]); // Removed workoutPlans and detectPushPullLegPattern to prevent loop
+
+  // Detect PPL pattern and suggest next workout (runs ONCE after data loads)
+  useEffect(() => {
+    if (!pplDetectionRan.current && recentActivity.length > 0 && workoutPlans.length > 0 && !loadingData) {
+      pplDetectionRan.current = true;
+      const suggestion = detectPushPullLegPattern(workoutPlans);
+      setSuggestedWorkout(suggestion);
+    }
+  }, [recentActivity.length, workoutPlans.length, loadingData, detectPushPullLegPattern]); // Safe to include now with ref guard
 
   // Memoize fetch function to prevent recreation on every render
   const fetchHomeData = useCallback(async (signal) => {
@@ -265,6 +276,9 @@ export default function HomePage() {
   }, [recentActivity, workoutPlans, detectPushPullLegPattern]);
 
   useEffect(() => {
+    // Reset PPL detection when data reloads
+    pplDetectionRan.current = false;
+    
     const abortController = new AbortController();
     
     fetchHomeData(abortController.signal);
@@ -272,6 +286,7 @@ export default function HomePage() {
     // Refresh data when page becomes visible (e.g., after completing a workout)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
+        pplDetectionRan.current = false; // Reset on visibility change
         fetchHomeData(abortController.signal);
       }
     };
@@ -285,148 +300,189 @@ export default function HomePage() {
   }, [fetchHomeData]);
 
 
+  // Handle pull-to-refresh
+  const handleRefresh = async () => {
+    const abortController = new AbortController();
+    await fetchHomeData(abortController.signal);
+    hapticSuccess(); // Success feedback
+  };
+
   if (loadingData) {
-    return <Loader fullScreen message="Loading today's workouts..." />;
+    return (
+      <Box sx={{ p: 3 }}>
+        <Stack spacing={3}>
+          <StatsCardSkeleton count={3} />
+          <WorkoutCardSkeleton count={3} />
+          <ChartSkeleton />
+        </Stack>
+      </Box>
+    );
   }
 
   return (
-    <Box>
+    <PullToRefresh onRefresh={handleRefresh}>
+      <Box>
       <Grid container spacing={3}>
-        {/* Today's Achievements */}
+        {/* Today's Achievements - Compact Expandable */}
         {todayAchievements.length > 0 && (
           <Grid item xs={12}>
-            <Paper sx={{ 
-              p: 3, 
-              bgcolor: 'rgba(196, 255, 13, 0.08)', 
-              border: '1px solid rgba(196, 255, 13, 0.3)',
+            <Card sx={{ 
+              bgcolor: 'rgba(50, 80, 0, 0.4)',
+              border: '2px solid rgba(196, 255, 13, 0.3)',
+              borderRadius: 3,
+              overflow: 'hidden',
             }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                <CheckCircleIcon sx={{ fontSize: 40, color: '#c4ff0d' }} />
-                <Box sx={{ flexGrow: 1 }}>
-                  <Typography variant="h5" sx={{ color: '#c4ff0d', fontWeight: 'bold' }}>
-                    🎉 Today&apos;s Achievements!
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Great job, {effectiveUser?.name || effectiveUser?.username}! You improved your strength today.
-                  </Typography>
-                </Box>
-              </Box>
-              
-              <Stack spacing={2}>
-                {todayAchievements.map((ach, idx) => {
-                  const achievementType = ach.achievementType || 'weight';
-                  
-                  return (
-                    <Card 
-                      key={idx} 
-                      sx={{ 
-                        bgcolor: '#000', 
-                        border: '2px solid #c4ff0d',
-                        transition: 'all 0.2s',
-                      }}
-                    >
-                      <CardContent>
-                        <Typography variant="h6" gutterBottom sx={{ color: '#fff', fontWeight: 'bold' }}>
-                          {ach.exerciseName}
-                        </Typography>
-                        
-                        {achievementType === 'weight' && (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                            <Typography variant="body2" sx={{ color: '#fff' }}>
-                              {ach.previousValue} {ach.unit}
-                            </Typography>
-                            <TrendingUpIcon sx={{ color: '#c4ff0d', fontSize: 20 }} />
-                            <Typography variant="body1" fontWeight="bold" sx={{ color: '#fff' }}>
-                              {ach.newValue} {ach.unit}
-                            </Typography>
-                            <Chip 
-                              label={`+${ach.improvement} ${ach.unit}`}
-                              size="small"
-                              icon={<TrendingUpIcon />}
-                              sx={{ 
-                                ml: 'auto', 
-                                bgcolor: '#c4ff0d', 
-                                color: '#000', 
-                                fontWeight: 'bold',
-                              }}
-                            />
-                          </Box>
-                        )}
-                        
-                        {achievementType === 'reps' && (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                            <Typography variant="body2" sx={{ color: '#fff' }}>
-                              {ach.previousValue} reps
-                            </Typography>
-                            <TrendingUpIcon sx={{ color: '#c4ff0d', fontSize: 20 }} />
-                            <Typography variant="body1" fontWeight="bold" sx={{ color: '#fff' }}>
-                              {ach.newValue} reps
-                            </Typography>
-                            <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                              @ {ach.unit}
-                            </Typography>
-                            <Chip 
-                              label={`+${ach.improvement} reps`}
-                              size="small"
-                              icon={<TrendingUpIcon />}
-                              sx={{ 
-                                ml: 'auto', 
-                                bgcolor: '#c4ff0d', 
-                                color: '#000', 
-                                fontWeight: 'bold',
-                              }}
-                            />
-                          </Box>
-                        )}
-                        
-                        {achievementType === 'rir' && (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                            <Typography variant="body2" sx={{ color: '#fff' }}>
-                              RIR {ach.previousValue}
-                            </Typography>
-                            <TrendingDownIcon sx={{ color: '#c4ff0d', fontSize: 20 }} />
-                            <Typography variant="body1" fontWeight="bold" sx={{ color: '#fff' }}>
-                              RIR {ach.newValue}
-                            </Typography>
-                            <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                              @ {ach.unit}
-                            </Typography>
-                            <Chip 
-                              label={`-${ach.improvement} RIR`}
-                              size="small"
-                              icon={<TrendingDownIcon />}
-                              sx={{ 
-                                ml: 'auto', 
-                                bgcolor: '#c4ff0d', 
-                                color: '#000', 
-                                fontWeight: 'bold',
-                              }}
-                            />
-                          </Box>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </Stack>
-              
-              <Button
-                variant="outlined"
-                onClick={() => router.push('/progress')}
+              <CardContent 
+                onClick={() => setAchievementsExpanded(!achievementsExpanded)}
                 sx={{ 
-                  mt: 3, 
-                  borderColor: '#c4ff0d', 
-                  color: '#c4ff0d',
-                  '&:hover': {
-                    borderColor: '#c4ff0d',
-                    bgcolor: 'rgba(196, 255, 13, 0.1)',
-                  }
+                  cursor: 'pointer',
+                  p: 2,
+                  '&:last-child': { pb: 2 },
+                  transition: 'background-color 0.2s',
                 }}
-                fullWidth
               >
-                View All Progress →
-              </Button>
-            </Paper>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box sx={{ 
+                      bgcolor: '#10b981', 
+                      borderRadius: '50%', 
+                      width: 40, 
+                      height: 40, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <CheckCircleIcon sx={{ fontSize: 24, color: '#000' }} />
+                    </Box>
+                    <Box>
+                      <Typography variant="h6" sx={{ color: '#10b981', fontWeight: 'bold', mb: 0.25 }}>
+                        Today&apos;s Achievements
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.6)' }}>
+                        {todayAchievements.length} new personal record{todayAchievements.length > 1 ? 's' : ''}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <IconButton 
+                    size="small"
+                    sx={{ 
+                      color: '#10b981',
+                      transform: achievementsExpanded ? 'rotate(180deg)' : 'rotate(0)',
+                      transition: 'transform 0.3s',
+                    }}
+                  >
+                    <ExpandMoreIcon />
+                  </IconButton>
+                </Box>
+              </CardContent>
+
+              <Collapse in={achievementsExpanded}>
+                <Box sx={{ px: 2, pb: 2 }}>
+                  <Stack spacing={1.5}>
+                    {todayAchievements.map((ach, idx) => {
+                      const achievementType = ach.achievementType || 'weight';
+                      
+                      return (
+                        <Box 
+                          key={idx} 
+                          sx={{ 
+                            bgcolor: 'rgba(50, 70, 0, 0.6)',
+                            border: '1px solid rgba(196, 255, 13, 0.3)',
+                            borderRadius: 2,
+                            p: 1.5,
+                          }}
+                        >
+                          <Typography variant="subtitle2" sx={{ color: '#fff', fontWeight: 600, mb: 1 }}>
+                            {ach.exerciseName}
+                          </Typography>
+                      
+                          {achievementType === 'weight' && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                                  {ach.previousValue} {ach.unit}
+                                </Typography>
+                                <TrendingUpIcon sx={{ color: '#10b981', fontSize: 18 }} />
+                                <Typography variant="body2" fontWeight="bold" sx={{ color: '#fff' }}>
+                                  {ach.newValue} {ach.unit}
+                                </Typography>
+                              </Box>
+                              <Chip
+                                icon={<TrendingUpIcon sx={{ fontSize: 14 }} />}
+                                label={`+${ach.improvement} ${ach.unit}`}
+                                size="small"
+                                sx={{ 
+                                  bgcolor: '#10b981', 
+                                  color: '#000',
+                                  fontWeight: 'bold',
+                                  height: 24,
+                                  '& .MuiChip-icon': { color: '#000' },
+                                }}
+                              />
+                            </Box>
+                          )}
+                        
+                            
+                          {achievementType === 'reps' && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                                  {ach.previousValue} reps
+                                </Typography>
+                                <TrendingUpIcon sx={{ color: '#10b981', fontSize: 18 }} />
+                                <Typography variant="body2" fontWeight="bold" sx={{ color: '#fff' }}>
+                                  {ach.newValue} reps
+                                </Typography>
+                              </Box>
+                              <Chip
+                                icon={<TrendingUpIcon sx={{ fontSize: 14 }} />}
+                                label={`+${ach.improvement} reps`}
+                                size="small"
+                                sx={{ 
+                                  bgcolor: '#10b981', 
+                                  color: '#000',
+                                  fontWeight: 'bold',
+                                  height: 24,
+                                  '& .MuiChip-icon': { color: '#000' },
+                                }}
+                              />
+                            </Box>
+                          )}
+                        
+                            
+                          {achievementType === 'rir' && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                                  RIR {ach.previousValue}
+                                </Typography>
+                                <TrendingDownIcon sx={{ color: '#10b981', fontSize: 18 }} />
+                                <Typography variant="body2" fontWeight="bold" sx={{ color: '#fff' }}>
+                                  RIR {ach.newValue}
+                                </Typography>
+                              </Box>
+                              <Chip
+                                icon={<TrendingDownIcon sx={{ fontSize: 14 }} />}
+                                label={`-${ach.improvement} RIR`}
+                                size="small"
+                                sx={{ 
+                                  bgcolor: '#10b981', 
+                                  color: '#000',
+                                  fontWeight: 'bold',
+                                  height: 24,
+                                  '& .MuiChip-icon': { color: '#000' },
+                                }}
+                              />
+                            </Box>
+                          )}
+                        </Box>
+                      );
+                    })}
+                  </Stack>
+                </Box>
+              </Collapse>
+            </Card>
           </Grid>
         )}
 
@@ -443,7 +499,7 @@ export default function HomePage() {
                   <Card 
                     key={workout.id}
                     sx={{
-                      border: '2px solid #c4ff0d',
+                      border: '2px solid #10b981',
                       bgcolor: 'background.paper',
                       transition: 'all 0.3s',
                       cursor: 'pointer',
@@ -463,7 +519,7 @@ export default function HomePage() {
                                 size="small"
                                 sx={{
                                   bgcolor: 'rgba(196, 255, 13, 0.2)',
-                                  color: '#c4ff0d',
+                                  color: '#10b981',
                                   border: '1px solid rgba(196, 255, 13, 0.4)',
                                   fontWeight: 'bold',
                                   fontSize: '0.7rem',
@@ -505,10 +561,6 @@ export default function HomePage() {
                               width: '60px',
                               flexShrink: 0,
                               cursor: 'pointer',
-                              transition: 'all 0.3s ease',
-                              '&:hover': {
-                                transform: 'scale(1.1)',
-                              }
                             }}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -570,9 +622,6 @@ export default function HomePage() {
                   sx={{
                     bgcolor: '#8b5cf6',
                     color: '#fff',
-                    '&:hover': {
-                      bgcolor: '#7c3aed',
-                    }
                   }}
                 >
                   Start Workout
@@ -586,7 +635,7 @@ export default function HomePage() {
         {activeWorkouts.length === 0 && recentActivity.length === 0 && !loadingRecentActivity && !suggestedWorkout && (
           <Grid item xs={12}>
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-              <FitnessCenterIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
+              <TimelineIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 No workouts yet!
               </Typography>
@@ -597,11 +646,8 @@ export default function HomePage() {
                 variant="contained"
                 onClick={() => router.push('/training-programs')}
                 sx={{
-                  bgcolor: '#c4ff0d',
+                  bgcolor: '#10b981',
                   color: '#000',
-                  '&:hover': {
-                    bgcolor: '#b0e00b',
-                  }
                 }}
               >
                 View Workout Plans
@@ -620,9 +666,9 @@ export default function HomePage() {
                   <Typography variant="h6" gutterBottom sx={{ mb: 2, textAlign: 'center' }}>
                     {effectiveUser?.username ? `${effectiveUser.username}'s ` : ''}Muscle Distribution
                   </Typography>
-                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                    <CircularProgress size={40} />
-                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                    Loading muscle distribution...
+                  </Typography>
                 </Paper>
               </Grid>
             ) : progressStats?.muscleDistribution && progressStats.muscleDistribution.length > 0 && (
@@ -634,7 +680,64 @@ export default function HomePage() {
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mb: 2 }}>
                     Last 7 days • Auto-resets after 1 week of rest
                   </Typography>
-                  <MuscleBodyMap muscleDistribution={progressStats.muscleDistribution} useGradient={true} />
+                  <Box sx={{ minHeight: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <MuscleBodyMap muscleDistribution={progressStats.muscleDistribution} useGradient={true} showBreakdown={false} />
+                  </Box>
+                  
+                  {/* Muscle Breakdown - Most & Least Worked */}
+                  {(() => {
+                    const allMuscles = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Abs', 'Quads', 'Hamstrings', 'Glutes', 'Calves'];
+                    const workedMuscles = progressStats.muscleDistribution || [];
+                    const sortedWorked = [...workedMuscles].sort((a, b) => b.count - a.count);
+                    const mostWorked = sortedWorked.slice(0, 5);
+                    const workedNames = workedMuscles.map(m => m.muscle);
+                    const neglectedMuscles = allMuscles.filter(m => !workedNames.includes(m));
+                    const leastWorked = sortedWorked.length > 5 ? sortedWorked.slice(-3) : [];
+                    const neglected = [...neglectedMuscles.slice(0, 5), ...leastWorked.map(m => m.muscle)].slice(0, 5);
+                    
+                    return (
+                      <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+                        {mostWorked.length > 0 && (
+                          <Box sx={{ 
+                            flex: '1 1 140px', 
+                            maxWidth: 180,
+                            p: 1.5, 
+                            bgcolor: 'rgba(16, 185, 129, 0.1)', 
+                            borderRadius: 2,
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                          }}>
+                            <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 600, display: 'block', mb: 1 }}>
+                              💪 Most Worked
+                            </Typography>
+                            {mostWorked.map((m, i) => (
+                              <Typography key={i} variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.7rem' }}>
+                                {m.muscle} ({m.count}x)
+                              </Typography>
+                            ))}
+                          </Box>
+                        )}
+                        {neglected.length > 0 && (
+                          <Box sx={{ 
+                            flex: '1 1 140px', 
+                            maxWidth: 180,
+                            p: 1.5, 
+                            bgcolor: 'rgba(239, 68, 68, 0.1)', 
+                            borderRadius: 2,
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                          }}>
+                            <Typography variant="caption" sx={{ color: '#f87171', fontWeight: 600, display: 'block', mb: 1 }}>
+                              ⚠️ Needs Attention
+                            </Typography>
+                            {neglected.map((m, i) => (
+                              <Typography key={i} variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.7rem' }}>
+                                {m}
+                              </Typography>
+                            ))}
+                          </Box>
+                        )}
+                      </Box>
+                    );
+                  })()}
                 </Paper>
               </Grid>
             )}
@@ -646,9 +749,9 @@ export default function HomePage() {
                   <Typography variant="h6" gutterBottom sx={{ mb: 3, textAlign: 'center' }}>
                     Calories Burned (Last 30 Days)
                   </Typography>
-                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                    <CircularProgress size={40} />
-                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                    Loading muscle distribution...
+                  </Typography>
                 </Paper>
               </Grid>
             ) : progressStats?.caloriesChart && progressStats.caloriesChart.some(day => day.calories > 0) && (
@@ -679,7 +782,7 @@ export default function HomePage() {
                         <Line 
                           type="monotone" 
                           dataKey="calories" 
-                          stroke="#c4ff0d" 
+                          stroke="#10b981" 
                           strokeWidth={3}
                           dot={false}
                         />
@@ -699,7 +802,7 @@ export default function HomePage() {
                   </Typography>
                   {loadingRecentActivity ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                      <CircularProgress size={40} />
+                      <Typography variant="body2" color="text.secondary">Loading...</Typography>
                     </Box>
                   ) : (
                     <Stack spacing={2}>
@@ -715,38 +818,31 @@ export default function HomePage() {
                         }}
                       >
                         <CardContent>
-                          <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
-                            <Box sx={{ flexGrow: 1 }}>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                                <Typography variant="h6">
-                                  {plan.name}
-                                </Typography>
-                                <Box sx={{ textAlign: 'right' }}>
-                                  <Typography variant="caption" color="text.secondary">
-                                    {new Date(plan.completedAt).toLocaleDateString('en-US', {
-                                      month: 'short',
-                                      day: 'numeric',
-                                      year: 'numeric'
-                                    })}
-                                  </Typography>
-                                  <Typography variant="caption" display="block" color="text.secondary">
-                                    {new Date(plan.completedAt).toLocaleTimeString('en-US', {
-                                      hour: 'numeric',
-                                      minute: '2-digit',
-                                      hour12: true
-                                    })}
-                                  </Typography>
-                                </Box>
-                              </Box>
+                          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                              <Typography variant="h6" sx={{ mb: 0.5 }}>
+                                {plan.name}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                                {new Date(plan.completedAt).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric'
+                                })} • {new Date(plan.completedAt).toLocaleTimeString('en-US', {
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                  hour12: true
+                                })}
+                              </Typography>
                               
                               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
                                 <Chip
-                                  icon={<FitnessCenterIcon />}
+                                  icon={<TimelineIcon />}
                                   label={`${plan.workoutCount || 0} workouts`}
                                   size="small"
                                   sx={{ 
                                     borderColor: 'rgba(196, 255, 13, 0.5)',
-                                    color: '#c4ff0d',
+                                    color: '#10b981',
                                     bgcolor: 'rgba(196, 255, 13, 0.1)',
                                   }}
                                   variant="outlined"
@@ -756,7 +852,7 @@ export default function HomePage() {
                                   size="small"
                                   sx={{ 
                                     borderColor: 'rgba(196, 255, 13, 0.5)',
-                                    color: '#c4ff0d',
+                                    color: '#10b981',
                                     bgcolor: 'rgba(196, 255, 13, 0.1)',
                                   }}
                                   variant="outlined"
@@ -767,7 +863,7 @@ export default function HomePage() {
                                   size="small"
                                   sx={{ 
                                     borderColor: 'rgba(196, 255, 13, 0.5)',
-                                    color: '#c4ff0d',
+                                    color: '#10b981',
                                     bgcolor: 'rgba(196, 255, 13, 0.1)',
                                   }}
                                   variant="outlined"
@@ -797,9 +893,9 @@ export default function HomePage() {
                                       size="small"
                                       sx={{
                                         bgcolor: 'rgba(196, 255, 13, 0.2)',
-                                        color: '#c4ff0d',
+                                        color: '#10b981',
                                         fontWeight: 'bold',
-                                        border: '1px solid #c4ff0d',
+                                        border: '1px solid #10b981',
                                       }}
                                     />
                                   ))}
@@ -857,12 +953,8 @@ export default function HomePage() {
                             variant="outlined"
                             onClick={() => router.push('/recent')}
                             sx={{
-                              color: '#c4ff0d',
+                              color: '#10b981',
                               borderColor: 'rgba(196, 255, 13, 0.5)',
-                              '&:hover': {
-                                borderColor: '#c4ff0d',
-                                bgcolor: 'rgba(196, 255, 13, 0.1)',
-                              }
                             }}
                           >
                             More Workouts
@@ -906,5 +998,6 @@ export default function HomePage() {
         </DialogContent>
       </Dialog>
     </Box>
+    </PullToRefresh>
   );
 }

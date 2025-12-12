@@ -24,6 +24,9 @@ import EventBusyIcon from '@mui/icons-material/EventBusy';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import Loader from '@/components/common/Loader';
+import { StatsCardSkeleton } from '@/components/common/SkeletonLoader';
+import PullToRefresh from '@/components/common/PullToRefresh';
+import { hapticSuccess } from '@/lib/nativeFeatures';
 
 export default function StatsPage() {
   const [statsData, setStatsData] = useState(null);
@@ -45,12 +48,33 @@ export default function StatsPage() {
     fetchStats();
   }, []);
 
+  // Handle pull-to-refresh
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/stats');
+      const data = await response.json();
+      setStatsData(data);
+      hapticSuccess();
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading) {
-    return <Loader fullScreen message="Loading statistics..." />;
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography variant="h4" sx={{ mb: 3 }}>Statistics</Typography>
+        <StatsCardSkeleton count={6} />
+      </Box>
+    );
   }
 
   if (!statsData) {
     return (
+      <PullToRefresh onRefresh={handleRefresh}>
       <Box>
         <Typography variant="h4" gutterBottom>
           Statistics
@@ -61,34 +85,44 @@ export default function StatsPage() {
           </Typography>
         </Paper>
       </Box>
+      </PullToRefresh>
     );
   }
 
-  const { userStats, mostConsistent, isAdmin } = statsData;
+  const { userStats = [], mostConsistent = [], isAdmin = false } = statsData || {};
 
   // Find winners for each category
-  const winners = {
-    streak: userStats.reduce((max, user) => user.currentStreak > (max?.currentStreak || 0) ? user : max, userStats[0]),
-    workouts: userStats.reduce((max, user) => (user.mostWorkoutsDone?.count || 0) > (max?.mostWorkoutsDone?.count || 0) ? user : max, userStats[0]),
-    weight: userStats.reduce((max, user) => (user.highestWeightLifted?.weight || 0) > (max?.highestWeightLifted?.weight || 0) ? user : max, userStats[0]),
-  };
+  const winners = userStats.length > 0 ? {
+    streak: userStats.reduce((max, user) => {
+      return user.currentStreak > (max?.currentStreak || 0) ? user : max;
+    }, userStats[0]),
+    workouts: userStats.reduce((max, user) => {
+      return (user.mostWorkoutsDone?.count || 0) > (max?.mostWorkoutsDone?.count || 0) ? user : max;
+    }, userStats[0]),
+    weight: userStats.reduce((max, user) => {
+      return (user.highestWeightLifted?.weight || 0) > (max?.highestWeightLifted?.weight || 0) ? user : max;
+    }, userStats[0]),
+  } : null;
 
   // Count wins per user
   const winCounts = {};
-  Object.values(winners).forEach(winner => {
-    if (winner) {
-      const key = winner.userId;
-      winCounts[key] = (winCounts[key] || 0) + 1;
-    }
-  });
+  if (winners) {
+    Object.values(winners).forEach(winner => {
+      if (winner) {
+        const key = winner.userId;
+        winCounts[key] = (winCounts[key] || 0) + 1;
+      }
+    });
+  }
 
   // Find user with most wins
   const championUserId = Object.entries(winCounts).reduce((max, [userId, count]) => 
     count > (max.count || 0) ? { userId: parseInt(userId), count } : max, { count: 0 }
   ).userId;
-  const champion = userStats.find(u => u.userId === championUserId);
+  const champion = championUserId ? userStats.find(u => u.userId === championUserId) : null;
 
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <Box>
       <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
         {isAdmin ? 'Workout Statistics' : 'My Statistics'}
@@ -109,7 +143,7 @@ export default function StatsPage() {
               sx={{ 
                 width: 80, 
                 height: 80, 
-                bgcolor: '#c4ff0d', 
+                bgcolor: '#10b981', 
                 color: '#000',
                 fontSize: '2rem',
                 fontWeight: 700,
@@ -118,7 +152,7 @@ export default function StatsPage() {
               <EmojiEventsIcon sx={{ fontSize: '3rem' }} />
             </Avatar>
             <Box sx={{ flexGrow: 1 }}>
-              <Typography variant="h5" sx={{ mb: 1, color: '#c4ff0d', fontWeight: 600 }}>
+              <Typography variant="h5" sx={{ mb: 1, color: '#10b981', fontWeight: 600 }}>
                 🏆 Overall Champion {!isAdmin && '(You!)'}
               </Typography>
               <Typography variant="h4" sx={{ mb: 1 }}>
@@ -130,7 +164,7 @@ export default function StatsPage() {
                   label={`${winCounts[champion.userId]} category ${winCounts[champion.userId] === 1 ? 'win' : 'wins'}`}
                   sx={{ 
                     bgcolor: 'rgba(196, 255, 13, 0.2)', 
-                    color: '#c4ff0d',
+                    color: '#10b981',
                     fontWeight: 600,
                     fontSize: '1rem',
                     px: 1,
@@ -246,6 +280,7 @@ export default function StatsPage() {
 
 
     </Box>
+    </PullToRefresh>
   );
 }
 
