@@ -2,8 +2,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  /* iOS PWA Status Bar Color - change this to customize status bar */
-  --status-bar-color: #0a0a0a;
+  /* iOS PWA Status Bar Color - white status bar with dark content */
+  --status-bar-color: #ffffff;
   --app-background: #000000;
 }
 
@@ -17,6 +17,45 @@
 * {
   -webkit-tap-highlight-color: transparent;
   /* Removed touch-action to allow normal scrolling */
+}
+
+/* Button touch responsiveness - instant feedback */
+button,
+.MuiButton-root,
+.MuiIconButton-root,
+.MuiListItemButton-root,
+.MuiCard-root[style*="cursor: pointer"],
+[role="button"] {
+  /* Enable hardware acceleration */
+  transform: translateZ(0);
+  /* Immediate visual feedback on touch */
+  transition: transform 0.1s ease, opacity 0.1s ease !important;
+  /* Proper touch behavior */
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+button:active,
+.MuiButton-root:active,
+.MuiIconButton-root:active,
+.MuiListItemButton-root:active,
+.MuiCard-root[style*="cursor: pointer"]:active,
+[role="button"]:active {
+  /* Instant visual feedback */
+  transform: scale(0.97) translateZ(0) !important;
+  opacity: 0.9 !important;
+}
+
+/* Faster click response */
+@supports (-webkit-touch-callout: none) {
+  button,
+  .MuiButton-root,
+  .MuiIconButton-root,
+  .MuiCard-root {
+    /* Remove 300ms delay on iOS */
+    touch-action: manipulation;
+  }
 }
 
 /* Smooth transitions for all elements */

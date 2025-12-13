@@ -92,6 +92,9 @@ export default function TrainingProgramsPage() {
   // Starting workout state - track which program is being started
   const [startingWorkoutId, setStartingWorkoutId] = useState(null);
 
+  // Program completion counts
+  const [programCounts, setProgramCounts] = useState({});
+
   // Permission checks - All edit/delete disabled
   const canAdd = user?.role === 'admin' || user?.role === 'trainer';
   const canEdit = false; // Disabled for all users
@@ -100,6 +103,20 @@ export default function TrainingProgramsPage() {
   useEffect(() => {
     dispatch(fetchTrainingPrograms());
     dispatch(fetchWorkouts());
+    
+    // Fetch program counts
+    const fetchCounts = async () => {
+      try {
+        const response = await fetch('/api/program-counts');
+        const data = await response.json();
+        if (data.counts) {
+          setProgramCounts(data.counts);
+        }
+      } catch (e) {
+        console.error('Failed to fetch program counts:', e);
+      }
+    };
+    fetchCounts();
   }, [dispatch]);
 
   const handleOpenDialog = (program = null) => {
@@ -346,10 +363,28 @@ export default function TrainingProgramsPage() {
       <Grid container spacing={3}>
         {paginatedPrograms.map((program) => (
           <Grid item xs={12} sm={6} md={4} key={program.id}>
-            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+              {/* Completion count badge */}
+              {programCounts[program.id] > 0 && (
+                <Chip
+                  label={`${programCounts[program.id]}x`}
+                  size="small"
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    bgcolor: '#10b981',
+                    color: '#000',
+                    fontWeight: 'bold',
+                    fontSize: '0.7rem',
+                    height: 22,
+                    zIndex: 1,
+                  }}
+                />
+              )}
               <CardContent sx={{ flexGrow: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 2 }}>
-                  <Typography variant="h6" sx={{ flexGrow: 1 }}>
+                  <Typography variant="h6" sx={{ flexGrow: 1, pr: programCounts[program.id] > 0 ? 4 : 0 }}>
                     {program.name}
                   </Typography>
                   {program.equipmentTag && (

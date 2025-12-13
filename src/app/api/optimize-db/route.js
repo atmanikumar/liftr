@@ -65,6 +65,19 @@ export async function POST() {
       indexes.push(`✗ idx_workout_sessions_user_workout: ${e.message}`);
     }
     
+    // 4b. Index for completedAt (for recent-workouts DISTINCT subquery)
+    // Used by: /api/recent-workouts (SELECT DISTINCT completedAt)
+    // Query: WHERE userId = ? ORDER BY completedAt DESC (with DISTINCT)
+    try {
+      await execute(`
+        CREATE INDEX IF NOT EXISTS idx_workout_sessions_completed_at 
+        ON liftr_workout_sessions(completedAt DESC)
+      `);
+      indexes.push('✓ idx_workout_sessions_completed_at');
+    } catch (e) {
+      indexes.push(`✗ idx_workout_sessions_completed_at: ${e.message}`);
+    }
+    
     // ============================================
     // ACTIVE WORKOUTS & TRAINING PROGRAMS
     // ============================================
@@ -261,7 +274,7 @@ export async function POST() {
         'Statistics queries': '70-85% faster',
       },
       indexBreakdown: {
-        coreWorkoutSessions: 4,
+        coreWorkoutSessions: 5, // Added idx_workout_sessions_completed_at
         activeWorkouts: 1,
         achievements: 3,
         metadata: 6,

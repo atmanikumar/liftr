@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Toolbar } from '@mui/material';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter, usePathname } from 'next/navigation';
@@ -8,9 +8,15 @@ import Navbar from './Navbar';
 import Sidebar from './Sidebar';
 import Loader from '../common/Loader';
 import { checkAuth, selectAuth, loadViewingAs } from '@/redux/slices/authSlice';
+import { hapticLight } from '@/lib/nativeFeatures';
 
 export default function MainLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Swipe gesture tracking
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
+  const touchEndX = useRef(null);
   const [initializing, setInitializing] = useState(true);
   const dispatch = useDispatch();
   const router = useRouter();
@@ -42,6 +48,56 @@ export default function MainLayout({ children }) {
   const handleSidebarClose = () => {
     setSidebarOpen(false);
   };
+
+  // Handle swipe gestures for sidebar
+  const handleTouchStart = useCallback((e) => {
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchStartY.current = e.targetTouches[0].clientY;
+    touchEndX.current = null;
+  }, []);
+
+  const handleTouchMove = useCallback((e) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!touchStartX.current || !touchEndX.current) return;
+    
+    const deltaX = touchEndX.current - touchStartX.current;
+    const startX = touchStartX.current;
+    const minSwipeDistance = 50;
+    const edgeThreshold = 40; // Pixels from left edge to trigger open
+    
+    // Swipe right from left edge to open sidebar
+    if (deltaX > minSwipeDistance && startX < edgeThreshold && !sidebarOpen) {
+      hapticLight();
+      setSidebarOpen(true);
+    }
+    
+    // Swipe left to close sidebar (can be from anywhere when open)
+    if (deltaX < -minSwipeDistance && sidebarOpen) {
+      hapticLight();
+      setSidebarOpen(false);
+    }
+    
+    // Reset
+    touchStartX.current = null;
+    touchStartY.current = null;
+    touchEndX.current = null;
+  }, [sidebarOpen]);
+
+  // Add touch event listeners
+  useEffect(() => {
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('touchmove', handleTouchMove, { passive: true });
+    document.addEventListener('touchend', handleTouchEnd, { passive: true });
+    
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [handleTouchStart, handleTouchMove, handleTouchEnd]);
 
   // Show loader while checking auth on initial load
   if (initializing || loading) {

@@ -2,7 +2,7 @@ import { CapacitorConfig } from '@capacitor/core';
 
 const config: CapacitorConfig = {
   appId: 'com.liftr.fitness',
-  appName: 'Liftr',
+  appName: 'Spartans',
   webDir: 'public',
   server: {
     url: 'https://liftr-six.vercel.app',
@@ -20,8 +20,8 @@ const config: CapacitorConfig = {
       showSpinner: false,
     },
     StatusBar: {
-      style: 'LIGHT', // Light content (white text/icons) on dark background
-      backgroundColor: '#0a0a0a',
+      style: 'DARK', // Dark content (black text/icons) for white status bar appearance
+      backgroundColor: '#ffffff',
     },
     Keyboard: {
       resize: 'body',

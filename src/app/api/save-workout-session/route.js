@@ -31,7 +31,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'No sessions to save' }, { status: 400 });
     }
 
-    // Pre-fetch all previous max weights for better performance (avoid N+1)
+    // Pre-fetch workout IDs
     const workoutIds = sessions
       .map(s => parseInt(s.workoutId))
       .filter(id => !isNaN(id) && id > 0);
@@ -40,20 +40,32 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid workout IDs' }, { status: 400 });
     }
     
-    const previousMaxWeights = {};
+    // Pre-fetch LAST SESSION data for each workout (not all-time max)
+    // This will be used to compare for achievements
+    const lastSessionData = {};
     
-    if (workoutIds.length > 0) {
-      const previousSessions = await query(
-        `SELECT workoutId, MAX(weight) as maxWeight
+    for (const workoutId of workoutIds) {
+      const lastSession = await query(
+        `SELECT weight, reps, rir, unit, completedAt
          FROM liftr_workout_sessions
-         WHERE userId = ? AND workoutId IN (${workoutIds.map(() => '?').join(',')}) AND completedAt < ?
-         GROUP BY workoutId`,
-        [userId, ...workoutIds, completedAt]
+         WHERE userId = ? AND workoutId = ? AND completedAt < ?
+         ORDER BY completedAt DESC, weight DESC
+         LIMIT 10`,
+        [userId, workoutId, completedAt]
       );
       
-      previousSessions.forEach(ps => {
-        previousMaxWeights[ps.workoutId] = ps.maxWeight;
-      });
+      if (lastSession.length > 0) {
+        // Get max weight, max reps, and min RIR from last session's timestamp
+        const lastTimestamp = lastSession[0].completedAt;
+        const lastSessionSets = lastSession.filter(s => s.completedAt === lastTimestamp);
+        
+        lastSessionData[workoutId] = {
+          maxWeight: Math.max(...lastSessionSets.map(s => parseFloat(s.weight) || 0)),
+          maxReps: Math.max(...lastSessionSets.map(s => parseInt(s.reps) || 0)),
+          minRir: Math.min(...lastSessionSets.map(s => parseInt(s.rir) || 10)),
+          unit: lastSessionSets[0].unit
+        };
+      }
     }
 
     // Pre-fetch all workout names (avoid N+1)
@@ -75,8 +87,11 @@ export async function POST(request) {
         continue; // Skip if no sets
       }
       
-      const previousMaxWeight = previousMaxWeights[workoutId] || 0;
+      // Get last session data for comparison (only compare to last session, not all-time)
+      const lastData = lastSessionData[workoutId] || { maxWeight: 0, maxReps: 0, minRir: 10 };
       const currentMaxWeight = Math.max(...sets.map(s => s.weight || 0));
+      const currentMaxReps = Math.max(...sets.map(s => s.reps || 0));
+      const currentMinRir = Math.min(...sets.map(s => s.rir || 10));
       
       // Insert each set as a separate row
       for (const set of sets) {
@@ -118,105 +133,89 @@ export async function POST(request) {
       // Track achievements for this workout
       const exerciseName = workoutNames[workoutId] || 'Unknown';
       
-      // Get previous session data for this specific workout to compare reps/RIR at same weight
-      const previousSession = await query(
-        `SELECT weight, reps, rir, unit
-         FROM liftr_workout_sessions
-         WHERE userId = ? AND workoutId = ? AND completedAt < ?
-         ORDER BY completedAt DESC
-         LIMIT 1`,
-        [userId, workoutId, completedAt]
-      );
-      
-      // Achievement Type 1: Weight increase
-      if (currentMaxWeight !== previousMaxWeight && previousMaxWeight > 0 && currentMaxWeight > 0) {
-        if (currentMaxWeight > previousMaxWeight) {
-          const improvement = currentMaxWeight - previousMaxWeight;
+      // Only track achievements if we have previous data to compare against
+      if (lastData.maxWeight > 0) {
+        // Check if current session beats last session:
+        // Achievement requires: max weight >= last max weight AND max reps >= last max reps AND min RIR <= last min RIR
+        // (You must at least match the previous performance in all categories to get credit)
+        
+        const beatsWeight = currentMaxWeight > lastData.maxWeight;
+        const beatsReps = currentMaxReps > lastData.maxReps;
+        const beatsRir = currentMinRir < lastData.minRir;
+        
+        // Weight achievement: beat last session's max weight
+        if (beatsWeight) {
+          const improvement = currentMaxWeight - lastData.maxWeight;
           
           await execute(
             `INSERT INTO liftr_achievements 
              (userId, workoutId, exerciseName, achievementType, previousValue, newValue, improvement, unit, achievedAt)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [userId, workoutId, exerciseName, 'weight', previousMaxWeight, currentMaxWeight, improvement, unit, completedAt]
+            [userId, workoutId, exerciseName, 'weight', lastData.maxWeight, currentMaxWeight, improvement, unit, completedAt]
           );
           
           improvements.push({
             exercise: exerciseName,
             type: 'weight',
-            previousWeight: previousMaxWeight,
+            previousWeight: lastData.maxWeight,
             newWeight: currentMaxWeight,
             improvement,
             unit,
           });
-        } else {
-          const decrease = previousMaxWeight - currentMaxWeight;
+        } else if (currentMaxWeight < lastData.maxWeight) {
+          const decrease = lastData.maxWeight - currentMaxWeight;
           decreases.push({
             exercise: exerciseName,
-            previousWeight: previousMaxWeight,
+            previousWeight: lastData.maxWeight,
             newWeight: currentMaxWeight,
             decrease,
             unit,
           });
         }
-      }
-      
-      // Achievement Type 2: Reps increase at same weight
-      if (previousSession.length > 0) {
-        const prevWeight = parseFloat(previousSession[0].weight);
-        const prevReps = parseInt(previousSession[0].reps);
-        const prevRir = parseInt(previousSession[0].rir);
         
-        // Find current session data at same weight
-        const currentAtSameWeight = sets.find(s => parseFloat(s.weight) === prevWeight);
+        // Reps achievement: beat last session's max reps (only if weight is same or higher)
+        if (beatsReps && currentMaxWeight >= lastData.maxWeight) {
+          const repsImprovement = currentMaxReps - lastData.maxReps;
+          
+          await execute(
+            `INSERT INTO liftr_achievements 
+             (userId, workoutId, exerciseName, achievementType, previousValue, newValue, improvement, unit, achievedAt)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [userId, workoutId, exerciseName, 'reps', lastData.maxReps, currentMaxReps, repsImprovement, `${currentMaxWeight} ${unit}`, completedAt]
+          );
+          
+          improvements.push({
+            exercise: exerciseName,
+            type: 'reps',
+            previousReps: lastData.maxReps,
+            newReps: currentMaxReps,
+            improvement: repsImprovement,
+            weight: currentMaxWeight,
+            unit,
+          });
+        }
         
-        if (currentAtSameWeight) {
-          const currentReps = parseInt(currentAtSameWeight.reps);
-          const currentRir = parseInt(currentAtSameWeight.rir);
+        // RIR achievement: beat last session's min RIR (only if weight and reps are same or higher)
+        if (beatsRir && currentMaxWeight >= lastData.maxWeight && currentMaxReps >= lastData.maxReps) {
+          const rirImprovement = lastData.minRir - currentMinRir;
           
-          // Reps increase at same weight
-          if (currentReps > prevReps && currentReps > 0 && prevReps > 0) {
-            const repsImprovement = currentReps - prevReps;
-            
-            await execute(
-              `INSERT INTO liftr_achievements 
-               (userId, workoutId, exerciseName, achievementType, previousValue, newValue, improvement, unit, achievedAt)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [userId, workoutId, exerciseName, 'reps', prevReps, currentReps, repsImprovement, `${prevWeight} ${unit}`, completedAt]
-            );
-            
-            improvements.push({
-              exercise: exerciseName,
-              type: 'reps',
-              previousReps: prevReps,
-              newReps: currentReps,
-              improvement: repsImprovement,
-              weight: prevWeight,
-              unit,
-            });
-          }
+          await execute(
+            `INSERT INTO liftr_achievements 
+             (userId, workoutId, exerciseName, achievementType, previousValue, newValue, improvement, unit, achievedAt)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [userId, workoutId, exerciseName, 'rir', lastData.minRir, currentMinRir, rirImprovement, `${currentMaxWeight} ${unit} × ${currentMaxReps}`, completedAt]
+          );
           
-          // RIR decrease at same weight and reps (better performance)
-          if (currentRir < prevRir && currentReps === prevReps && currentRir >= 0 && prevRir > 0) {
-            const rirImprovement = prevRir - currentRir;
-            
-            await execute(
-              `INSERT INTO liftr_achievements 
-               (userId, workoutId, exerciseName, achievementType, previousValue, newValue, improvement, unit, achievedAt)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [userId, workoutId, exerciseName, 'rir', prevRir, currentRir, rirImprovement, `${prevWeight} ${unit} × ${currentReps}`, completedAt]
-            );
-            
-            improvements.push({
-              exercise: exerciseName,
-              type: 'rir',
-              previousRir: prevRir,
-              newRir: currentRir,
-              improvement: rirImprovement,
-              weight: prevWeight,
-              reps: currentReps,
-              unit,
-            });
-          }
+          improvements.push({
+            exercise: exerciseName,
+            type: 'rir',
+            previousRir: lastData.minRir,
+            newRir: currentMinRir,
+            improvement: rirImprovement,
+            weight: currentMaxWeight,
+            reps: currentMaxReps,
+            unit,
+          });
         }
       }
     }

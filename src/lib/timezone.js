@@ -12,7 +12,21 @@
 export function formatToIST(date, options = {}) {
   if (!date) return 'N/A';
   
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  let dateObj;
+  
+  if (typeof date === 'string') {
+    // If the date string doesn't have timezone info (no Z or +/-), 
+    // assume it's UTC and append Z
+    if (!date.includes('Z') && !date.includes('+') && !date.match(/-\d{2}:\d{2}$/)) {
+      // Replace space with T if needed and add Z for UTC
+      const utcDateStr = date.replace(' ', 'T') + 'Z';
+      dateObj = new Date(utcDateStr);
+    } else {
+      dateObj = new Date(date);
+    }
+  } else {
+    dateObj = date;
+  }
   
   if (isNaN(dateObj.getTime())) {
     return 'Invalid Date';

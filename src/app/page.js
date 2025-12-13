@@ -34,6 +34,7 @@ import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'rec
 import { WorkoutCardSkeleton, StatsCardSkeleton, ChartSkeleton } from '@/components/common/SkeletonLoader';
 import PullToRefresh from '@/components/common/PullToRefresh';
 import { hapticSuccess } from '@/lib/nativeFeatures';
+import { formatTimeIST } from '@/lib/timezone';
 
 export default function HomePage() {
   const user = useSelector(selectUser);
@@ -540,11 +541,7 @@ export default function HomePage() {
                               }}
                             />
                             <Chip
-                              label={new Date(workout.startedAt).toLocaleTimeString('en-US', {
-                                hour: 'numeric',
-                                minute: '2-digit',
-                                hour12: true
-                              })}
+                              label={formatTimeIST(workout.startedAt)}
                               size="small"
                               sx={{
                                 bgcolor: 'rgba(255, 255, 255, 0.05)',
@@ -659,88 +656,91 @@ export default function HomePage() {
         {/* Progress Section */}
         {progressData && (
           <>
-            {/* Muscle Group Distribution - Body Map */}
-            {loadingProgressStats ? (
-              <Grid item xs={12}>
-                <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom sx={{ mb: 2, textAlign: 'center' }}>
-                    {effectiveUser?.username ? `${effectiveUser.username}'s ` : ''}Muscle Distribution
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                    Loading muscle distribution...
-                  </Typography>
-                </Paper>
-              </Grid>
-            ) : progressStats?.muscleDistribution && progressStats.muscleDistribution.length > 0 && (
-              <Grid item xs={12}>
-                <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom sx={{ mb: 2, textAlign: 'center' }}>
-                    {effectiveUser?.username ? `${effectiveUser.username}'s ` : ''}Muscle Distribution
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mb: 2 }}>
-                    Last 7 days • Auto-resets after 1 week of rest
-                  </Typography>
-                  <Box sx={{ minHeight: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <MuscleBodyMap muscleDistribution={progressStats.muscleDistribution} useGradient={true} showBreakdown={false} />
+            {/* Muscle Group Distribution - Body Map - Always reserve space */}
+            <Grid item xs={12}>
+              <Paper sx={{ p: 3, minHeight: 520 }}>
+                <Typography variant="h6" gutterBottom sx={{ mb: 2, textAlign: 'center' }}>
+                  {effectiveUser?.username ? `${effectiveUser.username}'s ` : ''}Muscle Distribution
+                </Typography>
+                {loadingProgressStats ? (
+                  <Box sx={{ minHeight: 420, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Loading muscle distribution...
+                    </Typography>
                   </Box>
+                ) : progressStats?.muscleDistribution && progressStats.muscleDistribution.length > 0 ? (
+                  <>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mb: 2 }}>
+                      Last 7 days • Auto-resets after 1 week of rest
+                    </Typography>
+                    <Box sx={{ minHeight: 420, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <MuscleBodyMap muscleDistribution={progressStats.muscleDistribution} useGradient={true} showBreakdown={false} />
+                    </Box>
                   
-                  {/* Muscle Breakdown - Most & Least Worked */}
-                  {(() => {
-                    const allMuscles = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Abs', 'Quads', 'Hamstrings', 'Glutes', 'Calves'];
-                    const workedMuscles = progressStats.muscleDistribution || [];
-                    const sortedWorked = [...workedMuscles].sort((a, b) => b.count - a.count);
-                    const mostWorked = sortedWorked.slice(0, 5);
-                    const workedNames = workedMuscles.map(m => m.muscle);
-                    const neglectedMuscles = allMuscles.filter(m => !workedNames.includes(m));
-                    const leastWorked = sortedWorked.length > 5 ? sortedWorked.slice(-3) : [];
-                    const neglected = [...neglectedMuscles.slice(0, 5), ...leastWorked.map(m => m.muscle)].slice(0, 5);
-                    
-                    return (
-                      <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
-                        {mostWorked.length > 0 && (
-                          <Box sx={{ 
-                            flex: '1 1 140px', 
-                            maxWidth: 180,
-                            p: 1.5, 
-                            bgcolor: 'rgba(16, 185, 129, 0.1)', 
-                            borderRadius: 2,
-                            border: '1px solid rgba(16, 185, 129, 0.3)',
-                          }}>
-                            <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 600, display: 'block', mb: 1 }}>
-                              💪 Most Worked
-                            </Typography>
-                            {mostWorked.map((m, i) => (
-                              <Typography key={i} variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.7rem' }}>
-                                {m.muscle} ({m.count}x)
+                    {/* Muscle Breakdown - Most & Least Worked */}
+                    {(() => {
+                      const allMuscles = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Abs', 'Quads', 'Hamstrings', 'Glutes', 'Calves'];
+                      const workedMuscles = progressStats.muscleDistribution || [];
+                      const sortedWorked = [...workedMuscles].sort((a, b) => b.count - a.count);
+                      const mostWorked = sortedWorked.slice(0, 5);
+                      const workedNames = workedMuscles.map(m => m.muscle);
+                      const neglectedMuscles = allMuscles.filter(m => !workedNames.includes(m));
+                      const leastWorked = sortedWorked.length > 5 ? sortedWorked.slice(-3) : [];
+                      const neglected = [...neglectedMuscles.slice(0, 5), ...leastWorked.map(m => m.muscle)].slice(0, 5);
+                      
+                      return (
+                        <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+                          {mostWorked.length > 0 && (
+                            <Box sx={{ 
+                              flex: '1 1 140px', 
+                              maxWidth: 180,
+                              p: 1.5, 
+                              bgcolor: 'rgba(16, 185, 129, 0.1)', 
+                              borderRadius: 2,
+                              border: '1px solid rgba(16, 185, 129, 0.3)',
+                            }}>
+                              <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 600, display: 'block', mb: 1 }}>
+                                💪 Most Worked
                               </Typography>
-                            ))}
-                          </Box>
-                        )}
-                        {neglected.length > 0 && (
-                          <Box sx={{ 
-                            flex: '1 1 140px', 
-                            maxWidth: 180,
-                            p: 1.5, 
-                            bgcolor: 'rgba(239, 68, 68, 0.1)', 
-                            borderRadius: 2,
-                            border: '1px solid rgba(239, 68, 68, 0.3)',
-                          }}>
-                            <Typography variant="caption" sx={{ color: '#f87171', fontWeight: 600, display: 'block', mb: 1 }}>
-                              ⚠️ Needs Attention
-                            </Typography>
-                            {neglected.map((m, i) => (
-                              <Typography key={i} variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.7rem' }}>
-                                {m}
+                              {mostWorked.map((m, i) => (
+                                <Typography key={i} variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.7rem' }}>
+                                  {m.muscle} ({m.count}x)
+                                </Typography>
+                              ))}
+                            </Box>
+                          )}
+                          {neglected.length > 0 && (
+                            <Box sx={{ 
+                              flex: '1 1 140px', 
+                              maxWidth: 180,
+                              p: 1.5, 
+                              bgcolor: 'rgba(239, 68, 68, 0.1)', 
+                              borderRadius: 2,
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                            }}>
+                              <Typography variant="caption" sx={{ color: '#f87171', fontWeight: 600, display: 'block', mb: 1 }}>
+                                ⚠️ Needs Attention
                               </Typography>
-                            ))}
-                          </Box>
-                        )}
-                      </Box>
-                    );
-                  })()}
-                </Paper>
-              </Grid>
-            )}
+                              {neglected.map((m, i) => (
+                                <Typography key={i} variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.7rem' }}>
+                                  {m}
+                                </Typography>
+                              ))}
+                            </Box>
+                          )}
+                        </Box>
+                      );
+                    })()}
+                  </>
+                ) : (
+                  <Box sx={{ minHeight: 420, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      No muscle data available. Complete some workouts to see your muscle distribution.
+                    </Typography>
+                  </Box>
+                )}
+              </Paper>
+            </Grid>
 
             {/* Calories Burned Per Day Chart */}
             {loadingProgressStats ? (

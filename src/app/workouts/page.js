@@ -79,8 +79,25 @@ export default function WorkoutsPage() {
   // Snackbar state
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
+  // Workout completion counts
+  const [workoutCounts, setWorkoutCounts] = useState({});
+
   useEffect(() => {
     dispatch(fetchWorkouts());
+    
+    // Fetch workout counts
+    const fetchCounts = async () => {
+      try {
+        const response = await fetch('/api/workout-counts');
+        const data = await response.json();
+        if (data.counts) {
+          setWorkoutCounts(data.counts);
+        }
+      } catch (e) {
+        console.error('Failed to fetch workout counts:', e);
+      }
+    };
+    fetchCounts();
   }, [dispatch]);
 
   const handleOpenDialog = (workout = null) => {
@@ -223,8 +240,27 @@ export default function WorkoutsPage() {
                 height: '100%', 
                 display: 'flex', 
                 flexDirection: 'column',
+                position: 'relative',
               }}
             >
+              {/* Completion count badge */}
+              {workoutCounts[workout.id] > 0 && (
+                <Chip
+                  label={`${workoutCounts[workout.id]}x`}
+                  size="small"
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    bgcolor: '#10b981',
+                    color: '#000',
+                    fontWeight: 'bold',
+                    fontSize: '0.7rem',
+                    height: 22,
+                    zIndex: 1,
+                  }}
+                />
+              )}
               <CardContent sx={{ flexGrow: 1 }}>
                 <Typography 
                   variant="h6" 
@@ -237,7 +273,8 @@ export default function WorkoutsPage() {
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
-                    lineHeight: 1.4
+                    lineHeight: 1.4,
+                    pr: workoutCounts[workout.id] > 0 ? 4 : 0, // Make room for badge
                   }}
                 >
                   {workout.name}

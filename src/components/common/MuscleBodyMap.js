@@ -1,42 +1,86 @@
 'use client';
 
 import { Box, Typography, ToggleButton, ToggleButtonGroup, Chip } from '@mui/material';
-import { useState, useMemo, memo } from 'react';
+import { useState, useMemo, memo, useCallback } from 'react';
 import Model from 'react-body-highlighter';
 
-// Valid muscle names that the library accepts (from DEFAULT_MUSCLE_DATA)
+// Valid muscle names that the library accepts (from react-body-highlighter v2)
 const VALID_LIBRARY_MUSCLES = [
   'trapezius', 'upper-back', 'lower-back', 'chest', 'biceps', 'triceps', 
   'forearm', 'back-deltoids', 'front-deltoids', 'abs', 'obliques', 
   'adductor', 'hamstring', 'quadriceps', 'abductors', 'calves', 'gluteal',
-  'head', 'neck', 'knees', 'left-soleus', 'right-soleus'
+  'head', 'neck'
 ];
 
 // Map our muscle names to the library's muscle names
-const muscleMapping = {
-  'Chest': 'chest',
-  'Shoulders': ['front-deltoids', 'back-deltoids'],
+const muscleToLibraryMapping = {
+  // Chest
+  'Chest': ['chest'],
+  
+  // Back
   'Back': ['trapezius', 'upper-back', 'lower-back'],
-  'Biceps': 'biceps',
-  'Triceps': 'triceps',
-  'Forearms': 'forearm',
-  'Forearm': 'forearm',
-  'Abs': 'abs',
-  'Obliques': 'obliques',
-  'Quads': 'quadriceps',
-  'Quadriceps': 'quadriceps',
-  'Hamstrings': 'hamstring',
-  'Hamstring': 'hamstring',
-  'Calves': 'calves',
-  'Glutes': 'gluteal',
-  'Gluteal': 'gluteal',
-  'Lats': 'upper-back',
-  'Traps': 'trapezius',
-  'Trapezius': 'trapezius',
-  'Lower Back': 'lower-back',
-  'Adductors': 'adductor',
-  'Adductor': 'adductor',
+  'Upper Back': ['upper-back', 'trapezius'],
+  'Lower Back': ['lower-back'],
+  'Lats': ['upper-back'],
+  
+  // Shoulders/Deltoids
+  'Shoulders': ['front-deltoids', 'back-deltoids'],
+  'Deltoids': ['front-deltoids', 'back-deltoids'],
+  'Delts': ['front-deltoids', 'back-deltoids'],
+  
+  // Arms
+  'Biceps': ['biceps'],
+  'Triceps': ['triceps'],
+  'Forearms': ['forearm'],
+  'Forearm': ['forearm'],
+  
+  // Core
+  'Abs': ['abs'],
+  'Core': ['abs', 'obliques'],
+  'Obliques': ['obliques'],
+  
+  // Legs
+  'Quads': ['quadriceps'],
+  'Quadriceps': ['quadriceps'],
+  'Hamstrings': ['hamstring'],
+  'Hamstring': ['hamstring'],
+  'Calves': ['calves'],
+  'Glutes': ['gluteal'],
+  'Gluteal': ['gluteal'],
+  'Adductors': ['adductor'],
+  'Adductor': ['adductor'],
+  
+  // Other
+  'Trapezius': ['trapezius'],
+  'Traps': ['trapezius'],
+  'Neck': ['neck'],
+  
+  // Compound/Legacy mappings
   'Legs': ['quadriceps', 'hamstring', 'calves'],
+  'Full Body': ['chest'], // Default fallback
+};
+
+// Reverse mapping for display: library muscle name -> our display name
+const libraryToDisplayName = {
+  'trapezius': 'Trapezius',
+  'upper-back': 'Upper Back',
+  'lower-back': 'Lower Back',
+  'chest': 'Chest',
+  'biceps': 'Biceps',
+  'triceps': 'Triceps',
+  'forearm': 'Forearms',
+  'back-deltoids': 'Rear Delts',
+  'front-deltoids': 'Front Delts',
+  'abs': 'Abs',
+  'obliques': 'Obliques',
+  'adductor': 'Adductors',
+  'hamstring': 'Hamstrings',
+  'quadriceps': 'Quads',
+  'abductors': 'Abductors',
+  'calves': 'Calves',
+  'gluteal': 'Glutes',
+  'head': 'Head',
+  'neck': 'Neck',
 };
 
 const MuscleBodyMap = memo(function MuscleBodyMap({ 
@@ -49,9 +93,8 @@ const MuscleBodyMap = memo(function MuscleBodyMap({
   selectable = false, // Allow clicking to select muscles
   onMuscleSelect = null, // Callback when muscle is selected
   selectedMuscle = null, // Currently selected muscle
-  useGradient = true, // Use 5-shade gradient (home page) vs direct max highlight (other pages)
+  useGradient = true, // Use gradient colors based on intensity
 }) {
-  const [hoveredMuscle, setHoveredMuscle] = useState(null);
   const [clickedMuscle, setClickedMuscle] = useState(null);
 
   // Auto-detect if back muscles are present
@@ -67,7 +110,6 @@ const MuscleBodyMap = memo(function MuscleBodyMap({
   }, [muscleDistribution, autoRotate]);
   
   const [view, setView] = useState(hasBackMuscles ? 'posterior' : 'anterior');
-  const [renderError, setRenderError] = useState(null);
 
   const validMuscleDistribution = useMemo(() => {
     if (!Array.isArray(muscleDistribution)) {
@@ -85,225 +127,162 @@ const MuscleBodyMap = memo(function MuscleBodyMap({
   // Calculate max count for normalization
   const maxCount = Math.max(...validMuscleDistribution.map(m => m.count), 1);
 
+  // Convert muscle distribution to exercise data format for the library
+  // Format: { name: 'Exercise Name', muscles: ['muscle1', 'muscle2'], frequency?: number }
   const exerciseData = useMemo(() => {
     if (!validMuscleDistribution || validMuscleDistribution.length === 0) {
       return [];
     }
 
-    try {
-      const exercises = [];
+    const exercises = [];
+    
+    validMuscleDistribution.forEach((muscle) => {
+      const muscleName = muscle.muscle;
       
-      validMuscleDistribution.forEach((muscle) => {
-        const muscleName = muscle.muscle;
-        let mappedMuscles = [];
-        
-        const exactMatch = Object.keys(muscleMapping).find(
-          key => key.toLowerCase() === muscleName.toLowerCase()
-        );
-        
-        if (exactMatch) {
-          const mapped = muscleMapping[exactMatch];
-          if (Array.isArray(mapped)) {
-            mappedMuscles.push(...mapped);
-          } else if (typeof mapped === 'string') {
-            mappedMuscles.push(mapped);
-          }
-        } else {
-          Object.keys(muscleMapping).forEach(key => {
-            if (muscleName.toLowerCase().includes(key.toLowerCase())) {
-              const mapped = muscleMapping[key];
-              if (Array.isArray(mapped)) {
-                mappedMuscles.push(...mapped);
-              } else if (typeof mapped === 'string') {
-                mappedMuscles.push(mapped);
-              }
-            }
-          });
-        }
-        
-        if (mappedMuscles.length === 0) {
-          mappedMuscles.push(muscleName.toLowerCase().replace(/\s+/g, '-'));
-        }
-        
-      const uniqueMuscles = [...new Set(mappedMuscles)]
-        .filter(m => typeof m === 'string' && m.length > 0 && VALID_LIBRARY_MUSCLES.includes(m));
+      // Find the library muscles for this muscle name
+      let libraryMuscles = [];
       
-      // IMPORTANT: Only add exercises if we have valid muscles array
-      if (Array.isArray(uniqueMuscles) && uniqueMuscles.length > 0 && muscle.count > 0) {
-        // If useGradient is false, add only 1 exercise per muscle (no intensity)
-        // If useGradient is true, add exercises based on count (for intensity shading)
-        const countToAdd = useGradient ? muscle.count : 1;
-        
-        for (let i = 0; i < countToAdd; i++) {
-          const exercise = {
-            name: `${muscleName} Exercise ${i + 1}`,
-            muscles: uniqueMuscles  // Must be a valid array of library-recognized muscles
-          };
-          
-          // Double-check the exercise structure before adding
-          if (exercise.name && Array.isArray(exercise.muscles) && exercise.muscles.length > 0) {
-            exercises.push(exercise);
+      // Try exact match first
+      if (muscleToLibraryMapping[muscleName]) {
+        libraryMuscles = muscleToLibraryMapping[muscleName];
+      } else {
+        // Try partial matching
+        const lowerName = muscleName.toLowerCase();
+        for (const [key, value] of Object.entries(muscleToLibraryMapping)) {
+          if (lowerName.includes(key.toLowerCase()) || key.toLowerCase().includes(lowerName)) {
+            libraryMuscles = value;
+            break;
           }
         }
       }
-      });
       
-    const validExercises = exercises.filter(ex => 
-      ex && 
-      typeof ex === 'object' &&
-      typeof ex.name === 'string' && 
-      Array.isArray(ex.muscles) && 
-      ex.muscles.length > 0 &&
-      ex.muscles.every(m => typeof m === 'string' && VALID_LIBRARY_MUSCLES.includes(m))
-    );
+      // Filter to only valid library muscles
+      const validMuscles = libraryMuscles.filter(m => VALID_LIBRARY_MUSCLES.includes(m));
+      
+      if (validMuscles.length > 0) {
+        // If useGradient, use frequency to show intensity
+        // Otherwise, just add 1 exercise per muscle
+        if (useGradient) {
+          // Add multiple exercises to increase the frequency/intensity shown
+          for (let i = 0; i < muscle.count; i++) {
+            exercises.push({
+              name: `${muscleName} ${i + 1}`,
+              muscles: validMuscles,
+            });
+          }
+        } else {
+          // Single exercise with full intensity
+          exercises.push({
+            name: muscleName,
+            muscles: validMuscles,
+            frequency: 5, // Max intensity
+          });
+        }
+      }
+    });
     
-    return validExercises;
-    } catch (error) {
-      return [];
-    }
+    return exercises;
   }, [validMuscleDistribution, useGradient]);
 
-  const highlightedColors = useMemo(() => {
-    if (!validMuscleDistribution || validMuscleDistribution.length === 0) {
-      return ['#c4ff0d'];
+  // Handle muscle click callback from library
+  const handleMuscleClick = useCallback((muscleStats) => {
+    if (!muscleStats) return;
+    
+    const muscle = muscleStats.muscle;
+    const displayName = libraryToDisplayName[muscle] || muscle;
+    
+    if (selectable && onMuscleSelect) {
+      onMuscleSelect(displayName);
+    } else {
+      setClickedMuscle(displayName);
+      setTimeout(() => setClickedMuscle(null), 3000);
     }
+  }, [selectable, onMuscleSelect]);
 
-    const baseColor = { r: 196, g: 255, b: 13 }; // #c4ff0d
-    
-    // If useGradient is false, use full bright color for all muscles
-    if (!useGradient) {
-      return [`rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, 1.0)`]; // Full brightness
-    }
+  // Get size config for empty state too (to reserve height)
+  const getEmptySizeConfig = () => {
+    if (size === 'small') return { minHeight: 120 };
+    if (size === 'medium') return { minHeight: 280 };
+    return { minHeight: 420 };
+  };
 
-    // For gradient mode: 5 fixed shades from lightest to darkest
-    // Level 1 (lightest): 20% opacity
-    // Level 2: 40% opacity
-    // Level 3: 60% opacity
-    // Level 4: 80% opacity
-    // Level 5 (darkest): 100% opacity (pure #c4ff0d)
-    const shades = [
-      `rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, 0.2)`,  // Level 1 - lightest
-      `rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, 0.4)`,  // Level 2
-      `rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, 0.6)`,  // Level 3
-      `rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, 0.8)`,  // Level 4
-      `rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, 1.0)`,  // Level 5 - darkest (full color)
-    ];
-    
-    // Map each muscle count to its corresponding shade (1 workout = level 1, 2 workouts = level 2, etc.)
-    const colors = [];
-    const maxSets = Math.max(...validMuscleDistribution.map(m => m.count), 1);
-    
-    for (let i = 1; i <= maxSets; i++) {
-      // Map count to shade level (1-5), capping at 5
-      const shadeIndex = Math.min(i, 5) - 1;
-      colors.push(shades[shadeIndex]);
-    }
-    
-    return colors.length > 0 ? colors : [shades[4]]; // Default to darkest shade
-  }, [validMuscleDistribution, useGradient]);
-
-  // Don't render if no valid data
+  // Don't render if no valid data - still reserve height to prevent CLS
   if (!validMuscleDistribution || validMuscleDistribution.length === 0) {
-          return (
-      <Box sx={{ textAlign: 'center', py: 4 }}>
+    const { minHeight: emptyMinHeight } = getEmptySizeConfig();
+    return (
+      <Box sx={{ 
+        textAlign: 'center', 
+        py: 4, 
+        minHeight: emptyMinHeight,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
         <Typography variant="body2" color="text.secondary">
           No muscle data available
         </Typography>
-                  </Box>
+      </Box>
     );
   }
 
-  // Make large size responsive to device height
-  const getMaxWidth = () => {
-    if (size === 'small') return '60px';
-    if (size === 'medium') return '250px';
-    // For large size, make it responsive to viewport height
-    if (typeof window !== 'undefined') {
-      const vh = window.innerHeight;
-      return `${Math.min(400, vh * 0.5)}px`; // Max 400px or 50% of viewport height
+  // Size configurations with reserved heights to prevent CLS
+  const getSizeConfig = () => {
+    if (size === 'small') {
+      return { 
+        maxWidth: '80px', 
+        minHeight: 120, // Reserved height for small
+        modelHeight: 100,
+      };
     }
-    return '400px';
+    if (size === 'medium') {
+      return { 
+        maxWidth: '200px', 
+        minHeight: 280, // Reserved height for medium
+        modelHeight: 250,
+      };
+    }
+    return { 
+      maxWidth: '300px', 
+      minHeight: 420, // Reserved height for large
+      modelHeight: 380,
+    };
   };
   
-  const maxWidth = getMaxWidth();
+  const { maxWidth, minHeight, modelHeight } = getSizeConfig();
   const toggleSize = size === 'small' ? 'small' : 'medium';
-  
-  // Handle muscle click for selection mode
-  const handleMuscleClick = (muscleData) => {
-    if (selectable && onMuscleSelect && muscleData?.muscle) {
-      onMuscleSelect(muscleData.muscle);
-    }
-  };
 
-  // Handle muscle click on body map to show name
-  const handleBodyMapClick = (e) => {
-    // Get the clicked polygon element
-    const polygon = e.target.closest('polygon');
-    if (!polygon) return;
-
-    // Try to find which muscle was clicked based on the polygon's fill color
-    const fill = polygon.getAttribute('fill');
-    if (!fill || fill === '#B6BDC3') return; // Ignore body color clicks
-
-    // Get the muscle ID from the polygon's data attributes or class
-    const polygonId = polygon.getAttribute('id') || polygon.getAttribute('data-id');
-    
-    // Map polygon IDs to our muscle names
-    let muscleName = null;
-    
-    if (polygonId) {
-      // Try to match the polygon ID with our muscle mapping
-      for (const [key, value] of Object.entries(muscleMapping)) {
-        const mappedMuscles = Array.isArray(value) ? value : [value];
-        if (mappedMuscles.some(m => polygonId.toLowerCase().includes(m))) {
-          muscleName = key;
-          break;
-        }
-      }
-    }
-    
-    // If we couldn't determine from polygon ID, check if the color matches any of our muscles
-    if (!muscleName && validMuscleDistribution.length > 0) {
-      // Find muscle based on color intensity - check if fill color is in our highlighted colors
-      const isHighlighted = highlightedColors.some(color => fill.includes(color.split(',')[0]));
-      if (isHighlighted) {
-        // Use the most prominent muscle (highest count)
-        const sortedMuscles = [...validMuscleDistribution].sort((a, b) => b.count - a.count);
-        muscleName = sortedMuscles[0].muscle;
-      }
-    }
-    
-    if (muscleName) {
-      setClickedMuscle(muscleName);
-      
-      // Clear after 3 seconds
-      setTimeout(() => setClickedMuscle(null), 3000);
-    }
-  };
+  // Generate highlight colors (5 levels from light to bright)
+  const highlightedColors = [
+    'rgba(196, 255, 13, 0.3)',  // Level 1 - lightest
+    'rgba(196, 255, 13, 0.5)',  // Level 2
+    'rgba(196, 255, 13, 0.65)', // Level 3
+    'rgba(196, 255, 13, 0.8)',  // Level 4
+    '#c4ff0d',                   // Level 5 - full brightness
+  ];
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: size === 'small' ? 1 : 2, position: 'relative' }}>
-      {/* Clicked Muscle Label */}
+      {/* Clicked Muscle Label - Top Right Corner */}
       {clickedMuscle && (
         <Chip
           label={clickedMuscle}
           sx={{
             position: 'absolute',
-            top: 10,
-            left: '50%',
-            transform: 'translateX(-50%)',
+            top: 8,
+            right: 8,
             bgcolor: '#c4ff0d',
             color: '#000',
             fontWeight: 'bold',
-            fontSize: '1rem',
-            px: 2,
-            py: 1,
+            fontSize: size === 'small' ? '0.75rem' : '0.875rem',
+            px: 1.5,
+            py: 0.5,
             height: 'auto',
             zIndex: 1000,
-            animation: 'fadeIn 0.3s ease-in-out',
-            '@keyframes fadeIn': {
-              '0%': { opacity: 0, transform: 'translateX(-50%) translateY(-10px)' },
-              '100%': { opacity: 1, transform: 'translateX(-50%) translateY(0)' },
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+            animation: 'fadeInRight 0.3s ease-in-out',
+            '@keyframes fadeInRight': {
+              '0%': { opacity: 0, transform: 'translateX(10px)' },
+              '100%': { opacity: 1, transform: 'translateX(0)' },
             },
           }}
         />
@@ -351,53 +330,51 @@ const MuscleBodyMap = memo(function MuscleBodyMap({
         </ToggleButtonGroup>
       )}
 
-      {/* Body Model using react-body-highlighter */}
-      {exerciseData && Array.isArray(exerciseData) && exerciseData.length > 0 ? (
-        <Box 
-          onClick={handleBodyMapClick}
-          sx={{ 
-            '& .rbh': {
-              maxWidth: maxWidth,
-              width: '70%',
-            },
-            '& .rbh polygon': {
-              transition: 'all 0.3s ease',
-              cursor: 'pointer',
-            },
-          }}
-        >
-          {(() => {
-            try {
-              return (
-          <Model
-            data={exerciseData}
-            bodyColor="#B6BDC3"
-                  style={{
-              width: '100%', 
-              maxWidth: maxWidth,
-              margin: '0 auto',
-              textAlign: 'center',
+      {/* Body Model using react-body-highlighter - Reserved height to prevent CLS */}
+      <Box 
+        sx={{ 
+          minHeight: modelHeight,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '100%',
+        }}
+      >
+        {exerciseData.length > 0 ? (
+          <Box 
+            sx={{ 
+              filter: 'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5))',
+              '& .rbh': {
+                maxWidth: maxWidth,
+                width: '100%',
+              },
+              '& .rbh polygon': {
+                transition: 'all 0.3s ease',
+                cursor: 'pointer',
+              },
             }}
-            highlightedColors={highlightedColors}
-            type={view}
-          />
-              );
-            } catch (error) {
-              return (
-                <Typography variant="body2" color="error" sx={{ textAlign: 'center' }}>
-                  Error displaying muscle map
-                </Typography>
-              );
-            }
-          })()}
-        </Box>
-      ) : (
-        <Box sx={{ textAlign: 'center', py: 4 }}>
-          <Typography variant="body2" color="text.secondary">
-            Complete some workouts to see muscle distribution
-          </Typography>
-        </Box>
-      )}
+          >
+            <Model
+              data={exerciseData}
+              style={{ 
+                width: '100%', 
+                maxWidth: maxWidth,
+                margin: '0 auto',
+              }}
+              bodyColor="#3f3f3f"
+              highlightedColors={highlightedColors}
+              type={view}
+              onClick={handleMuscleClick}
+            />
+          </Box>
+        ) : (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="body2" color="text.secondary">
+              Complete some workouts to see muscle distribution
+            </Typography>
+          </Box>
+        )}
+      </Box>
 
       {/* Legend - 5 Level Scale */}
       {showLegend && (
@@ -406,16 +383,9 @@ const MuscleBodyMap = memo(function MuscleBodyMap({
             Intensity
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: size === 'small' ? 0.5 : 1, justifyContent: 'center' }}>
-            {/* Show all 5 levels */}
-            {[
-              { level: 1, color: 'rgba(196, 255, 13, 0.2)' },
-              { level: 2, color: 'rgba(196, 255, 13, 0.4)' },
-              { level: 3, color: 'rgba(196, 255, 13, 0.6)' },
-              { level: 4, color: 'rgba(196, 255, 13, 0.8)' },
-              { level: 5, color: 'rgba(196, 255, 13, 1.0)' },
-            ].map(({ level, color }) => (
+            {highlightedColors.map((color, index) => (
               <Box 
-                key={level}
+                key={index}
                 sx={{ 
                   display: 'flex', 
                   flexDirection: 'column', 
@@ -432,7 +402,7 @@ const MuscleBodyMap = memo(function MuscleBodyMap({
                 }} />
                 {size !== 'small' && (
                   <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary' }}>
-                    {level}
+                    {index + 1}
                   </Typography>
                 )}
               </Box>
@@ -451,7 +421,7 @@ const MuscleBodyMap = memo(function MuscleBodyMap({
         </Box>
       )}
 
-      {/* Muscle List */}
+      {/* Muscle List / Breakdown */}
       {showBreakdown && validMuscleDistribution.length > 0 && (
         <Box sx={{ mt: size === 'small' ? 2 : 3, width: '100%' }}>
           <Typography variant={size === 'small' ? 'caption' : 'subtitle2'} gutterBottom sx={{ textAlign: 'center', mb: size === 'small' ? 1 : 2 }}>
@@ -463,7 +433,7 @@ const MuscleBodyMap = memo(function MuscleBodyMap({
               .map((muscle, idx) => (
                 <Box 
                   key={idx}
-                  onClick={() => selectable && handleMuscleClick(muscle)}
+                  onClick={() => selectable && onMuscleSelect && onMuscleSelect(muscle.muscle)}
                   sx={{ 
                     display: 'flex', 
                     justifyContent: 'space-between',
@@ -479,34 +449,32 @@ const MuscleBodyMap = memo(function MuscleBodyMap({
                     transition: 'all 0.3s ease',
                     cursor: selectable ? 'pointer' : 'default',
                   }}
-                  onMouseEnter={() => setHoveredMuscle(muscle.muscle)}
-                  onMouseLeave={() => setHoveredMuscle(null)}
                 >
                   <Typography variant={size === 'small' ? 'caption' : 'body2'}>{muscle.muscle}</Typography>
                   {!selectable && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box 
-                      sx={{ 
-                          width: size === 'small' ? 40 : 60, 
-                          height: size === 'small' ? 4 : 6, 
-                        bgcolor: 'rgba(255, 255, 255, 0.1)',
-                        borderRadius: 1,
-                        overflow: 'hidden',
-                      }}
-                    >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Box 
                         sx={{ 
-                          width: `${(muscle.count / maxCount) * 100}%`, 
-                          height: '100%', 
-                          bgcolor: '#c4ff0d',
-                          transition: 'width 0.3s ease',
-                        }} 
-                      />
-                    </Box>
+                          width: size === 'small' ? 40 : 60, 
+                          height: size === 'small' ? 4 : 6, 
+                          bgcolor: 'rgba(255, 255, 255, 0.1)',
+                          borderRadius: 1,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <Box 
+                          sx={{ 
+                            width: `${(muscle.count / maxCount) * 100}%`, 
+                            height: '100%', 
+                            bgcolor: '#c4ff0d',
+                            transition: 'width 0.3s ease',
+                          }} 
+                        />
+                      </Box>
                       <Typography variant="caption" color="text.secondary" sx={{ minWidth: size === 'small' ? 30 : 40, textAlign: 'right', fontSize: size === 'small' ? '0.65rem' : undefined }}>
                         {muscle.count} {size === 'small' ? '' : 'sets'}
-                    </Typography>
-                  </Box>
+                      </Typography>
+                    </Box>
                   )}
                 </Box>
               ))}

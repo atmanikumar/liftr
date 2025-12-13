@@ -94,10 +94,12 @@ export async function POST(request) {
       );
     }
 
-    // Create new active workout
+    // Create new active workout with UTC timestamp
+    const startedAt = new Date().toISOString();
+    
     await execute(
-      'INSERT INTO liftr_active_workouts (userId, trainingProgramId, workoutData) VALUES (?, ?, ?)',
-      [userId, trainingProgramId, JSON.stringify(workoutData)]
+      'INSERT INTO liftr_active_workouts (userId, trainingProgramId, workoutData, startedAt) VALUES (?, ?, ?, ?)',
+      [userId, trainingProgramId, JSON.stringify(workoutData), startedAt]
     );
 
     // Get the newly created active workout ID

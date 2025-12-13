@@ -32,6 +32,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
+import SkipNextIcon from '@mui/icons-material/SkipNext';
 import { useParams, useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchTrainingPrograms, selectTrainingPrograms } from '@/redux/slices/trainingProgramsSlice';
@@ -82,6 +83,7 @@ export default function ActiveWorkoutPage() {
   const [workoutData, setWorkoutData] = useState({});
   const [currentWorkoutId, setCurrentWorkoutId] = useState(null); // Currently selected workout in dialog
   const [completedWorkoutIds, setCompletedWorkoutIds] = useState([]); // Track completed workouts in order
+  const [skippedWorkoutIds, setSkippedWorkoutIds] = useState([]); // Track skipped workouts
   const [workoutDialogOpen, setWorkoutDialogOpen] = useState(false); // Dialog for workout details
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [addWorkoutDialogOpen, setAddWorkoutDialogOpen] = useState(false);
@@ -397,12 +399,64 @@ export default function ActiveWorkoutPage() {
     }
   }, [workoutHistory]);
 
+  // Fetch and apply last exercise data if current workout has no weight set
+  const fetchAndApplyLastExercise = useCallback(async (workoutId) => {
+    // Only fetch if current workout has weight = 0 (not pre-filled)
+    const currentData = workoutData[workoutId];
+    if (!currentData) return;
+    
+    const hasNoWeight = currentData.sets.every(set => set.weight === 0);
+    if (!hasNoWeight) return; // Already has weight, don't override
+    
+    try {
+      const response = await fetch(`/api/last-exercise/${workoutId}`);
+      const data = await response.json();
+      
+      if (data.lastSession && data.lastSession.sets && data.lastSession.sets.length > 0) {
+        setWorkoutData(prev => {
+          const updated = {
+            ...prev,
+            [workoutId]: {
+              ...prev[workoutId],
+              unit: data.lastSession.unit || prev[workoutId].unit,
+              sets: prev[workoutId].sets.map((set, idx) => {
+                const lastSet = data.lastSession.sets[idx];
+                if (lastSet && set.weight === 0) {
+                  return {
+                    ...set,
+                    weight: parseFloat(lastSet.weight) || 0,
+                    reps: parseInt(lastSet.reps) || set.reps,
+                    rir: parseInt(lastSet.rir) || set.rir,
+                    previousWeight: parseFloat(lastSet.weight) || 0,
+                  };
+                }
+                return set;
+              }),
+            },
+          };
+          
+          // Save to DB
+          fetch('/api/active-workout', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ workoutData: updated }),
+          }).catch(e => console.error('Failed to save:', e));
+          
+          return updated;
+        });
+      }
+    } catch (e) {
+      console.error('Failed to fetch last exercise:', e);
+    }
+  }, [workoutData]);
+
   // Open workout details dialog
   const handleOpenWorkout = useCallback((workoutId) => {
     setCurrentWorkoutId(workoutId);
     setWorkoutDialogOpen(true);
     fetchWorkoutHistory(workoutId);
-  }, [fetchWorkoutHistory]);
+    fetchAndApplyLastExercise(workoutId); // Auto-fill from last session if needed
+  }, [fetchWorkoutHistory, fetchAndApplyLastExercise]);
 
   // Close workout dialog
   const handleCloseWorkout = useCallback(() => {
@@ -462,6 +516,22 @@ export default function ActiveWorkoutPage() {
       setTimeout(() => handleOpenWorkout(nextWorkout.id), 300);
     }
   }, [currentWorkoutId, programWorkouts, completedWorkoutIds, handleCloseWorkout, handleOpenWorkout]);
+
+  // Skip current workout (won't be saved)
+  const handleSkipWorkout = useCallback(() => {
+    if (!currentWorkoutId) return;
+    
+    // Add to skipped list
+    setSkippedWorkoutIds(prev => {
+      if (!prev.includes(currentWorkoutId)) {
+        return [...prev, currentWorkoutId];
+      }
+      return prev;
+    });
+    
+    // Close dialog without opening next
+    handleCloseWorkout();
+  }, [currentWorkoutId, handleCloseWorkout]);
 
   const handleCreateWorkout = async () => {
     if (creatingWorkout) return;
@@ -753,14 +823,54 @@ export default function ActiveWorkoutPage() {
           </Box>
         )}
 
+        {/* Skipped Workouts */}
+        {skippedWorkoutIds.length > 0 && (
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'rgba(255, 255, 255, 0.4)', fontWeight: 'bold' }}>
+              Skipped ({skippedWorkoutIds.length})
+            </Typography>
+            <Stack spacing={1}>
+              {skippedWorkoutIds.map((workoutId) => {
+                const workout = programWorkouts.find(w => w.id === workoutId);
+                if (!workout) return null;
+                
+                return (
+                  <Card
+                    key={workoutId}
+                    sx={{
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      bgcolor: 'rgba(255, 255, 255, 0.02)',
+                      opacity: 0.5,
+                    }}
+                  >
+                    <CardContent sx={{ py: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <SkipNextIcon sx={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: 28 }} />
+                        <Box sx={{ flexGrow: 1 }}>
+                          <Typography variant="h6" sx={{ color: 'rgba(255, 255, 255, 0.5)', textDecoration: 'line-through' }}>
+                            {workout.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Skipped
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </Stack>
+          </Box>
+        )}
+
         {/* Pending Workouts */}
         <Box>
           <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary', fontWeight: 'bold' }}>
-            Pending ({programWorkouts.filter(w => !completedWorkoutIds.includes(w.id)).length})
+            Pending ({programWorkouts.filter(w => !completedWorkoutIds.includes(w.id) && !skippedWorkoutIds.includes(w.id)).length})
           </Typography>
           <Stack spacing={1}>
             {programWorkouts
-              .filter(w => !completedWorkoutIds.includes(w.id))
+              .filter(w => !completedWorkoutIds.includes(w.id) && !skippedWorkoutIds.includes(w.id))
               .map((workout, index) => {
                 const workoutSets = workoutData[workout.id]?.sets || [];
                 const completedSets = workoutSets.filter(s => s.completed).length;
@@ -973,9 +1083,19 @@ export default function ActiveWorkoutPage() {
                   </Box>
                 </Box>
 
-                <Stack spacing={2.5}>
+                <Stack spacing={3}>
                   {workoutSets.map((set, setIndex) => (
-                    <Card key={setIndex} sx={{ bgcolor: 'background.paper' }}>
+                    <Box key={setIndex}>
+                      {/* Divider between sets */}
+                      {setIndex > 0 && (
+                        <Box sx={{ 
+                          my: 2, 
+                          height: '1px', 
+                          bgcolor: 'rgba(196, 255, 13, 0.15)',
+                          mx: 2,
+                        }} />
+                      )}
+                    <Card sx={{ bgcolor: 'background.paper' }}>
                       <CardContent>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                           <Typography variant="subtitle1" fontWeight="bold">
@@ -1163,6 +1283,7 @@ export default function ActiveWorkoutPage() {
                         </Grid>
                       </CardContent>
                     </Card>
+                    </Box>
                   ))}
 
                   {/* Add Set Button */}
@@ -1179,25 +1300,42 @@ export default function ActiveWorkoutPage() {
             );
           })()}
         </DialogContent>
-        <DialogActions sx={{ p: 3, gap: 2 }}>
-          <Button onClick={handleCloseWorkout} variant="outlined">
-            Close
-          </Button>
-          <Button
-            onClick={handleCompleteWorkout}
-            variant="contained"
-            size="large"
+        <DialogActions sx={{ p: 3, gap: 2, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+          <Button 
+            onClick={handleSkipWorkout} 
+            variant="outlined"
+            startIcon={<SkipNextIcon />}
+            disabled={skippedWorkoutIds.includes(currentWorkoutId)}
             sx={{
-              bgcolor: '#10b981',
-              color: '#000',
-              fontWeight: 'bold',
+              color: 'rgba(255, 255, 255, 0.6)',
+              borderColor: 'rgba(255, 255, 255, 0.3)',
               '&:hover': {
-                bgcolor: '#b0e00b',
+                borderColor: 'rgba(255, 255, 255, 0.5)',
               }
             }}
           >
-            Complete Workout
+            Skip
           </Button>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button onClick={handleCloseWorkout} variant="outlined">
+              Close
+            </Button>
+            <Button
+              onClick={handleCompleteWorkout}
+              variant="contained"
+              size="large"
+              sx={{
+                bgcolor: '#10b981',
+                color: '#000',
+                fontWeight: 'bold',
+                '&:hover': {
+                  bgcolor: '#b0e00b',
+                }
+              }}
+            >
+              Complete Workout
+            </Button>
+          </Box>
         </DialogActions>
       </Dialog>
 
