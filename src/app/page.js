@@ -658,22 +658,22 @@ export default function HomePage() {
           <>
             {/* Muscle Group Distribution - Body Map - Always reserve space */}
             <Grid item xs={12}>
-              <Paper sx={{ p: 3, minHeight: 520 }}>
+              <Paper sx={{ p: 3, minHeight: { xs: 400, sm: 480, md: 520 } }}>
                 <Typography variant="h6" gutterBottom sx={{ mb: 2, textAlign: 'center' }}>
                   {effectiveUser?.username ? `${effectiveUser.username}'s ` : ''}Muscle Distribution
                 </Typography>
                 {loadingProgressStats ? (
-                  <Box sx={{ minHeight: 420, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Box sx={{ minHeight: { xs: 300, sm: 380, md: 420 }, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Typography variant="body2" color="text.secondary">
                       Loading muscle distribution...
                     </Typography>
                   </Box>
                 ) : progressStats?.muscleDistribution && progressStats.muscleDistribution.length > 0 ? (
                   <>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mb: 1 }}>
                       Last 7 days • Auto-resets after 1 week of rest
                     </Typography>
-                    <Box sx={{ minHeight: 420, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Box sx={{ minHeight: { xs: 300, sm: 380, md: 420 }, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <MuscleBodyMap muscleDistribution={progressStats.muscleDistribution} useGradient={true} showBreakdown={false} />
                     </Box>
                   
@@ -733,8 +733,8 @@ export default function HomePage() {
                     })()}
                   </>
                 ) : (
-                  <Box sx={{ minHeight: 420, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Typography variant="body2" color="text.secondary">
+                  <Box sx={{ minHeight: { xs: 300, sm: 380, md: 420 }, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', px: 2 }}>
                       No muscle data available. Complete some workouts to see your muscle distribution.
                     </Typography>
                   </Box>

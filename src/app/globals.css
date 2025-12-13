@@ -2,8 +2,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  /* iOS PWA Status Bar Color - white status bar with dark content */
-  --status-bar-color: #ffffff;
+  /* iOS Status Bar Color - dark background with white/light content */
+  --status-bar-color: #000000;
   --app-background: #000000;
 }
 

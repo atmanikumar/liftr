@@ -22,6 +22,7 @@ const config: CapacitorConfig = {
     StatusBar: {
       style: 'DARK', // Dark content (black text/icons) for white status bar appearance
       backgroundColor: '#ffffff',
+      color: '#ffffff',
     },
     Keyboard: {
       resize: 'body',

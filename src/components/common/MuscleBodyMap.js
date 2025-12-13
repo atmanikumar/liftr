@@ -226,6 +226,7 @@ const MuscleBodyMap = memo(function MuscleBodyMap({
   }
 
   // Size configurations with reserved heights to prevent CLS
+  // For large size, calculate based on viewport height to fit device screen
   const getSizeConfig = () => {
     if (size === 'small') {
       return { 
@@ -241,10 +242,18 @@ const MuscleBodyMap = memo(function MuscleBodyMap({
         modelHeight: 250,
       };
     }
+    // Large size - responsive to viewport height
+    // Use CSS clamp for responsive sizing: min 280px, preferred 45vh, max 380px
+    const isClient = typeof window !== 'undefined';
+    const viewportHeight = isClient ? window.innerHeight : 800;
+    // Calculate responsive height: 45% of viewport, but clamped between 280-380px
+    const responsiveHeight = Math.min(380, Math.max(280, viewportHeight * 0.4));
+    const responsiveWidth = Math.min(260, Math.max(200, viewportHeight * 0.35));
+    
     return { 
-      maxWidth: '300px', 
-      minHeight: 420, // Reserved height for large
-      modelHeight: 380,
+      maxWidth: `${responsiveWidth}px`, 
+      minHeight: responsiveHeight + 40, // Add padding for toggle/legend
+      modelHeight: responsiveHeight,
     };
   };
   
